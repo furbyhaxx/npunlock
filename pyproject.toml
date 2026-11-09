@@ -14,12 +14,6 @@ classifiers = ["Operating System :: Microsoft :: Windows", "Operating System :: 
 [project.scripts]
 npunlock-viz = "npunlock.viz.cli:main"
 
-[tool.setuptools]
-package-dir = {"" = "python"}
-
-[tool.setuptools.packages.find]
-where = ["python"]
-
 [tool.setuptools.package-data]
 npunlock = ["py.typed", "*.pyi", "include/npunlock/*.h"]
 "npunlock._bin" = ["*.dll", "*.exe", "*.so", "npunlock-ir-worker"]

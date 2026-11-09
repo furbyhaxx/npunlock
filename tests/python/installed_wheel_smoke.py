@@ -8,7 +8,7 @@ from pathlib import Path
 
 import npunlock as npu
 from npunlock.doctor import collect_diagnostics
-
+from tools.shaveasm.objwriter import assemble
 
 ROOT = Path(__file__).resolve().parents[2]
 FIXTURE = ROOT / "tests/fixtures/npu3720/add1-shared-1x16.blob"
@@ -16,6 +16,7 @@ FIXTURE_SHA256 = "23b0467b55bd69fa3587afc0387e4ba171ec46eb3ec41b79633e6831cc4178
 
 
 def main() -> None:
+    assert assemble(".code smoke\nNOP\n").startswith(b"\x7fELF")
     native = npu.NativeLibraries()
     doctor = collect_diagnostics(
         movi_dll_dir="",

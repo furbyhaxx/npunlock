@@ -4,6 +4,7 @@ recursive-include cmake *.in
 recursive-include include *.h
 recursive-include src *.c *.h *.ld
 recursive-include tools *.ps1
+recursive-include tools/shaveasm *.py
 recursive-include frontend *.json *.ts
 recursive-include python/npunlock/viz/static *.html *.css *.js
 recursive-include python/npunlock/viz/schemas *.json

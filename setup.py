@@ -8,7 +8,7 @@ import struct
 import subprocess
 import sys
 
-from setuptools import setup
+from setuptools import find_packages, setup
 from setuptools.command.build_py import build_py
 from wheel.bdist_wheel import bdist_wheel
 
@@ -100,5 +100,7 @@ class BdistWheel(bdist_wheel):
 
 setup(
     version=os.environ.get("NPUNLOCK_PACKAGE_VERSION", "0.1.0"),
+    packages=[*find_packages(where="python"), "tools.shaveasm"],
+    package_dir={"": "python", "tools.shaveasm": "tools/shaveasm"},
     cmdclass={"build_py": BuildPy, "bdist_wheel": BdistWheel},
 )
