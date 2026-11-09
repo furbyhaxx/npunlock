@@ -76,6 +76,18 @@ class EncodingTests(unittest.TestCase):
             with self.subTest(comparison=comparison), self.assertRaisesRegex(AssemblyError, "read port 6"):
                 encode(f"{comparison} i0 i1 || LSU1.LD.32 i8 i9")
 
+    def test_lsu1_scalar_store_leaves_the_postincrement_selector_clear(self) -> None:
+        self.assertEqual(encode("LSU1.ST.32 i0 i0"), bytes.fromhex("89090001"))
+        self.assertEqual(encode("LSU1.ST.32 i31 i31"), bytes.fromhex("89f93f01"))
+        self.assertEqual(encode("LSU1.ST.32 i1 i2"), bytes.fromhex("89190401"))
+        for source in ("LSU1.ST.32 i32 i0", "LSU1.ST.32 i0 i32",
+                       "LSU1.ST.32 i0 1", "LSU1.ST.32 i0 i1 4"):
+            with self.subTest(source=source), self.assertRaises(AssemblyError):
+                encode(source)
+        for comparison in ("CMU.CMII.I32", "CMU.CMII.U32"):
+            with self.subTest(comparison=comparison), self.assertRaisesRegex(AssemblyError, "read port 6"):
+                encode(f"{comparison} i0 i1 || LSU1.ST.32 i8 i9")
+
     def test_lsu1_postincrement_store_uses_the_twenty_four_bit_class(self) -> None:
         self.assertEqual(encode("LSU1.STI.32 i0 i0"), bytes.fromhex("89090081"))
         self.assertEqual(encode("LSU1.STI.32 i31 i31"), bytes.fromhex("89f93f81"))
