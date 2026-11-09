@@ -707,6 +707,16 @@ including unsupported forms, for conservative delay-window validation. It covers
 both encoded transfers (BRA and register JMP); object writers can use this
 predicate instead of duplicating mnemonic checks.
 
+### Scalar SAU immediate left shift
+
+`SAU.SHL.X32 dst src imm5` uses the 24-bit SAU class and payload
+`0x100011 | dst<<10 | src<<5 | imm5<<15`. All 323 SAU header combinations,
+64 register sweeps and 32 shift amounts match moviAsm. Both seeds pass
+**15340/15340** packet cases and 59 offline tests pass. Coverage is
+**9776/11912** packets (32 accepted mnemonics, 1210 prefix shapes), with
+**0/55** exact objects and 2391 diagnostic instruction rejections. First
+rejections are SAU.SHR.U32 (40 files), CMPI (8), and STO.64 (7).
+
 ### Differential gates and corpus inventory
 
 Cached assembly can be inventoried without Wine or recompilation:

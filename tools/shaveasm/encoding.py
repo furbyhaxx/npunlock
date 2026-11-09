@@ -1340,10 +1340,11 @@ def _operation(instruction: Instruction) -> _Operation:
         destination, left, right = (_register(op, line) for op in operands)
         opcode = 0x200000 if mnemonic == "SAU.ADD.F32" else 0x04
         return _Operation(unit, opcode | destination << 10 | left << 5 | right << 15, 24)
-    if mnemonic == "SAU.ADD.I32" and len(operands) == 3:
+    if mnemonic in ("SAU.ADD.I32", "SAU.SHL.X32") and len(operands) == 3:
         destination, source = (_register(op, line) for op in operands[:2])
         immediate = _immediate(operands[2], 5, line)
-        return _Operation(unit, 0x100000 | destination << 10 | source << 5 | immediate << 15, 24)
+        opcode = 0x100000 if mnemonic == "SAU.ADD.I32" else 0x100011
+        return _Operation(unit, opcode | destination << 10 | source << 5 | immediate << 15, 24)
     if mnemonic == "PEU.PCCX" and len(operands) == 2 and operands[0].upper() in _PCCX_PREDICATES:
         condition = _PCCX_PREDICATES[operands[0].upper()]
         immediate = _immediate(operands[1], 6, line)
