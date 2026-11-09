@@ -508,6 +508,11 @@ The five-input example validated both copied and shared-buffer execution.
 Saved `.npunlock` bundles loaded and executed with MoviTools unset and no
 Wine on PATH.
 
+[Native assembler/linker groundwork](NATIVE_TOOLCHAIN.md) records the pinned
+native lld build, offline fixture, real-kernel relink comparisons and NPU
+oracles. Native assembler compatibility is still blocked by vendor dialect and
+packet packing; the default compiler path and configuration remain unchanged.
+
 ## Linux with NPU3720
 
 The working hypothesis is that a patched NPU3720 graph blob generated on
