@@ -678,6 +678,13 @@ def _operation(instruction: Instruction) -> _Operation:
         destination, source = (_register(op, line) for op in operands)
         opcode = {"LSU0.LD.32": 0x1000D, "LSU0.CP.32": 0x80007}[mnemonic]
         return _Operation(unit, opcode | destination << 4 | source << 9, 24)
+    if mnemonic == "LSU0.LDIH" and len(operands) == 2:
+        destination = _register(operands[0], line)
+        if re.fullmatch(r"[A-Za-z_.$][A-Za-z_0-9.$]*", operands[1]):
+            return _Operation(unit, 3 | destination << 3, 24,
+                              Fixup(operands[1], 0, 8, 16, "R_SHAVE_HI16"))
+        immediate = _immediate(operands[1], 16, line)
+        return _Operation(unit, 3 | destination << 3 | immediate << 8, 24)
     if mnemonic in ("LSU0.LDIL", "LSU1.LDIL") and len(operands) == 2:
         destination = _register(operands[0], line)
         immediate = _immediate(operands[1], 16, line)
@@ -779,13 +786,14 @@ def encode_packet_with_fixups(
     bits, value = _PREFIXES[key]
     fixups = []
     for operation in operations:
+        value |= operation.value << bits
         if operation.fixup is not None:
             fixup = operation.fixup
-            kind = fixup.kind + ("_AT4" if bits % 8 == 4 else "")
-            fixups.append(Fixup(fixup.symbol, fixup.addend, bits, fixup.bit_width, kind))
-            value |= ((bits // 8) | _branch_delay_span(following) << 16) << bits
-        else:
-            value |= operation.value << bits
+            offset = bits + fixup.bit_offset
+            kind = fixup.kind + ("_AT4" if offset % 8 == 4 else "")
+            fixups.append(Fixup(fixup.symbol, fixup.addend, offset, fixup.bit_width, kind))
+            if fixup.kind == "R_SHAVE_PCREL16":
+                value |= ((bits // 8) | _branch_delay_span(following) << 16) << bits
         bits += operation.bits
     if bits > 128:
         raise AssemblyError(f"line {first.line}: packet exceeds 128 bits")

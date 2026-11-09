@@ -40,6 +40,25 @@ class EncodingTests(unittest.TestCase):
         with self.assertRaisesRegex(AssemblyError, "read port 6"):
             encode("CMU.CMII.U32 i1 i2 || LSU1.STO.32 i8 i9 0")
 
+    def test_high_immediate_load_and_absolute_high_fixup(self) -> None:
+        self.assertEqual(encode("LSU0.LDIH i0 0"), bytes.fromhex("82030000"))
+        self.assertEqual(encode("LSU0.LDIH i31 65535"), bytes.fromhex("82fbffff"))
+        packet = parse("LSU0.LDIH i4 external_target")[0]
+        data, fixups = encode_packet_with_fixups(packet)
+        self.assertEqual(data, bytes.fromhex("82230000"))
+        self.assertEqual(fixups, (Fixup("external_target", 0, 16, 16, "R_SHAVE_HI16"),))
+        packet = parse("BRU.BRA target || LSU0.LDIH i4 external_target")[0]
+        data, fixups = encode_packet_with_fixups(packet)
+        self.assertEqual(data, bytes.fromhex("cec2230000050000"))
+        self.assertEqual(fixups, (Fixup("external_target", 0, 24, 16, "R_SHAVE_HI16"),
+                                  Fixup("target", 0, 40, 16, "R_SHAVE_PCREL16")))
+        for source in ("LSU0.LDIH i0 65536", "LSU0.LDIH i32 0",
+                       "LSU0.LDIH i0 target+2"):
+            with self.subTest(source=source), self.assertRaises(AssemblyError):
+                encode(source)
+        with self.assertRaisesRegex(AssemblyError, "symbolic fixups"):
+            encode("LSU0.LDIH i4 external_target")
+
     def test_lsu1_signed_offset_load_uses_the_thirty_two_bit_lsu1_class(self) -> None:
         self.assertEqual(encode("LSU1.LDO.32 i0 i0 -16384"), bytes.fromhex("c902400180"))
         self.assertEqual(encode("LSU1.LDO.32 i31 i31 16383"), bytes.fromhex("c9f27fff7f"))
