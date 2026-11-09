@@ -737,6 +737,20 @@ tests pass. Coverage is **9943/11912** packets (34 accepted mnemonics,
 1210 prefix shapes), with **0/55** exact objects and 2223 diagnostic
 instruction rejections. CMPI is now the most common first rejection (9 files).
 
+### Immediate scalar comparison
+
+`CMU.CMPI src imm16` accepts unsigned 0..65535 and uses a 28-bit payload
+`0x0a | src<<4 | imm16<<9`, with distinct `CMU.CMPI28` headers. Negative
+immediates are rejected by moviAsm. All 264 retained header combinations,
+32 register sweeps, 16 immediate-bit sweeps and boundaries match moviAsm.
+Headers exceeding the encoder's 128-bit packet limit remain unsupported.
+Both seeds pass **17667/17667** packet cases and 59 offline tests pass.
+Coverage is **10006/11912** packets (35 accepted mnemonics, 1474 prefix
+shapes), with **0/55** exact objects and 2136 diagnostic instruction
+rejections. First rejections are LSU0.LD.16 (9 files), LSU1.LDIH (8),
+LSU0.LD.32.F16.F32 and LSU1.STO.64 (7 each), LSU1.STI.32 (5),
+LSU1.LD.32 (4), SAU.MUL.F32 and LSU0.LD.8 (3 each), and IAU.MUL (1).
+
 ### Differential gates and corpus inventory
 
 Cached assembly can be inventoried without Wine or recompilation:
@@ -755,8 +769,9 @@ command. The combined baseline is 3291/11912 accepted packets and **98** distinc
 mnemonics (97 in the literal corpus alone). With symbolic branches, signed
 loads/stores, indirect loads, integer addition, comparisons, PCCX, AND/OR,
 LMULL, INCS, scalar floating-point addition and immediate SHL, coverage is
-**9325/11912** packets, including 878 requiring symbolic fixups.
-Twenty-seven distinct mnemonics occur in accepted packets (six at baseline); the
+**10006/11912** packets, including 878 requiring symbolic fixups, after the
+additional measured forms documented above.
+Thirty-five distinct mnemonics occur in accepted packets (six at baseline); the
 corpus still has 98 mnemonics.
 `accepted_packets` counts bytes-plus-fixups support and `relocatable_packets`
 identifies that subset. Coverage tests isolated packet forms; it does not
@@ -775,8 +790,9 @@ python3 -m tools.shaveasm.corpus --native-dir build/linux \
   --output /mnt/cache/build-shave/native-asm-corpus
 ```
 
-Offline regressions: 56 passed, including the merged object-writer/corpus tests.
-Each randomized gate passed **12156/12156 cases**
+Offline regressions: 59 passed, including the merged object-writer/corpus tests.
+Each current randomized gate passes **17667/17667 cases**. Before the eight
+additional forms documented above, the gate passed **12156/12156 cases**
 (seeds 3720 and 9001): the original 2362 isolated-packet cases (1000 random
 packets, 457 shapes, 352 mixed operand sweeps, 96 ADD sweeps, 384 PCCX pairs,
 eight immediate boundaries and 65 NOP cases), plus 64 counted-NOP branch
@@ -797,7 +813,8 @@ LSU0.LDIH adds 362 immediate/symbol header cases, 64 register cases and 18 immed
 JMP adds 280 header shapes, 32 register cases and the same 2232 delay-window
 sequences as BRA; the expanded headers also repeat existing alternative forms.
 SUB adds 482 register/immediate header cases, 96 register-field cases and ten
-immediate-bit/boundary cases. The current total is 887 prefix shapes.
+immediate-bit/boundary cases. Those forms established 887 prefix shapes;
+SAU.AND and CMPI bring the current total to 1474.
 Every case's full instruction bytes and fixups are compared to moviAsm, not
 merely round-tripped through native code. All measured instruction forms occur
 in the real compiler corpus.
@@ -828,7 +845,8 @@ The parser structurally accepted all 55 captured assemblies. The literal
 corpus contains 97 distinct mnemonics. Only **3291/11912** parsed packets are
 accepted by the original byte-only encoder across the two corpora; the symbolic
 branch, scalar-load/store, ADD, compare, PCCX, AND/OR, LMULL, INCS and SHL extensions raise
-bytes-plus-fixups support to **9325/11912**. These are
+bytes-plus-fixups support to **10006/11912** with the additional measured forms
+above. These are
 syntactic coverage counts, **not** full-stream or whole-object parity claims.
 Calls, other branch forms, additional instruction/header classes, data and
 alignment directives, ELF symbols and relocations remain the next gate. Hybrid

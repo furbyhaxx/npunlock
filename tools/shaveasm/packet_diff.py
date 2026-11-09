@@ -34,6 +34,8 @@ def generate_packets(seed: int, count: int) -> list[str]:
             mnemonic = ("LSU0.LDO.32" if unit == "LSU0.LDO32"
                         else rng.choice(("LSU1.STO.32", "LSU1.LDO.32")))
             return f"{mnemonic} {registers[0]} {registers[1]} {rng.randrange(-16384, 16384)}"
+        if unit == "CMU.CMPI28":
+            return f"CMU.CMPI {registers[0]} {rng.randrange(65536)}"
         if unit == "CMU.CMZ16":
             return f"CMU.CMZ.I32 {registers[0]}"
         if unit == "CMU":
@@ -177,6 +179,8 @@ def generate_packets(seed: int, count: int) -> list[str]:
     packets.extend(f"IAU.INCS i0 {value}" for value in
                    (0, -1, 8191, -8192, *(1 << bit for bit in range(13)),
                     *(-(1 << bit) for bit in range(14))))
+    packets.extend(f"CMU.CMPI i{r} 0" for r in range(32))
+    packets.extend(f"CMU.CMPI i0 {value}" for value in (0, 65535, *(1 << bit for bit in range(16))))
     delay_operations = (
         "NOP", "NOP 1", "NOP 2", "NOP 4", "NOP 6", "NOP 16", "NOP 17", "NOP 32",
         "LSU0.LDIL i4 1", "CMU.CMZ.I32 i0", "IAU.ADD i16 i17 231",
