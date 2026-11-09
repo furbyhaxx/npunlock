@@ -34,6 +34,12 @@ class EncodingTests(unittest.TestCase):
         self.assertEqual(encode("NOP 17"), b"\xf0\x00")
         self.assertEqual(encode("NOP 32"), b"\xf0\xf0")
 
+    def test_and_shares_the_measured_twenty_bit_xor_class(self) -> None:
+        self.assertEqual(encode("IAU.AND i5 i5 i5"), bytes.fromhex("86b09402"))
+        self.assertEqual(encode("IAU.AND i5 i5 i5 || PEU.PC1C EQ"), bytes.fromhex("adb094b201"))
+        with self.assertRaises(AssemblyError):
+            encode("IAU.AND i0 i1 3")
+
     def test_pccx_has_twelve_payload_bits_and_its_own_neq_selector(self) -> None:
         self.assertEqual(encode("PEU.PCCX NEQ 63"), bytes.fromhex("c5d90f"))
         self.assertEqual(encode("PEU.PCCX EQ 0"), bytes.fromhex("c50500"))

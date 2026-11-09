@@ -41,7 +41,8 @@ def generate_packets(seed: int, count: int) -> list[str]:
             right = registers[2] if rng.randrange(2) else str(rng.randrange(256))
             return f"IAU.ADD {registers[0]} {registers[1]} {right}"
         if unit == "IAU":
-            return f"IAU.XOR {registers[0]} {registers[1]} {registers[2]}"
+            mnemonic = rng.choice(("IAU.XOR", "IAU.AND"))
+            return f"{mnemonic} {registers[0]} {registers[1]} {registers[2]}"
         condition = rng.choice(("EQ", "NEQ", "LT", "LTE", "GT", "GTE"))
         if unit == "PEU.PCCX12":
             return f"PEU.PCCX {condition} {rng.randrange(64)}"
@@ -63,6 +64,14 @@ def generate_packets(seed: int, count: int) -> list[str]:
         order = list(shape)
         rng.shuffle(order)
         packets.append("\n || ".join(operation(unit) for unit in order))
+    for key in _PREFIXES:
+        if "IAU" in key.split(","):
+            packets.append("\n || ".join(operation(unit) for unit in key.split(",")).replace("IAU.XOR", "IAU.AND"))
+    for position in range(3):
+        for register in range(32):
+            operands = ["i0"] * 3
+            operands[position] = f"i{register}"
+            packets.append("IAU.AND " + " ".join(operands))
     delay_operations = (
         "NOP", "NOP 1", "NOP 2", "NOP 4", "NOP 6", "NOP 16", "NOP 17", "NOP 32",
         "LSU0.LDIL i4 1", "CMU.CMZ.I32 i0", "IAU.ADD i16 i17 231",

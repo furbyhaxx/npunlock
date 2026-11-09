@@ -539,9 +539,10 @@ def _operation(instruction: Instruction) -> _Operation:
             selector = 1 << 23
         return _Operation(unit, selector | destination << 10 | left << 5 | right << 15, 24,
                           prefix_class="IAU.ADD24")
-    if mnemonic == "IAU.XOR" and len(operands) == 3:
+    if mnemonic in ("IAU.XOR", "IAU.AND") and len(operands) == 3:
         destination, left, right = (_register(op, line) for op in operands)
-        return _Operation(unit, 0x12 | destination << 10 | left << 5 | right << 15, 20)
+        opcode = {"IAU.XOR": 0x12, "IAU.AND": 0x10}[mnemonic]
+        return _Operation(unit, opcode | destination << 10 | left << 5 | right << 15, 20)
     if mnemonic == "SAU.ADD.I32" and len(operands) == 3:
         destination, source = (_register(op, line) for op in operands[:2])
         immediate = _immediate(operands[2], 5, line)
