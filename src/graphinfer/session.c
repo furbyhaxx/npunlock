@@ -1,5 +1,4 @@
-#define WIN32_LEAN_AND_MEAN
-#include <windows.h>
+#include "session_platform.h"
 
 #include <stdbool.h>
 #include <stddef.h>
@@ -67,11 +66,11 @@ typedef struct session_graph_functions {
 } session_graph_functions;
 
 struct graphinfer_session {
-  CRITICAL_SECTION lock;
-  LONG references;
+  session_mutex lock;
+  session_refcount references;
   bool active;
   bool initialized;
-  HMODULE loader;
+  session_library loader;
   session_ze_functions ze;
   session_graph_functions graph;
   npunlock_ze_driver_handle driver;
@@ -119,8 +118,12 @@ static npunlock_status session_driver_error(npunlock_diagnostic *diagnostic, con
                                  message);
 }
 
-static bool load_export(HMODULE library, const char *name, void *destination, size_t size) {
+static bool load_export(session_library library, const char *name, void *destination, size_t size) {
+#ifdef _WIN32
   FARPROC function = GetProcAddress(library, name);
+#else
+  void *function = dlsym(library, name);
+#endif
   if (function == NULL || size != sizeof(function)) {
     return false;
   }
@@ -128,7 +131,7 @@ static bool load_export(HMODULE library, const char *name, void *destination, si
   return true;
 }
 
-static bool load_ze_functions(HMODULE library, session_ze_functions *ze) {
+static bool load_ze_functions(session_library library, session_ze_functions *ze) {
   memset(ze, 0, sizeof(*ze));
 #define LOAD(name, field) load_export(library, name, &ze->field, sizeof(ze->field))
   return LOAD("zeInitDrivers", init_drivers) &&
@@ -473,14 +476,14 @@ static void session_destroy(graphinfer_session *session) {
     session->ze.context_destroy(session->context);
   }
   if (session->loader != NULL) {
-    FreeLibrary(session->loader);
+    session_library_close(session->loader);
   }
-  DeleteCriticalSection(&session->lock);
+  session_mutex_destroy(&session->lock);
   free(session);
 }
 
 static void session_unref(graphinfer_session *session) {
-  if (session != NULL && InterlockedDecrement(&session->references) == 0) {
+  if (session != NULL && session_reference_release(&session->references) == 0) {
     session_destroy(session);
   }
 }
@@ -599,14 +602,19 @@ npunlock_status graphinfer_session_create(const graphinfer_options *options,
     return npunlock_set_diagnostic(&result->diagnostic, NPUNLOCK_STATUS_OUT_OF_MEMORY,
                                    "graphinfer.session", "failed to allocate session");
   }
-  InitializeCriticalSection(&session->lock);
-  session->references = 1;
+  if (!session_mutex_init(&session->lock)) {
+    free(session);
+    return npunlock_set_diagnostic(&result->diagnostic, NPUNLOCK_STATUS_INTERNAL_ERROR,
+                                   "graphinfer.session", "failed to initialize session mutex");
+  }
+  session_reference_init(&session->references);
   session->active = true;
   session->fence_timeout_ns = (uint64_t)options->timeout_ms * 1000000u;
-  session->loader = LoadLibraryExW(L"ze_loader.dll", NULL, LOAD_LIBRARY_SEARCH_SYSTEM32);
+  session->loader = session_library_open();
   if (session->loader == NULL) {
-    status = npunlock_set_diagnostic(&result->diagnostic, NPUNLOCK_STATUS_NOT_FOUND,
-                                     "graphinfer.session", "ze_loader.dll was not found");
+    status =
+        npunlock_set_diagnostic(&result->diagnostic, NPUNLOCK_STATUS_NOT_FOUND,
+                                "graphinfer.session", "system Level Zero loader was not found");
     goto fail;
   }
   if (!load_ze_functions(session->loader, &session->ze)) {
@@ -678,7 +686,7 @@ void graphinfer_session_result_release(graphinfer_session_result *result) {
   }
   session = result->session;
   if (session != NULL) {
-    EnterCriticalSection(&session->lock);
+    session_mutex_lock(&session->lock);
     session->active = false;
     if (session->submission_fence != NULL) {
       session->ze.fence_destroy(session->submission_fence);
@@ -696,7 +704,7 @@ void graphinfer_session_result_release(graphinfer_session_result *result) {
       session->graph.destroy(session->handle);
       session->handle = NULL;
     }
-    LeaveCriticalSection(&session->lock);
+    session_mutex_unlock(&session->lock);
     session_unref(session);
   }
   npunlock_diagnostic_release(&result->diagnostic);
@@ -723,9 +731,9 @@ npunlock_status graphinfer_shared_buffer_create(graphinfer_session *session, siz
     return npunlock_set_diagnostic(&buffer->diagnostic, NPUNLOCK_STATUS_OUT_OF_MEMORY,
                                    "graphinfer.shared_buffer", "failed to allocate buffer state");
   }
-  EnterCriticalSection(&session->lock);
+  session_mutex_lock(&session->lock);
   if (!session->active) {
-    LeaveCriticalSection(&session->lock);
+    session_mutex_unlock(&session->lock);
     free(implementation);
     return npunlock_set_diagnostic(&buffer->diagnostic, NPUNLOCK_STATUS_INVALID_ARGUMENT,
                                    "graphinfer.shared_buffer", "session is closed");
@@ -738,9 +746,9 @@ npunlock_status graphinfer_shared_buffer_create(graphinfer_session *session, siz
   if (code == NPUNLOCK_ZE_SUCCESS) {
     implementation->session = session;
     implementation->size = size;
-    InterlockedIncrement(&session->references);
+    session_reference_retain(&session->references);
   }
-  LeaveCriticalSection(&session->lock);
+  session_mutex_unlock(&session->lock);
   if (code != NPUNLOCK_ZE_SUCCESS) {
     free(implementation);
     return session_driver_error(&buffer->diagnostic, "zeMemAllocShared", code);
@@ -761,9 +769,9 @@ void graphinfer_shared_buffer_release(graphinfer_shared_buffer *buffer) {
   implementation = (shared_buffer_impl *)buffer->implementation;
   if (implementation != NULL) {
     session = implementation->session;
-    EnterCriticalSection(&session->lock);
+    session_mutex_lock(&session->lock);
     session->ze.mem_free(session->context, implementation->allocation);
-    LeaveCriticalSection(&session->lock);
+    session_mutex_unlock(&session->lock);
     free(implementation);
     session_unref(session);
   }
@@ -917,7 +925,7 @@ npunlock_status graphinfer_session_infer(graphinfer_session *session,
     return npunlock_set_diagnostic(&result->diagnostic, NPUNLOCK_STATUS_INVALID_ARGUMENT,
                                    "graphinfer.session", "bindings do not cover graph tensors");
   }
-  EnterCriticalSection(&session->lock);
+  session_mutex_lock(&session->lock);
   if (!session->active) {
     status = npunlock_set_diagnostic(&result->diagnostic, NPUNLOCK_STATUS_INVALID_ARGUMENT,
                                      "graphinfer.session", "session is closed");
@@ -943,7 +951,7 @@ npunlock_status graphinfer_session_infer(graphinfer_session *session,
   status = execute_allocations_locked(session, allocations, &result->diagnostic);
 
 done:
-  LeaveCriticalSection(&session->lock);
+  session_mutex_unlock(&session->lock);
   return status;
 }
 
@@ -1017,7 +1025,7 @@ npunlock_status npunlock_graphinfer_infer_copied(graphinfer_session *session,
   result->driver_version = session->driver_version;
   result->device_vendor_id = session->device_vendor_id;
   result->device_id = session->device_id;
-  EnterCriticalSection(&session->lock);
+  session_mutex_lock(&session->lock);
   if (!session->active) {
     status = npunlock_set_diagnostic(&result->diagnostic, NPUNLOCK_STATUS_INVALID_ARGUMENT,
                                      "graphinfer.infer", "session is closed");
@@ -1104,7 +1112,7 @@ npunlock_status npunlock_graphinfer_infer_copied(graphinfer_session *session,
   }
 
 done:
-  LeaveCriticalSection(&session->lock);
+  session_mutex_unlock(&session->lock);
   return status;
 }
 

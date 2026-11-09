@@ -24,7 +24,10 @@ static bool view_has_nul(npunlock_view view) {
   return view.size != 0 && memchr(view.data, 0, view.size) != NULL;
 }
 
-static bool is_absolute_windows_path(npunlock_view path) {
+static bool is_absolute_tool_path(npunlock_view path) {
+#ifndef _WIN32
+  return path.size != 0 && path.data[0] == '/';
+#else
   if (path.size >= 3 &&
       ((path.data[0] >= 'A' && path.data[0] <= 'Z') ||
        (path.data[0] >= 'a' && path.data[0] <= 'z')) &&
@@ -32,6 +35,7 @@ static bool is_absolute_windows_path(npunlock_view path) {
     return true;
   }
   return path.size >= 2 && path.data[0] == '\\' && path.data[1] == '\\';
+#endif
 }
 
 static bool is_entry_symbol(npunlock_view entry) {
@@ -86,19 +90,36 @@ static npunlock_status make_path(npunlock_view directory, const char *filename,
       directory.data[directory.size - 1] != '\\' && directory.data[directory.size - 1] != '/';
   size_t size;
   uint8_t *data;
+#ifdef _WIN32
+  size_t prefix = 0;
+#else
+  size_t prefix = 2;
+#endif
   if (!npunlock_checked_add_size(directory.size, add_separator ? 1 : 0, &size) ||
-      !npunlock_checked_add_size(size, filename_size, &size)) {
+      !npunlock_checked_add_size(size, filename_size, &size) ||
+      !npunlock_checked_add_size(size, prefix, &size)) {
     return NPUNLOCK_STATUS_OVERFLOW;
   }
   data = (uint8_t *)malloc(size);
   if (data == NULL) {
     return NPUNLOCK_STATUS_OUT_OF_MEMORY;
   }
-  memcpy(data, directory.data, directory.size);
-  if (add_separator) {
-    data[directory.size] = '\\';
+  if (prefix != 0) {
+    data[0] = 'Z';
+    data[1] = ':';
   }
-  memcpy(data + directory.size + (add_separator ? 1 : 0), filename, filename_size);
+  memcpy(data + prefix, directory.data, directory.size);
+  if (add_separator) {
+    data[prefix + directory.size] = '\\';
+  }
+  memcpy(data + prefix + directory.size + (add_separator ? 1 : 0), filename, filename_size);
+#ifndef _WIN32
+  for (size_t index = prefix; index < size; ++index) {
+    if (data[index] == '/') {
+      data[index] = '\\';
+    }
+  }
+#endif
   return npunlock_buffer_adopt_malloc(data, size, path);
 }
 
@@ -312,7 +333,7 @@ npunlock_status shavecc_compile(const shavecc_options *options, npunlock_view c_
       !npunlock_view_is_valid(c_source) || c_source.size == 0 || view_has_nul(c_source) ||
       !npunlock_view_is_valid(options->movi_dll_directory_utf8) ||
       options->movi_dll_directory_utf8.size == 0 ||
-      !is_absolute_windows_path(options->movi_dll_directory_utf8) ||
+      !is_absolute_tool_path(options->movi_dll_directory_utf8) ||
       view_has_nul(options->movi_dll_directory_utf8) ||
       !npunlock_view_is_valid(options->worker_executable_utf8) ||
       view_has_nul(options->worker_executable_utf8) ||

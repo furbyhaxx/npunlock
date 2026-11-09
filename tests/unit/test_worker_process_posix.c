@@ -1,5 +1,7 @@
+#define _POSIX_C_SOURCE 200809L
 #include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "npunlock/error.h"
@@ -20,11 +22,11 @@ static int buffer_equals(const npunlock_buffer *buffer, const char *expected) {
   return buffer->size == size && memcmp(buffer->data, expected, size) == 0;
 }
 
-static int test_echo(void) {
+static int test_echo(const char *mode) {
   static const uint8_t request[] = "worker request";
   npunlock_worker_process_result result = {0};
   npunlock_status status = npunlock_worker_process_run(
-      fixture_path(), "echo", (npunlock_view){request, sizeof(request) - 1}, 1024, 2000, &result);
+      fixture_path(), mode, (npunlock_view){request, sizeof(request) - 1}, 1024, 2000, &result);
   int passed = status == NPUNLOCK_STATUS_OK && result.process_exit_code == 0 &&
                result.response.size == sizeof(request) - 1 &&
                memcmp(result.response.data, request, sizeof(request) - 1) == 0 &&
@@ -53,4 +55,47 @@ static int test_timeout(void) {
   return passed;
 }
 
-int main(void) { return test_echo() && test_timeout() ? 0 : 1; }
+static int test_wine(void) {
+  static const char payload[] = NPUNLOCK_WINE_FIXTURE_DIR "/payload with spaces.exe";
+  static const char prefix[] = NPUNLOCK_WINE_FIXTURE_DIR "/prefix with spaces";
+  static const uint8_t request[] = {0, 1, 0xff, 0x80, 4, 0};
+  char *path = getenv("PATH") == NULL ? NULL : strdup(getenv("PATH"));
+  char *old_prefix = getenv("WINEPREFIX") == NULL ? NULL : strdup(getenv("WINEPREFIX"));
+  npunlock_worker_process_result result = {0};
+  int passed =
+      setenv("PATH", NPUNLOCK_WINE_FIXTURE_DIR, 1) == 0 && setenv("WINEPREFIX", prefix, 1) == 0;
+  npunlock_status status = npunlock_worker_process_run(
+      (npunlock_view){(const uint8_t *)payload, sizeof(payload) - 1}, "movi",
+      (npunlock_view){request, sizeof(request)}, 1024, 2000, &result);
+  passed = passed && status == NPUNLOCK_STATUS_OK && result.process_exit_code == 0 &&
+           result.response.size == sizeof(request) &&
+           memcmp(result.response.data, request, sizeof(request)) == 0 &&
+           result.stdout_log.size == 0 &&
+           buffer_equals(&result.stderr_log, "wine fixture stderr\n");
+  npunlock_worker_process_result_release(&result);
+  setenv("PATH", "", 1);
+  status = npunlock_worker_process_run(
+      (npunlock_view){(const uint8_t *)payload, sizeof(payload) - 1}, "movi",
+      (npunlock_view){request, sizeof(request)}, 1024, 2000, &result);
+  passed = passed && status == NPUNLOCK_STATUS_NOT_FOUND;
+  npunlock_worker_process_result_release(&result);
+  if (path == NULL)
+    unsetenv("PATH");
+  else
+    setenv("PATH", path, 1);
+  if (old_prefix == NULL)
+    unsetenv("WINEPREFIX");
+  else
+    setenv("WINEPREFIX", old_prefix, 1);
+  free(path);
+  free(old_prefix);
+  if (!passed)
+    fprintf(stderr, "Wine worker launcher contract failed\n");
+  return passed;
+}
+
+int main(int argc, char **argv) {
+  if (argc == 2 && strcmp(argv[1], "wine") == 0)
+    return test_wine() ? 0 : 1;
+  return test_echo("echo") && test_echo("late-close") && test_timeout() ? 0 : 1;
+}

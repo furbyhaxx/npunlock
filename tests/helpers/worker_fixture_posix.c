@@ -56,13 +56,23 @@ int main(int argc, char **argv) {
       return 3;
     }
   }
-  if (strcmp(argv[1], "echo") == 0) {
+  if (strcmp(argv[1], "echo") == 0 || strcmp(argv[1], "late-close") == 0) {
     static const uint8_t stdout_text[] = "fixture stdout\n";
     static const uint8_t stderr_text[] = "fixture stderr\n";
     if (!write_all(STDOUT_FILENO, stdout_text, sizeof(stdout_text) - 1) ||
         !write_all(STDERR_FILENO, stderr_text, sizeof(stderr_text) - 1) ||
         !write_all(response_fd, request, used)) {
       return 4;
+    }
+    if (strcmp(argv[1], "late-close") == 0) {
+      pid_t child = fork();
+      if (child < 0)
+        return 5;
+      if (child == 0) {
+        struct timespec delay = {0, 200000000};
+        while (nanosleep(&delay, &delay) != 0 && errno == EINTR) {
+        }
+      }
     }
     return 0;
   }

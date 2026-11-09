@@ -7,6 +7,21 @@
   },
   "configurePresets": [
     {
+      "name": "linux",
+      "displayName": "Linux native runtime with Wine MoviTools worker",
+      "binaryDir": "${sourceDir}/build/linux",
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Linux"
+      },
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "NPUNLOCK_BUILD_TESTS": "ON",
+        "NPUNLOCK_INSPECT_ONLY": "OFF"
+      }
+    },
+    {
       "name": "windows",
       "displayName": "Windows",
       "binaryDir": "${sourceDir}/build/windows",
@@ -26,11 +41,16 @@
       },
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Debug",
-        "NPUNLOCK_BUILD_TESTS": "ON"
+        "NPUNLOCK_BUILD_TESTS": "ON",
+        "NPUNLOCK_INSPECT_ONLY": "ON"
       }
     }
   ],
   "buildPresets": [
+    {
+      "name": "linux",
+      "configurePreset": "linux"
+    },
     {
       "name": "windows-debug",
       "configurePreset": "windows",
@@ -47,6 +67,13 @@
     }
   ],
   "testPresets": [
+    {
+      "name": "linux",
+      "configurePreset": "linux",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
     {
       "name": "windows-debug",
       "configurePreset": "windows",

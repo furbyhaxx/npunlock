@@ -8,6 +8,7 @@ include(GNUInstallDirs)
 include(CMakePackageConfigHelpers)
 
 option(NPUNLOCK_BUILD_TESTS "Build offline unit tests" ON)
+option(NPUNLOCK_INSPECT_ONLY "Build only Linux porting utilities" OFF)
 option(NPUNLOCK_ENABLE_NPU_TESTS "Enable tests that require an Intel NPU" OFF)
 option(NPUNLOCK_ENABLE_GRAPHINFER_TESTS "Enable bundled graph inference tests on an Intel NPU" OFF)
 option(NPUNLOCK_ENABLE_MOVITOOLS_TESTS "Enable tests that invoke caller-supplied MoviTools" OFF)
@@ -285,7 +286,7 @@ if(NOT WIN32)
     src/common/worker_process_posix.c
   )
   target_include_directories(npunlock_posix_worker_process PUBLIC include PRIVATE src/common)
-  target_link_libraries(npunlock_posix_worker_process PRIVATE npunlock_warnings)
+  target_link_libraries(npunlock_posix_worker_process PRIVATE npunlock_warnings ${CMAKE_DL_LIBS})
   install(
     TARGETS npunlock_linux_probe RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT Runtime
   )
@@ -296,16 +297,25 @@ if(NOT WIN32)
     )
     add_executable(npunlock_worker_fixture_posix tests/helpers/worker_fixture_posix.c)
     target_link_libraries(npunlock_worker_fixture_posix PRIVATE npunlock_warnings)
+    add_executable(npunlock_wine_fixture_posix tests/helpers/wine_fixture_posix.c)
+    set_target_properties(npunlock_wine_fixture_posix PROPERTIES
+      OUTPUT_NAME wine RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/wine-fixture")
+    target_link_libraries(npunlock_wine_fixture_posix PRIVATE npunlock_warnings)
+    file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/wine-fixture")
+    file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/wine-fixture/payload with spaces.exe" "fixture")
     add_executable(npunlock_test_worker_process_posix tests/unit/test_worker_process_posix.c)
     target_include_directories(npunlock_test_worker_process_posix PRIVATE src/common)
     target_compile_definitions(
       npunlock_test_worker_process_posix
       PRIVATE NPUNLOCK_POSIX_WORKER_FIXTURE="$<TARGET_FILE:npunlock_worker_fixture_posix>"
+        NPUNLOCK_WINE_FIXTURE_DIR="${CMAKE_CURRENT_BINARY_DIR}/wine-fixture"
     )
     target_link_libraries(
       npunlock_test_worker_process_posix PRIVATE npunlock_posix_worker_process npunlock_warnings
     )
-    add_dependencies(npunlock_test_worker_process_posix npunlock_worker_fixture_posix)
+    add_dependencies(npunlock_test_worker_process_posix npunlock_worker_fixture_posix npunlock_wine_fixture_posix)
+    add_test(NAME porting_wine_worker_launcher COMMAND npunlock_test_worker_process_posix wine)
+    set_tests_properties(porting_wine_worker_launcher PROPERTIES TIMEOUT 5)
     add_executable(npunlock_test_ir_worker_posix tests/unit/test_ir_worker_posix.c)
     target_include_directories(npunlock_test_ir_worker_posix PRIVATE src/common src/workers)
     target_compile_definitions(npunlock_test_ir_worker_posix
@@ -320,48 +330,57 @@ if(NOT WIN32)
     add_test(NAME porting_posix_worker_process COMMAND npunlock_test_worker_process_posix)
     set_tests_properties(porting_posix_worker_process PROPERTIES TIMEOUT 5)
   endif()
-  set(NPUNLOCK_LINUX_FORMAT_SOURCES
-    ${NPUNLOCK_INSPECT_SOURCES}
-    ${NPUNLOCK_LINUX_PROBE_SOURCES}
-    src/linux_probe/infer_engine.h
-    src/workers/main_posix.c
-    src/workers/ir_worker.c
-    src/workers/worker_io.h
-    src/workers/worker_io_common.c
-    src/workers/worker_io_posix.c
-    tests/unit/test_ir_worker_posix.c
-    src/workers/level_zero_min.h
-    src/common/worker_process_posix.c
-    tests/helpers/worker_fixture_posix.c
-    tests/unit/test_worker_process_posix.c
-  )
-  find_program(CLANG_FORMAT_EXECUTABLE
-    NAMES clang-format clang-format-19 clang-format-18
-  )
-  if(CLANG_FORMAT_EXECUTABLE)
-    add_custom_target(format
-      COMMAND ${CLANG_FORMAT_EXECUTABLE} -i ${NPUNLOCK_LINUX_FORMAT_SOURCES}
-      WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-      VERBATIM
+  if(NPUNLOCK_INSPECT_ONLY)
+    set(NPUNLOCK_LINUX_FORMAT_SOURCES
+      ${NPUNLOCK_INSPECT_SOURCES}
+      ${NPUNLOCK_LINUX_PROBE_SOURCES}
+      src/linux_probe/infer_engine.h
+      src/workers/main_posix.c
+      src/workers/ir_worker.c
+      src/workers/worker_io.h
+      src/workers/worker_io_common.c
+      src/workers/worker_io_posix.c
+      tests/unit/test_ir_worker_posix.c
+      src/workers/level_zero_min.h
+      src/common/worker_process_posix.c
+      tests/helpers/worker_fixture_posix.c
+      tests/helpers/wine_fixture_posix.c
+      tests/unit/test_worker_process_posix.c
     )
-    add_custom_target(format-check
-      COMMAND ${CLANG_FORMAT_EXECUTABLE} --dry-run --Werror ${NPUNLOCK_LINUX_FORMAT_SOURCES}
-      WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-      VERBATIM
+    find_program(CLANG_FORMAT_EXECUTABLE
+      NAMES clang-format clang-format-19 clang-format-18
     )
-  else()
-    add_custom_target(format
-      COMMAND ${CMAKE_COMMAND} -E echo "clang-format not found; install it to format C sources"
-      COMMAND ${CMAKE_COMMAND} -E false
-      VERBATIM
-    )
-    add_custom_target(format-check
-      COMMAND ${CMAKE_COMMAND} -E echo "clang-format not found; install it to check C formatting"
-      COMMAND ${CMAKE_COMMAND} -E false
-      VERBATIM
-    )
+    if(CLANG_FORMAT_EXECUTABLE)
+      add_custom_target(format
+        COMMAND ${CLANG_FORMAT_EXECUTABLE} -i ${NPUNLOCK_LINUX_FORMAT_SOURCES}
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+        VERBATIM
+      )
+      add_custom_target(format-check
+        COMMAND ${CLANG_FORMAT_EXECUTABLE} --dry-run --Werror ${NPUNLOCK_LINUX_FORMAT_SOURCES}
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+        VERBATIM
+      )
+    else()
+      add_custom_target(format
+        COMMAND ${CMAKE_COMMAND} -E echo "clang-format not found; install it to format C sources"
+        COMMAND ${CMAKE_COMMAND} -E false
+        VERBATIM
+      )
+      add_custom_target(format-check
+        COMMAND ${CMAKE_COMMAND} -E echo "clang-format not found; install it to check C formatting"
+        COMMAND ${CMAKE_COMMAND} -E false
+        VERBATIM
+      )
+    endif()
+    return()
   endif()
-  return()
+endif()
+
+if(WIN32)
+  set(NPUNLOCK_PROCESS_SOURCE src/common/worker_process_win32.c)
+else()
+  set(NPUNLOCK_PROCESS_SOURCE src/common/worker_process_posix.c)
 endif()
 
 add_library(npunlock_common_objects OBJECT
@@ -371,20 +390,41 @@ add_library(npunlock_common_objects OBJECT
   src/common/elf32.c
   src/common/sha256.c
   src/common/status.c
-  src/common/worker_process_win32.c
+  ${NPUNLOCK_PROCESS_SOURCE}
 )
 target_include_directories(npunlock_common_objects PRIVATE include src/common)
 target_link_libraries(npunlock_common_objects PRIVATE npunlock_warnings)
 
-add_executable(npunlock_worker
-  src/workers/worker.c
-  src/workers/worker_io_common.c
-  src/workers/worker_io.c
-  src/workers/movi_worker.c
-  src/workers/ir_worker.c
-)
-target_include_directories(npunlock_worker PRIVATE src/common src/workers)
-target_link_libraries(npunlock_worker PRIVATE npunlock_warnings)
+if(WIN32)
+  add_executable(npunlock_worker
+    src/workers/worker.c
+    src/workers/worker_io_common.c
+    src/workers/worker_io.c
+    src/workers/movi_worker.c
+    src/workers/ir_worker.c
+  )
+  target_include_directories(npunlock_worker PRIVATE src/common src/workers)
+  target_link_libraries(npunlock_worker PRIVATE npunlock_warnings)
+else()
+  find_program(NPUNLOCK_MINGW_CC NAMES x86_64-w64-mingw32-gcc REQUIRED)
+  set(NPUNLOCK_WINE_WORKER "${CMAKE_CURRENT_BINARY_DIR}/npunlock_movi_worker.exe")
+  set(NPUNLOCK_WINE_WORKER_SOURCES
+    src/workers/worker.c src/workers/worker_io.c src/workers/worker_io_common.c
+    src/workers/movi_worker.c src/workers/ir_worker.c
+  )
+  add_custom_command(OUTPUT "${NPUNLOCK_WINE_WORKER}"
+    COMMAND "${NPUNLOCK_MINGW_CC}" -std=c17 -O2 -static
+      -Wall -Wextra -Werror -Wpedantic -Isrc/workers -Isrc/common
+      ${NPUNLOCK_WINE_WORKER_SOURCES} -o "${NPUNLOCK_WINE_WORKER}"
+    DEPENDS ${NPUNLOCK_WINE_WORKER_SOURCES}
+      src/workers/worker_io.h src/workers/worker_entry.h
+      src/workers/movi_protocol.h src/workers/ir_protocol.h
+      src/workers/level_zero_min.h src/common/worker_protocol.h
+    WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+    VERBATIM
+  )
+  add_custom_target(npunlock_worker ALL DEPENDS "${NPUNLOCK_WINE_WORKER}")
+endif()
 
 set(NPUNLOCK_DEFAULT_LINKER_SCRIPT "${CMAKE_CURRENT_SOURCE_DIR}/src/shavecc/shave_kernel.ld")
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${NPUNLOCK_DEFAULT_LINKER_SCRIPT}")
@@ -437,7 +477,7 @@ target_link_libraries(npunlock_patchblob_objects PRIVATE npunlock_warnings)
 
 add_library(npunlock_graphinfer_objects OBJECT
   src/graphinfer/graphinfer.c
-  src/graphinfer/session_win32.c
+  src/graphinfer/session.c
 )
 target_include_directories(npunlock_graphinfer_objects PRIVATE include src src/common src/graphinfer)
 target_link_libraries(npunlock_graphinfer_objects PRIVATE npunlock_warnings)
@@ -463,6 +503,10 @@ add_library(npunlock_native SHARED
 )
 add_library(npunlock::native ALIAS npunlock_native)
 set_target_properties(npunlock_native PROPERTIES OUTPUT_NAME npunlock EXPORT_NAME native)
+if(NOT WIN32)
+  find_package(Threads REQUIRED)
+  target_link_libraries(npunlock_native PRIVATE ${CMAKE_DL_LIBS} Threads::Threads)
+endif()
 target_include_directories(npunlock_native PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
@@ -517,7 +561,8 @@ set(NPUNLOCK_FORMAT_SOURCES
   src/ir2blob/ir_worker_win32.c
   src/graphinfer/graphinfer.c
   src/graphinfer/session_internal.h
-  src/graphinfer/session_win32.c
+  src/graphinfer/session.c
+  src/graphinfer/session_platform.h
   src/npurun/main.c
   src/npunlock_inspect/main.c
   src/patchblob/patchblob.c
@@ -546,6 +591,14 @@ set(NPUNLOCK_FORMAT_SOURCES
   tests/unit/test_elf32.c
   tests/unit/test_graph_blob.c
 )
+
+if(NOT WIN32)
+  list(APPEND NPUNLOCK_FORMAT_SOURCES
+    src/workers/main_posix.c src/workers/worker_io_posix.c
+    tests/helpers/worker_fixture_posix.c tests/helpers/wine_fixture_posix.c
+    tests/unit/test_worker_process_posix.c tests/unit/test_ir_worker_posix.c
+  )
+endif()
 
 find_program(CLANG_FORMAT_EXECUTABLE
   NAMES clang-format clang-format-19 clang-format-18
@@ -700,10 +753,19 @@ install(TARGETS npunlock_native
   LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR} COMPONENT PythonRuntime
   ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR} COMPONENT Development
 )
-install(TARGETS npunlock_worker
-  EXPORT npunlockTargets
-  RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT PythonRuntime
-)
+if(WIN32)
+  install(TARGETS npunlock_worker
+    EXPORT npunlockTargets
+    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT PythonRuntime
+  )
+else()
+  install(TARGETS npunlock_ir_worker_posix
+    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT PythonRuntime
+  )
+  install(FILES "${NPUNLOCK_WINE_WORKER}"
+    DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT PythonRuntime
+  )
+endif()
 install(TARGETS npurun
   EXPORT npunlockTargets
   RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT Runtime

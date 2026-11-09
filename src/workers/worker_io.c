@@ -1,9 +1,11 @@
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 
+#include <io.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -72,6 +74,19 @@ bool npunlock_worker_read_all(HANDLE handle, size_t maximum, uint8_t **data, siz
 bool npunlock_worker_response_handle(int argc, char **argv, HANDLE *response) {
   char *handle_end = NULL;
   uint64_t handle_value;
+  if (response != NULL && argc == 2 && strcmp(argv[1], "--response-stdout") == 0) {
+    HANDLE output = GetStdHandle(STD_OUTPUT_HANDLE);
+    if (!DuplicateHandle(GetCurrentProcess(), output, GetCurrentProcess(), response, 0, FALSE,
+                         DUPLICATE_SAME_ACCESS)) {
+      return false;
+    }
+    if (_dup2(_fileno(stderr), _fileno(stdout)) != 0 ||
+        !SetStdHandle(STD_OUTPUT_HANDLE, GetStdHandle(STD_ERROR_HANDLE))) {
+      CloseHandle(*response);
+      return false;
+    }
+    return true;
+  }
   if (response == NULL || argc != 3 || strcmp(argv[1], "--response-handle") != 0) {
     return false;
   }

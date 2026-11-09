@@ -1,5 +1,7 @@
+#define _GNU_SOURCE
 #define _POSIX_C_SOURCE 200809L
 
+#include <dlfcn.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <poll.h>
@@ -12,6 +14,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
+#include <sys/stat.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <time.h>
@@ -53,14 +56,26 @@ static char *copy_view(npunlock_view view) {
   return copy;
 }
 
-static char *default_worker_path(void) {
-  static const char worker_name[] = "npunlock_worker";
+static const uint8_t module_anchor = 0;
+
+static char *default_worker_path(const char *mode) {
+  const char *worker_name =
+      strcmp(mode, "movi") == 0 ? "npunlock_movi_worker.exe" : "npunlock-ir-worker";
+  size_t name_size = strlen(worker_name) + 1;
+  Dl_info module;
   char executable[4096];
-  ssize_t length = readlink("/proc/self/exe", executable, sizeof(executable) - 1);
+  if (dladdr(&module_anchor, &module) == 0 || module.dli_fname == NULL) {
+    return NULL;
+  }
+  size_t length = strlen(module.dli_fname);
+  if (length >= sizeof(executable)) {
+    return NULL;
+  }
+  memcpy(executable, module.dli_fname, length + 1);
   char *separator;
   size_t directory_size;
   char *path;
-  if (length <= 0 || (size_t)length >= sizeof(executable)) {
+  if (length == 0 || length >= sizeof(executable)) {
     return NULL;
   }
   executable[length] = '\0';
@@ -69,16 +84,80 @@ static char *default_worker_path(void) {
     return NULL;
   }
   directory_size = (size_t)(separator - executable) + 1;
-  if (directory_size > SIZE_MAX - sizeof(worker_name)) {
+  if (directory_size > SIZE_MAX - name_size) {
     return NULL;
   }
-  path = (char *)malloc(directory_size + sizeof(worker_name));
+  path = (char *)malloc(directory_size + name_size);
   if (path == NULL) {
     return NULL;
   }
   memcpy(path, executable, directory_size);
-  memcpy(path + directory_size, worker_name, sizeof(worker_name));
+  memcpy(path + directory_size, worker_name, name_size);
   return path;
+}
+
+static char **wine_environment(char **owned_prefix) {
+  const char *configured = getenv("WINEPREFIX");
+  const char *data_home = getenv("XDG_DATA_HOME");
+  const char *home = getenv("HOME");
+  size_t count = 0;
+  char **environment;
+  char *prefix;
+  size_t size;
+  if (configured != NULL) {
+    if (configured[0] != '/') {
+      return NULL;
+    }
+    prefix = strdup(configured);
+  } else {
+    const char *root = data_home != NULL && data_home[0] == '/' ? data_home : home;
+    const char *suffix = root == data_home ? "/npunlock/wine" : "/.local/share/npunlock/wine";
+    if (root == NULL || root[0] != '/') {
+      return NULL;
+    }
+    size = strlen(root) + strlen(suffix) + 1;
+    prefix = malloc(size);
+    if (prefix != NULL) {
+      snprintf(prefix, size, "%s%s", root, suffix);
+    }
+  }
+  if (prefix == NULL) {
+    return NULL;
+  }
+  for (char *cursor = prefix + 1; *cursor != '\0'; ++cursor) {
+    if (*cursor == '/') {
+      *cursor = '\0';
+      int code = mkdir(prefix, 0700);
+      *cursor = '/';
+      if (code != 0 && errno != EEXIST) {
+        free(prefix);
+        return NULL;
+      }
+    }
+  }
+  while (environ[count] != NULL) {
+    ++count;
+  }
+  environment = calloc(count + 2, sizeof(*environment));
+  size = strlen(prefix) + sizeof("WINEPREFIX=");
+  *owned_prefix = malloc(size);
+  if (environment == NULL || *owned_prefix == NULL) {
+    free(environment);
+    free(*owned_prefix);
+    *owned_prefix = NULL;
+    free(prefix);
+    return NULL;
+  }
+  snprintf(*owned_prefix, size, "WINEPREFIX=%s", prefix);
+  free(prefix);
+  size_t next = 0;
+  for (size_t index = 0; index < count; ++index) {
+    if (strncmp(environ[index], "WINEPREFIX=", 11) != 0) {
+      environment[next++] = environ[index];
+    }
+  }
+  environment[next] = *owned_prefix;
+  return environment;
 }
 
 static bool relocate_fd(int *fd) {
@@ -200,13 +279,14 @@ static npunlock_status drain_stream(byte_stream *stream) {
 
 static int add_child_actions(posix_spawn_file_actions_t *actions, const int request_pipe[2],
                              const int response_pipe[2], const int stdout_pipe[2],
-                             const int stderr_pipe[2]) {
+                             const int stderr_pipe[2], bool wine_mode) {
   const int descriptors[] = {request_pipe[0], request_pipe[1], response_pipe[0], response_pipe[1],
                              stdout_pipe[0],  stdout_pipe[1],  stderr_pipe[0],   stderr_pipe[1]};
   size_t index;
   if (posix_spawn_file_actions_adddup2(actions, request_pipe[0], STDIN_FILENO) != 0 ||
       posix_spawn_file_actions_adddup2(actions, response_pipe[1], NPUNLOCK_RESPONSE_FD) != 0 ||
-      posix_spawn_file_actions_adddup2(actions, stdout_pipe[1], STDOUT_FILENO) != 0 ||
+      posix_spawn_file_actions_adddup2(actions, wine_mode ? response_pipe[1] : stdout_pipe[1],
+                                       STDOUT_FILENO) != 0 ||
       posix_spawn_file_actions_adddup2(actions, stderr_pipe[1], STDERR_FILENO) != 0) {
     return 0;
   }
@@ -245,6 +325,9 @@ npunlock_status npunlock_worker_process_run(npunlock_view worker_executable_utf8
   bool attributes_initialized = false;
   char response_fd_text[16];
   char *arguments[5];
+  bool wine_mode = worker_mode != NULL && strcmp(worker_mode, "movi") == 0;
+  char **child_environment = NULL;
+  char *prefix_environment = NULL;
   char *worker_path = NULL;
   pid_t process = -1;
   size_t request_offset = 0;
@@ -260,11 +343,15 @@ npunlock_status npunlock_worker_process_run(npunlock_view worker_executable_utf8
     return NPUNLOCK_STATUS_INVALID_ARGUMENT;
   }
   memset(result, 0, sizeof(*result));
-  worker_path =
-      worker_executable_utf8.size == 0 ? default_worker_path() : copy_view(worker_executable_utf8);
+  worker_path = worker_executable_utf8.size == 0 ? default_worker_path(worker_mode)
+                                                 : copy_view(worker_executable_utf8);
   if (worker_path == NULL) {
     return worker_executable_utf8.size == 0 ? NPUNLOCK_STATUS_INTERNAL_ERROR
                                             : NPUNLOCK_STATUS_INVALID_ARGUMENT;
+  }
+  if (wine_mode && access(worker_path, R_OK) != 0) {
+    status = NPUNLOCK_STATUS_NOT_FOUND;
+    goto done;
   }
   if (!make_request_socket(request_pipe) || !make_pipe(response_pipe) || !make_pipe(stdout_pipe) ||
       !make_pipe(stderr_pipe) || !set_nonblocking(request_pipe[1]) ||
@@ -276,7 +363,8 @@ npunlock_status npunlock_worker_process_run(npunlock_view worker_executable_utf8
     goto done;
   }
   actions_initialized = true;
-  if (!add_child_actions(&actions, request_pipe, response_pipe, stdout_pipe, stderr_pipe) ||
+  if (!add_child_actions(&actions, request_pipe, response_pipe, stdout_pipe, stderr_pipe,
+                         wine_mode) ||
       posix_spawnattr_init(&attributes) != 0) {
     goto done;
   }
@@ -286,13 +374,21 @@ npunlock_status npunlock_worker_process_run(npunlock_view worker_executable_utf8
     goto done;
   }
   snprintf(response_fd_text, sizeof(response_fd_text), "%d", NPUNLOCK_RESPONSE_FD);
-  arguments[0] = worker_path;
-  arguments[1] = (char *)worker_mode;
-  arguments[2] = "--response-fd";
-  arguments[3] = response_fd_text;
+  arguments[0] = wine_mode ? "wine" : worker_path;
+  arguments[1] = wine_mode ? worker_path : (char *)worker_mode;
+  arguments[2] = wine_mode ? "movi" : "--response-fd";
+  arguments[3] = wine_mode ? "--response-stdout" : response_fd_text;
   arguments[4] = NULL;
+  if (wine_mode) {
+    child_environment = wine_environment(&prefix_environment);
+    if (child_environment == NULL) {
+      status = NPUNLOCK_STATUS_INVALID_ARGUMENT;
+      goto done;
+    }
+  }
   {
-    int spawn_error = posix_spawn(&process, worker_path, &actions, &attributes, arguments, environ);
+    int spawn_error = posix_spawnp(&process, arguments[0], &actions, &attributes, arguments,
+                                   wine_mode ? child_environment : environ);
     if (spawn_error != 0) {
       status = spawn_error == ENOENT ? NPUNLOCK_STATUS_NOT_FOUND : NPUNLOCK_STATUS_INTERNAL_ERROR;
       goto done;
@@ -365,7 +461,7 @@ npunlock_status npunlock_worker_process_run(npunlock_view worker_executable_utf8
     if (status != NPUNLOCK_STATUS_OK) {
       break;
     }
-    wait_result = waitpid(process, &wait_status, WNOHANG);
+    wait_result = process_exited ? 0 : waitpid(process, &wait_status, WNOHANG);
     if (wait_result == process) {
       process_exited = true;
     } else if (wait_result < 0 && errno != EINTR) {
@@ -414,6 +510,8 @@ done:
   if (actions_initialized) {
     posix_spawn_file_actions_destroy(&actions);
   }
+  free(child_environment);
+  free(prefix_environment);
   free(worker_path);
   if (npunlock_buffer_adopt_malloc(response.data, response.size, &result->response) ==
       NPUNLOCK_STATUS_OK) {

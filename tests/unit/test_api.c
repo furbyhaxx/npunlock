@@ -90,7 +90,11 @@ static int check_diagnostic(const npunlock_diagnostic *diagnostic, const char *s
 
 int main(void) {
   static const uint8_t source[] = "void controlled_act(unsigned p) {(void)p;}";
+#ifdef _WIN32
   static const uint8_t path[] = "C:\\npunlock-tests\\missing-movitools";
+#else
+  static const uint8_t path[] = "/npunlock-tests/missing-movitools";
+#endif
   static const uint8_t missing_ir_worker[] = "C:\\npunlock-tests\\missing-ir-worker.exe";
   static const uint8_t cpu[] = "3720xx";
   static const uint8_t entry[] = "controlled_act";
@@ -131,6 +135,8 @@ int main(void) {
 
   shave_options.struct_size = sizeof(shave_options);
   shave_options.movi_dll_directory_utf8 = (npunlock_view){path, sizeof(path) - 1};
+  shave_options.worker_executable_utf8 =
+      (npunlock_view){missing_ir_worker, sizeof(missing_ir_worker) - 1};
   shave_options.target_cpu = (npunlock_view){cpu, sizeof(cpu) - 1};
   shave_options.entry_symbol = (npunlock_view){entry, sizeof(entry) - 1};
   shave_options.timeout_ms = 1000;
