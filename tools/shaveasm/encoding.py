@@ -673,9 +673,10 @@ def _operation(instruction: Instruction) -> _Operation:
         }[mnemonic]
         return _Operation(unit, opcode | register << 4 | base << 9 | immediate << 17, 32,
                           prefix_class=prefix_class)
-    if mnemonic == "LSU0.LD.32" and len(operands) == 2:
-        destination, base = (_register(op, line) for op in operands)
-        return _Operation(unit, 0x1000D | destination << 4 | base << 9, 24)
+    if mnemonic in ("LSU0.LD.32", "LSU0.CP.32") and len(operands) == 2:
+        destination, source = (_register(op, line) for op in operands)
+        opcode = {"LSU0.LD.32": 0x1000D, "LSU0.CP.32": 0x80007}[mnemonic]
+        return _Operation(unit, opcode | destination << 4 | source << 9, 24)
     if mnemonic in ("LSU0.LDIL", "LSU1.LDIL") and len(operands) == 2:
         destination = _register(operands[0], line)
         immediate = _immediate(operands[1], 16, line)
