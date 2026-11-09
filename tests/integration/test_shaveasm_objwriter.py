@@ -86,6 +86,23 @@ class ObjectWriterTests(unittest.TestCase):
         image = Elf32.parse(assemble(".code .text.x\nBRU.BRA .Ltarget\nNOP 6\n.align 4\n.Ltarget:\n"))
         self.assertEqual(image.section(".text.x").data[:4], b"\xc7\x01\x00\x01")
 
+    def test_register_jump_delay_suffix_matches_vendor(self) -> None:
+        image = Elf32.parse(assemble((FIXTURES / "shaveasm-object-jump.s").read_text()))
+        self.assertEqual(image.section(".text.jump").data, bytes.fromhex("47f106308222010007"))
+        self.assertEqual(image.section(".text.jumpmixed").data, bytes.fromhex("ae18d294131f0050"))
+
+    def test_register_jump_delay_window_rejects_directives(self) -> None:
+        for branch in ("BRU.JMP i30", "IAU.XOR i5 i6 i7 || BRU.JMP i30"):
+            for directive in (".align 1", ".byte 0", ".fill 0"):
+                source = f".code x\n{branch}\nNOP 4\n{directive}\nNOP 2\n"
+                with self.subTest(branch=branch, directive=directive), self.assertRaisesRegex(
+                    AssemblyError, r"line 4.*branch.*line 2"
+                ):
+                    assemble(source)
+            assemble(f".code x\n{branch}\nNOP 6\n.align 4\n")
+            assemble(f".code x\n{branch}\n.code y\n.align 4\n")
+        assemble(".code x\nBRU.NOP\n.align 4\n")
+
     def test_branch_suffix_stops_at_section_switch(self) -> None:
         image = Elf32.parse(assemble((FIXTURES / "shaveasm-object-switch.s").read_text()))
         self.assertEqual(image.section(".text.x").data[:4], b"\xc7\x01\x00\x00")
