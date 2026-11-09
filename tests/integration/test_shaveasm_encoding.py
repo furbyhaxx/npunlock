@@ -40,6 +40,22 @@ class EncodingTests(unittest.TestCase):
         with self.assertRaisesRegex(AssemblyError, "read port 6"):
             encode("CMU.CMII.U32 i1 i2 || LSU1.STO.32 i8 i9 0")
 
+    def test_register_jump_has_a_sixteen_bit_payload_and_delay_span(self) -> None:
+        self.assertEqual(encode("BRU.JMP i0"), bytes.fromhex("470100"))
+        self.assertEqual(encode("BRU.JMP i31"), bytes.fromhex("47f900"))
+        jump = parse("BRU.JMP i30")[0]
+        data, fixups = encode_packet_with_fixups(jump, following=parse("NOP 6"))
+        self.assertEqual(data, bytes.fromhex("47f101"))
+        self.assertEqual(fixups, ())
+        data, _ = encode_packet_with_fixups(jump, following=parse("\n".join(["NOP"] * 6)))
+        self.assertEqual(data, bytes.fromhex("47f106"))
+        for source in ("BRU.JMP target", "BRU.JMP 30", "BRU.JMP i32",
+                       "BRU.JMP i0 || BRU.BRA target"):
+            with self.subTest(source=source), self.assertRaises(AssemblyError):
+                encode(source)
+        with self.assertRaisesRegex(AssemblyError, "control transfer"):
+            encode_packet_with_fixups(jump, following=parse("BRU.JMP i0\nNOP 6"))
+
     def test_high_immediate_load_and_absolute_high_fixup(self) -> None:
         self.assertEqual(encode("LSU0.LDIH i0 0"), bytes.fromhex("82030000"))
         self.assertEqual(encode("LSU0.LDIH i31 65535"), bytes.fromhex("82fbffff"))

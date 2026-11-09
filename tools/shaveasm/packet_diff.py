@@ -24,6 +24,9 @@ def generate_packets(seed: int, count: int) -> list[str]:
     def operation(unit: str, registers: tuple[str, str, str] | None = None, *, store_packet: bool = False) -> str:
         if unit == "BRU":
             return "BRU.BRA external_target"
+        if unit == "BRU.JMP16":
+            register = registers[0] if registers is not None else f"i{rng.randrange(32)}"
+            return f"BRU.JMP {register}"
         if registers is None:
             base = _UNITS.index(unit.split(".")[0]) * 4
             registers = tuple(f"i{base + rng.randrange(4)}" for _ in range(3))
@@ -65,7 +68,7 @@ def generate_packets(seed: int, count: int) -> list[str]:
 
     packets = ["NOP", *(f"NOP {n}" for n in range(1, 65))]
     for register in range(32):
-        for unit in (*_UNITS, "LSU0.LDO32", "LSU1.STO32", "IAU.ADD24", "CMU.CMZ16", "PEU.PCCX12"):
+        for unit in (*_UNITS, "LSU0.LDO32", "LSU1.STO32", "IAU.ADD24", "CMU.CMZ16", "PEU.PCCX12", "BRU.JMP16"):
             packets.append(operation(unit, (f"i{register}", f"i{31 - register}", f"i{(register + 11) % 32}")))
     packets.extend(("LSU0.LDIL i31 65535", "LSU1.LDIL i0 0", "SAU.ADD.i32 i0 i31 31"))
     packets.extend(f"LSU0.LDO.32 i31 i0 {value}" for value in (-16384, -1, 0, 1, 16383))
@@ -158,7 +161,8 @@ def generate_packets(seed: int, count: int) -> list[str]:
         "LSU0.LDIL i4 1", "CMU.CMZ.I32 i0", "IAU.ADD i16 i17 231",
         "IAU.XOR i16 i17 i18 || PEU.PCCX NEQ 63",
     )
-    branches = ("BRU.BRA external_target", "IAU.XOR i5 i6 i7 || BRU.BRA external_target")
+    branches = ("BRU.BRA external_target", "IAU.XOR i5 i6 i7 || BRU.BRA external_target",
+                "BRU.JMP i30", "IAU.XOR i5 i6 i7 || BRU.JMP i30")
     for branch in branches:
         packets.extend(f"{branch}\n NOP {n}" for n in range(1, 33))
         packets.extend(branch + "\n " + "\n ".join([op] * n)
@@ -223,7 +227,7 @@ def verify_packets(oracle: Oracle, output: Path, seed: int, count: int) -> None:
         if actual != expected or tuple(fixups) != expected_fixups:
             failures.append({"index": index, "source": source_packet, "vendor": expected.hex(), "native": actual.hex(),
                              "vendor_fixups": repr(expected_fixups), "native_fixups": repr(fixups)})
-    report = {"seed": seed, "random_packets": count, "random_delay_sequences": 2 * count,
+    report = {"seed": seed, "random_packets": count, "random_delay_sequences": 4 * count,
               "total": len(packets), "failures": failures}
     (output / "report.json").write_text(json.dumps(report, indent=2) + "\n")
     if failures:
