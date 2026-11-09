@@ -281,8 +281,8 @@ static npunlock_status stage_failure(shavecc_result *result, npunlock_status sta
   return status;
 }
 
-npunlock_status shavecc_compile(const shavecc_options *options, npunlock_view c_source,
-                                shavecc_result *result) {
+static npunlock_status compile_source(const shavecc_options *options, npunlock_view c_source,
+                                      shavecc_result *result, bool assembly_only) {
   enum { LINK_ENTRY_INDEX = 5, LINK_MATH_LIBRARY_INDEX = 9 };
   static const char *compile_base[] = {"moviCompile.dll",
                                        "-cc1",
@@ -433,6 +433,11 @@ npunlock_status shavecc_compile(const shavecc_options *options, npunlock_view c_
     status = stage_failure(result, status, "shavecc.compile", &compiled);
     goto done;
   }
+  if (assembly_only) {
+    result->elf = compiled.output;
+    memset(&compiled.output, 0, sizeof(compiled.output));
+    goto done;
+  }
   for (index = 0; index < sizeof(assemble_args) / sizeof(assemble_args[0]); ++index) {
     assemble_arguments[index] = literal_view(assemble_args[index]);
   }
@@ -519,6 +524,39 @@ done:
   npunlock_movi_result_release(&assembled);
   npunlock_movi_result_release(&linked);
   return status;
+}
+
+npunlock_status shavecc_compile(const shavecc_options *options, npunlock_view c_source,
+                                shavecc_result *result) {
+  return compile_source(options, c_source, result, false);
+}
+
+npunlock_status shavecc_compile_assembly(const shavecc_options *options, npunlock_view c_source,
+                                         shavecc_assembly_result *result) {
+  shavecc_result compiled = {0};
+  npunlock_status status;
+  if (result == NULL) {
+    return NPUNLOCK_STATUS_INVALID_ARGUMENT;
+  }
+  memset(result, 0, sizeof(*result));
+  result->struct_size = (uint32_t)sizeof(*result);
+  status = compile_source(options, c_source, &compiled, true);
+  result->assembly = compiled.elf;
+  result->stdout_log = compiled.stdout_log;
+  result->stderr_log = compiled.stderr_log;
+  result->diagnostic = compiled.diagnostic;
+  return status;
+}
+
+void shavecc_assembly_result_release(shavecc_assembly_result *result) {
+  if (result == NULL) {
+    return;
+  }
+  npunlock_buffer_release(&result->assembly);
+  npunlock_buffer_release(&result->stdout_log);
+  npunlock_buffer_release(&result->stderr_log);
+  npunlock_diagnostic_release(&result->diagnostic);
+  memset(result, 0, sizeof(*result));
 }
 
 void shavecc_result_release(shavecc_result *result) {

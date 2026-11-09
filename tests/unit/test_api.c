@@ -104,6 +104,7 @@ int main(void) {
   static const uint8_t tensor[] = {0x00, 0x3c};
   shavecc_options shave_options = {0};
   shavecc_result shave_result = {0};
+  shavecc_assembly_result assembly_result = {0};
   ir2blob_options ir_options = {0};
   ir2blob_result ir_result = {0};
   patchblob_options patch_options = {0};
@@ -145,6 +146,19 @@ int main(void) {
   CHECK(check_diagnostic(&shave_result.diagnostic, "not_found"));
   shavecc_result_release(&shave_result);
   shavecc_result_release(&shave_result);
+
+  CHECK(shavecc_compile_assembly(&shave_options, (npunlock_view){source, sizeof(source) - 1},
+                                 &assembly_result) == NPUNLOCK_STATUS_NOT_FOUND);
+  CHECK(check_diagnostic(&assembly_result.diagnostic, "not_found"));
+  CHECK(assembly_result.assembly.data == NULL && assembly_result.assembly.size == 0);
+  shavecc_assembly_result_release(&assembly_result);
+  shavecc_assembly_result_release(&assembly_result);
+  CHECK(shavecc_compile_assembly(NULL, (npunlock_view){source, sizeof(source) - 1},
+                                 &assembly_result) == NPUNLOCK_STATUS_INVALID_ARGUMENT);
+  CHECK(check_diagnostic(&assembly_result.diagnostic, "invalid_argument"));
+  shavecc_assembly_result_release(&assembly_result);
+  CHECK(shavecc_compile_assembly(&shave_options, (npunlock_view){source, sizeof(source) - 1},
+                                 NULL) == NPUNLOCK_STATUS_INVALID_ARGUMENT);
 
   shave_options.linker_script = (npunlock_view){script, sizeof(script) - 1};
   CHECK(shavecc_compile(&shave_options, (npunlock_view){source, sizeof(source) - 1},

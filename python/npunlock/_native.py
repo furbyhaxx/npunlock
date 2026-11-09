@@ -94,6 +94,16 @@ class _ShaveResult(ctypes.Structure):
     ]
 
 
+class _ShaveAssemblyResult(ctypes.Structure):
+    _fields_ = [
+        ("struct_size", ctypes.c_uint32),
+        ("assembly", _Buffer),
+        ("stdout_log", _Buffer),
+        ("stderr_log", _Buffer),
+        ("diagnostic", _Diagnostic),
+    ]
+
+
 class _IrOptions(ctypes.Structure):
     _fields_ = [
         ("struct_size", ctypes.c_uint32),
@@ -1082,6 +1092,13 @@ class NativeLibraries:
         ]
         self.shave.shavecc_compile.restype = ctypes.c_int
         self.shave.shavecc_result_release.argtypes = [ctypes.POINTER(_ShaveResult)]
+        self.shave.shavecc_compile_assembly.argtypes = [
+            ctypes.POINTER(_ShaveOptions),
+            _View,
+            ctypes.POINTER(_ShaveAssemblyResult),
+        ]
+        self.shave.shavecc_compile_assembly.restype = ctypes.c_int
+        self.shave.shavecc_assembly_result_release.argtypes = [ctypes.POINTER(_ShaveAssemblyResult)]
         self.ir.ir2blob_compile.argtypes = [
             ctypes.POINTER(_IrOptions),
             _View,
@@ -1348,6 +1365,46 @@ class NativeLibraries:
         timeout_ms: int = 20_000,
         worker: str | None = None,
     ) -> bytes:
+        return self._compile_shave(
+            source,
+            movi_dll_dir=movi_dll_dir,
+            linker_script=linker_script,
+            definitions=definitions,
+            timeout_ms=timeout_ms,
+            worker=worker,
+            assembly_only=False,
+        )
+
+    def compile_shave_assembly(
+        self,
+        source: bytes,
+        *,
+        movi_dll_dir: str | os.PathLike[str],
+        definitions: Iterable[str] = (),
+        timeout_ms: int = 20_000,
+        worker: str | None = None,
+    ) -> bytes:
+        return self._compile_shave(
+            source,
+            movi_dll_dir=movi_dll_dir,
+            linker_script=None,
+            definitions=definitions,
+            timeout_ms=timeout_ms,
+            worker=worker,
+            assembly_only=True,
+        )
+
+    def _compile_shave(
+        self,
+        source: bytes,
+        *,
+        movi_dll_dir: str | os.PathLike[str],
+        linker_script: bytes | None,
+        definitions: Iterable[str],
+        timeout_ms: int,
+        worker: str | None,
+        assembly_only: bool,
+    ) -> bytes:
         source_view, source_owner = _owned_view(source)
         directory_view, directory_owner = _owned_view(os.fspath(movi_dll_dir).encode("utf-8"))
         script_view, script_owner = _owned_view(linker_script or b"")
@@ -1376,9 +1433,18 @@ class NativeLibraries:
             script_view,
             timeout_ms,
         )
-        result = _ShaveResult()
-        result.struct_size = ctypes.sizeof(_ShaveResult)
-        status = self.shave.shavecc_compile(ctypes.byref(options), source_view, ctypes.byref(result))
+        if assembly_only:
+            result = _ShaveAssemblyResult()
+            result.struct_size = ctypes.sizeof(_ShaveAssemblyResult)
+            status = self.shave.shavecc_compile_assembly(ctypes.byref(options), source_view, ctypes.byref(result))
+            output = result.assembly
+            release = self.shave.shavecc_assembly_result_release
+        else:
+            result = _ShaveResult()
+            result.struct_size = ctypes.sizeof(_ShaveResult)
+            status = self.shave.shavecc_compile(ctypes.byref(options), source_view, ctypes.byref(result))
+            output = result.elf
+            release = self.shave.shavecc_result_release
         try:
             if status != 0:
                 self._raise(
@@ -1393,9 +1459,9 @@ class NativeLibraries:
                 _buffer_bytes(result.stderr_log),
                 failed=False,
             )
-            return _buffer_bytes(result.elf)
+            return _buffer_bytes(output)
         finally:
-            self.shave.shavecc_result_release(ctypes.byref(result))
+            release(ctypes.byref(result))
 
     def patch_graph(
         self,

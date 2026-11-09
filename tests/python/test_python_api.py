@@ -5,7 +5,9 @@ import ctypes
 import hashlib
 import io
 import json
+import os
 import sys
+import tempfile
 import unittest
 import warnings
 import zipfile
@@ -676,6 +678,7 @@ class NativeLayoutTests(unittest.TestCase):
         self.assertEqual(ctypes.sizeof(_native._Diagnostic), 40)
         self.assertEqual(ctypes.sizeof(_native._ShaveOptions), 112)
         self.assertEqual(ctypes.sizeof(_native._ShaveResult), 144)
+        self.assertEqual(ctypes.sizeof(_native._ShaveAssemblyResult), 144)
         self.assertEqual(ctypes.sizeof(_native._IrOptions), 48)
         self.assertEqual(ctypes.sizeof(_native._IrResult), 200)
         self.assertEqual(ctypes.sizeof(_native._PatchOptions), 12)
@@ -700,6 +703,38 @@ class NativeLayoutTests(unittest.TestCase):
         self.assertEqual(ctypes.sizeof(_native._InferSharedBuffer), 72)
         self.assertEqual(ctypes.sizeof(_native._InferSharedTensor), 32)
         self.assertEqual(ctypes.sizeof(_native._InferSessionRunResult), 48)
+
+    @unittest.skipUnless(
+        sys.platform == "linux" and (ROOT / "build/linux/libnpunlock.so").is_file(),
+        "Linux native build required",
+    )
+    def test_compile_assembly_returns_compiler_output_without_later_stages(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            worker = root / "worker.exe"
+            worker.touch()
+            wine = root / "wine"
+            wine.write_text(
+                f"#!{sys.executable}\n"
+                "import struct, sys\n"
+                "request = sys.stdin.buffer.read()\n"
+                "assert struct.unpack_from('<I', request, 8)[0] == 1\n"
+                "assert b'-DTEST_LIMIT=12' in request\n"
+                "assert b'void controlled_act' in request\n"
+                "assembly = b'BRU.JMP i30\\nNOP 6\\n'\n"
+                "sys.stdout.buffer.write(struct.pack('<IIIIQQ', 0x5257504e, 1, 0, 0, len(assembly), 0) + assembly)\n",
+                encoding="utf-8",
+            )
+            wine.chmod(0o755)
+            native = _native.NativeLibraries(ROOT / "build/linux")
+            with patch.dict("os.environ", {"PATH": str(root) + os.pathsep + os.environ.get("PATH", "")}):
+                assembly = native.compile_shave_assembly(
+                    b"void controlled_act(unsigned p) {}",
+                    movi_dll_dir=root,
+                    definitions=("TEST_LIMIT=12",),
+                    worker=str(worker),
+                )
+            self.assertEqual(assembly, b"BRU.JMP i30\nNOP 6\n")
 
     def test_failed_worker_streams_are_written_verbatim(self) -> None:
         class BinaryStream:
