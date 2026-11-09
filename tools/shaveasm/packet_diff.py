@@ -38,6 +38,8 @@ def generate_packets(seed: int, count: int) -> list[str]:
         if unit == "SAU":
             return f"SAU.ADD.i32 {registers[0]} {registers[1]} {rng.randrange(32)}"
         if unit == "IAU.ADD24":
+            if rng.randrange(3) == 0:
+                return f"IAU.SHL {registers[0]} {registers[1]} {rng.randrange(32)}"
             right = registers[2] if rng.randrange(2) else str(rng.randrange(256))
             return f"IAU.ADD {registers[0]} {registers[1]} {right}"
         if unit == "IAU":
@@ -67,11 +69,20 @@ def generate_packets(seed: int, count: int) -> list[str]:
     for key in _PREFIXES:
         if "IAU" in key.split(","):
             packets.append("\n || ".join(operation(unit) for unit in key.split(",")).replace("IAU.XOR", "IAU.AND"))
+        if "IAU.ADD24" in key.split(","):
+            packets.append("\n || ".join(f"IAU.SHL i16 i17 {rng.randrange(32)}" if unit == "IAU.ADD24"
+                                          else operation(unit) for unit in key.split(",")))
     for position in range(3):
         for register in range(32):
             operands = ["i0"] * 3
             operands[position] = f"i{register}"
             packets.append("IAU.AND " + " ".join(operands))
+    for position in range(2):
+        for register in range(32):
+            operands = ["i0", "i0", "0"]
+            operands[position] = f"i{register}"
+            packets.append("IAU.SHL " + " ".join(operands))
+    packets.extend(f"IAU.SHL i0 i0 {n}" for n in range(32))
     delay_operations = (
         "NOP", "NOP 1", "NOP 2", "NOP 4", "NOP 6", "NOP 16", "NOP 17", "NOP 32",
         "LSU0.LDIL i4 1", "CMU.CMZ.I32 i0", "IAU.ADD i16 i17 231",

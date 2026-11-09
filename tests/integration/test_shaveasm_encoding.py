@@ -34,6 +34,13 @@ class EncodingTests(unittest.TestCase):
         self.assertEqual(encode("NOP 17"), b"\xf0\x00")
         self.assertEqual(encode("NOP 32"), b"\xf0\xf0")
 
+    def test_immediate_shift_uses_the_twenty_four_bit_add_class(self) -> None:
+        self.assertEqual(encode("IAU.SHL i0 i0 0"), bytes.fromhex("c60c0080"))
+        self.assertEqual(encode("IAU.SHL i31 i31 31"), bytes.fromhex("c6ecff8f"))
+        for source in ("IAU.SHL i0 i1 -1", "IAU.SHL i0 i1 32", "IAU.SHL i0 i1 i2"):
+            with self.subTest(source=source), self.assertRaises(AssemblyError):
+                encode(source)
+
     def test_and_shares_the_measured_twenty_bit_xor_class(self) -> None:
         self.assertEqual(encode("IAU.AND i5 i5 i5"), bytes.fromhex("86b09402"))
         self.assertEqual(encode("IAU.AND i5 i5 i5 || PEU.PC1C EQ"), bytes.fromhex("adb094b201"))
