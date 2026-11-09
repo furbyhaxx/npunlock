@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import json
 import struct
+import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -55,10 +57,11 @@ class CorpusTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             source = ".code .text.test\nNOP\n"
-            for name in ("exact", "different", "rejected", "missing"):
+            for name in ("exact", "different", "rejected", "missing", "invalid"):
                 (root / f"{name}.s").write_text(source)
             obj = assemble(source)
             (root / "exact.o").write_bytes(obj)
+            (root / "invalid.o").write_bytes(b"not an ELF object")
             changed = bytearray(obj)
             struct.pack_into("<I", changed, 28, 1)
             (root / "different.o").write_bytes(changed)
@@ -67,16 +70,38 @@ class CorpusTests(unittest.TestCase):
             result = parity_report([root, root], diagnostic=True)
             files = {Path(row["path"]).stem: row for row in result["files"]}
             self.assertEqual({name: row["status"] for name, row in files.items()}, {
-                "exact": "exact", "different": "different", "rejected": "rejected", "missing": "missing_reference"
+                "exact": "exact", "different": "different", "rejected": "rejected", "missing": "missing_reference",
+                "invalid": "invalid_reference"
             })
             self.assertEqual(files["different"]["section_differences"], [])
             self.assertEqual(files["rejected"]["first_rejection"]["line"], 2)
             self.assertEqual(files["rejected"]["first_rejection"]["category"], "instruction")
-            self.assertEqual(result["summary"]["files"], 4)
+            self.assertEqual(result["summary"]["files"], 5)
             output = root / "report"
             write_reports(result, output)
             self.assertEqual(json.loads((output / "report.json").read_text()), result)
             self.assertIn("| exact | 1 |", (output / "summary.md").read_text())
+
+    def test_parity_cli_writes_reports_and_fails_for_missing_reference(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = ".code code\nIAU.UNMEASURED i1\n.unknown 1\n"
+            (root / "authored.s").write_text(source)
+            reference = root / "authored.o"
+            reference.write_bytes(assemble(".code code\nNOP\n"))
+            output = root / "reports"
+            command = [sys.executable, "-m", "tools.shaveasm.corpus_parity", "--diagnostic", str(root),
+                       "--output", str(output)]
+            result = subprocess.run(command, cwd=Path(__file__).resolve().parents[2], capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("rejected line 2: instruction", result.stdout)
+            report = json.loads((output / "report.json").read_text())
+            self.assertEqual([e["category"] for e in report["files"][0]["diagnostics"]["rejections"]],
+                             ["instruction", "directive"])
+            reference.unlink()
+            result = subprocess.run(command, cwd=Path(__file__).resolve().parents[2], capture_output=True, text=True)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("missing_reference", result.stdout)
 
     def test_diagnostics_continue_across_categories_and_packets(self) -> None:
         source = (

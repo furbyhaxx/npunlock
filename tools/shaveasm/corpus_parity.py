@@ -21,7 +21,7 @@ _DEFAULT_CORPORA = (
 _DEFAULT_OUTPUT = Path("/mnt/cache/build-shave/corpus-parity")
 _DIAGNOSTIC_NOTE = (
     "Diagnostic continuation removes unparseable lines and replaces rejected packets with one-slot NOPs. "
-    "Offsets, symbol sizes, and branch-delay findings after a rejection are approximate; "
+    "Rejected directives can be partially applied. Offsets, symbol sizes, and branch-delay findings after a rejection are approximate; "
     "unsupported branch forms cannot be checked as branches. Only exact object comparison proves parity."
 )
 

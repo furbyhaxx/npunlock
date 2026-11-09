@@ -728,13 +728,16 @@ section differences, the first assembly rejection and, in diagnostic mode,
 all independently rejected instruction forms and continued directive,
 expression, symbol, relocation and delay-window checks. The diagnostic pass
 replaces rejected packets with one-slot NOPs and removes unparseable lines to
-continue: offsets, sizes and later branch-delay findings can therefore be
-approximate, and unsupported branch forms are not checked as branches.
+continue; rejected directives can also be partially applied. Offsets, sizes
+and later branch-delay findings can therefore be approximate, and unsupported
+branch forms are not checked as branches.
 Diagnostic counts do not establish object parity.
 
 On 2026-11-09, before merging later ISA work, the corpus contained 55 object
 pairs: **0/55** were exact and all 55 first rejected an instruction form.
 Diagnostic continuation found 6819 rejected instruction operations or packet
-shapes and no non-instruction rejections; this does not establish that
-non-instruction parity is complete once the actual instruction lengths and
-relocations are available.
+shapes and no non-instruction rejections. After integrating ISA commit
+`260e5ef`, the same 55 pairs still have **0/55** exact objects and diagnostic
+continuation finds 3535 instruction rejections and no non-instruction
+rejections. This does not establish that non-instruction parity is complete
+once actual instruction lengths and relocations are available.
