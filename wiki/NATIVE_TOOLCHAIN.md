@@ -841,6 +841,19 @@ Both seeds pass **22719/22719** packet cases and 68 offline tests pass.
 Coverage is **10508/11912** packets, with **7/55 exact objects**, zero
 different objects, and 1603 diagnostic instruction rejections.
 
+### Register swap control transfer
+
+`BRU.SWP reg` uses the existing 16-bit `BRU.JMP16` class and payload
+`2 | reg<<3 | delay_bytes<<8`. The following six issue slots determine the
+byte span using the same measured rule as JMP, including counted NOPs.
+The shared control-transfer predicate already includes SWP; nested transfers
+inside its delay window are rejected. All 456 current header shapes,
+32 register cases and 2232 standalone/co-issued counted, repeated and random
+delay sequences match moviAsm. Both seeds pass **25439/25439** packet cases
+and 69 offline tests pass. Coverage is **10582/11912** packets, with
+**7/55 exact objects**, zero different objects, and 1527 diagnostic
+instruction rejections.
+
 ### Differential gates and corpus inventory
 
 Cached assembly can be inventoried without Wine or recompilation:

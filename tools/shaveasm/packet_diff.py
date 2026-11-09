@@ -101,6 +101,9 @@ def generate_packets(seed: int, count: int) -> list[str]:
         if "LSU1.STO32" in shape:
             packets.append("\n || ".join("LSU1.LDO.32 i8 i9 -3" if unit == "LSU1.STO32"
                                           else operation(unit, store_packet=True) for unit in shape))
+        if "BRU.JMP16" in shape:
+            packets.append("\n || ".join("BRU.SWP i30" if unit == "BRU.JMP16"
+                                          else operation(unit, store_packet=store_packet) for unit in shape))
         if "SAU" in shape:
             packets.append("\n || ".join("SAU.SHR.U32 i12 i13 i14" if unit == "SAU"
                                           else operation(unit, store_packet=store_packet) for unit in shape))
@@ -210,6 +213,7 @@ def generate_packets(seed: int, count: int) -> list[str]:
     packets.extend(f"IAU.INCS i0 {value}" for value in
                    (0, -1, 8191, -8192, *(1 << bit for bit in range(13)),
                     *(-(1 << bit) for bit in range(14))))
+    packets.extend(f"BRU.SWP i{r}" for r in range(32))
     packets.extend(f"LSU1.LDIL i{r} external_target" for r in range(32))
     packets.extend(f"CMU.CP.32 i{r} v0.0" for r in range(32))
     packets.extend(f"CMU.CP.32 i0 v{r}.{lane}" for r in range(32) for lane in range(4))
@@ -221,7 +225,8 @@ def generate_packets(seed: int, count: int) -> list[str]:
         "IAU.XOR i16 i17 i18 || PEU.PCCX NEQ 63",
     )
     branches = ("BRU.BRA external_target", "IAU.XOR i5 i6 i7 || BRU.BRA external_target",
-                "BRU.JMP i30", "IAU.XOR i5 i6 i7 || BRU.JMP i30")
+                "BRU.JMP i30", "IAU.XOR i5 i6 i7 || BRU.JMP i30",
+                "BRU.SWP i30", "IAU.XOR i5 i6 i7 || BRU.SWP i30")
     for branch in branches:
         packets.extend(f"{branch}\n NOP {n}" for n in range(1, 33))
         packets.extend(branch + "\n " + "\n ".join([op] * n)
@@ -287,7 +292,7 @@ def verify_packets(oracle: Oracle, output: Path, seed: int, count: int) -> None:
         if actual != expected or tuple(fixups) != expected_fixups:
             failures.append({"index": index, "source": source_packet, "vendor": expected.hex(), "native": actual.hex(),
                              "vendor_fixups": repr(expected_fixups), "native_fixups": repr(fixups)})
-    report = {"seed": seed, "random_packets": count, "random_delay_sequences": 4 * count,
+    report = {"seed": seed, "random_packets": count, "random_delay_sequences": 6 * count,
               "total": len(packets), "failures": failures}
     (output / "report.json").write_text(json.dumps(report, indent=2) + "\n")
     if failures:

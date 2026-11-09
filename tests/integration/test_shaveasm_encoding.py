@@ -105,6 +105,21 @@ class EncodingTests(unittest.TestCase):
             with self.subTest(source=source), self.assertRaises(AssemblyError):
                 encode(source)
 
+    def test_register_swap_uses_jump_headers_and_delay_windows(self) -> None:
+        self.assertEqual(encode("BRU.SWP i0"), bytes.fromhex("470200"))
+        self.assertEqual(encode("BRU.SWP i31"), bytes.fromhex("47fa00"))
+        swap = parse("BRU.SWP i30")[0]
+        data, fixups = encode_packet_with_fixups(swap, following=parse("NOP 6"))
+        self.assertEqual(data, bytes.fromhex("47f201"))
+        self.assertEqual(fixups, ())
+        data, _ = encode_packet_with_fixups(swap, following=parse("\n".join(["NOP"] * 6)))
+        self.assertEqual(data, bytes.fromhex("47f206"))
+        for source in ("BRU.SWP target", "BRU.SWP 30", "BRU.SWP i32"):
+            with self.subTest(source=source), self.assertRaises(AssemblyError):
+                encode(source)
+        with self.assertRaisesRegex(AssemblyError, "control transfer"):
+            encode_packet_with_fixups(swap, following=parse("BRU.SWP i0\nNOP 6"))
+
     def test_register_jump_has_a_sixteen_bit_payload_and_delay_span(self) -> None:
         self.assertEqual(encode("BRU.JMP i0"), bytes.fromhex("470100"))
         self.assertEqual(encode("BRU.JMP i31"), bytes.fromhex("47f900"))

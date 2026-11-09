@@ -1529,9 +1529,10 @@ def _signed_immediate(text: str, bits: int, line: int) -> int:
 def _operation(instruction: Instruction) -> _Operation:
     mnemonic, operands, line = instruction.mnemonic, instruction.operands, instruction.line
     unit = mnemonic.split(".")[0]
-    if mnemonic == "BRU.JMP" and len(operands) == 1:
+    if mnemonic in ("BRU.JMP", "BRU.SWP") and len(operands) == 1:
         register = _register(operands[0], line)
-        return _Operation(unit, 1 | register << 3, 16, prefix_class="BRU.JMP16")
+        opcode = 1 if mnemonic == "BRU.JMP" else 2
+        return _Operation(unit, opcode | register << 3, 16, prefix_class="BRU.JMP16")
     if mnemonic == "BRU.BRA" and len(operands) == 1 and re.fullmatch(r"[A-Za-z_.$][A-Za-z_0-9.$]*", operands[0]):
         return _Operation(unit, 0, 24, Fixup(operands[0], 0, 0, 16, "R_SHAVE_PCREL16"))
     if mnemonic in ("LSU0.LDO.32", "LSU1.LDO.32", "LSU1.STO.32") and len(operands) == 3:
