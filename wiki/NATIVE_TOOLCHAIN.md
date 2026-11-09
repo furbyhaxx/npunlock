@@ -808,6 +808,17 @@ The parser already preserves lane-qualified tokens. Coverage now classifies
 actual symbolic addresses such as `memcpy` retain the `symbol` shape.
 This classification does not enable any additional unmeasured encodings.
 
+### Scalar LSU1 high-half loads
+
+`LSU1.LDIH dst imm16` shares LSU0's payload
+`3 | dst<<3 | imm16<<8`, in the 24-bit LSU1 class. Symbolic operands emit
+`R_SHAVE_HI16` (202) or `R_SHAVE_HI16_AT4` (203), as measured from vendor
+relocations. All 408 LSU1 header shapes with immediate and symbolic operands,
+64 register cases and 18 immediate-bit/boundary cases match moviAsm.
+Both seeds pass **21804/21804** packet cases and 66 offline tests pass.
+Coverage is **10423/11912** packets, with **7/55 exact objects**, zero
+different objects, and 1697 diagnostic instruction rejections.
+
 ### Differential gates and corpus inventory
 
 Cached assembly can be inventoried without Wine or recompilation:

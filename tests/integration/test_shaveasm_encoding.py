@@ -112,6 +112,18 @@ class EncodingTests(unittest.TestCase):
         with self.assertRaisesRegex(AssemblyError, "control transfer"):
             encode_packet_with_fixups(jump, following=parse("BRU.JMP i0\nNOP 6"))
 
+    def test_lsu1_high_immediate_load_and_fixup(self) -> None:
+        self.assertEqual(encode("LSU1.LDIH i0 0"), bytes.fromhex("89030000"))
+        self.assertEqual(encode("LSU1.LDIH i31 65535"), bytes.fromhex("89fbffff"))
+        packet = parse("LSU1.LDIH i6 external_target")[0]
+        data, fixups = encode_packet_with_fixups(packet)
+        self.assertEqual(data, bytes.fromhex("89330000"))
+        self.assertEqual(fixups, (Fixup("external_target", 0, 16, 16, "R_SHAVE_HI16"),))
+        for source in ("LSU1.LDIH i0 65536", "LSU1.LDIH i0 -1",
+                       "LSU1.LDIH i32 0", "LSU1.LDIH i0 target+2"):
+            with self.subTest(source=source), self.assertRaises(AssemblyError):
+                encode(source)
+
     def test_high_immediate_load_and_absolute_high_fixup(self) -> None:
         self.assertEqual(encode("LSU0.LDIH i0 0"), bytes.fromhex("82030000"))
         self.assertEqual(encode("LSU0.LDIH i31 65535"), bytes.fromhex("82fbffff"))

@@ -1551,7 +1551,7 @@ def _operation(instruction: Instruction) -> _Operation:
     if mnemonic == "LSU1.STI.32" and len(operands) == 2:
         source, base = (_register(op, line) for op in operands)
         return _Operation(unit, 0x810009 | source << 4 | base << 9, 24)
-    if mnemonic == "LSU0.LDIH" and len(operands) == 2:
+    if mnemonic in ("LSU0.LDIH", "LSU1.LDIH") and len(operands) == 2:
         destination = _register(operands[0], line)
         if re.fullmatch(r"[A-Za-z_.$][A-Za-z_0-9.$]*", operands[1]):
             return _Operation(unit, 3 | destination << 3, 24,

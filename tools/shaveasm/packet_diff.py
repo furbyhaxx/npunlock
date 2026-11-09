@@ -43,9 +43,9 @@ def generate_packets(seed: int, count: int) -> list[str]:
         if unit == "CMU":
             mnemonic = "CMU.CP.32" if store_packet else rng.choice(("CMU.CP.32", "CMU.CMII.I32", "CMU.CMII.U32"))
             return f"{mnemonic} {registers[0]} {registers[1]}"
-        if unit == "LSU0" and rng.randrange(3) == 0:
+        if unit in ("LSU0", "LSU1") and rng.randrange(3) == 0:
             immediate = "external_target" if rng.randrange(2) else str(rng.randrange(65536))
-            return f"LSU0.LDIH {registers[0]} {immediate}"
+            return f"{unit}.LDIH {registers[0]} {immediate}"
         if unit == "LSU0" and rng.randrange(3):
             mnemonic = rng.choice(("LSU0.LD.32", "LSU0.CP.32"))
             return f"{mnemonic} {registers[0]} {registers[1]}"
@@ -137,6 +137,9 @@ def generate_packets(seed: int, count: int) -> list[str]:
     for key in _PREFIXES:
         shape = key.split(",")
         if "LSU1" in shape:
+            for immediate in ("43210", "external_target"):
+                packets.append("\n || ".join(f"LSU1.LDIH i8 {immediate}" if unit == "LSU1"
+                                              else operation(unit, store_packet="LSU1.STO32" in shape) for unit in shape))
             for mnemonic in ("LSU1.STI.32", "LSU1.LD.32"):
                 packets.append("\n || ".join(f"{mnemonic} i8 i9" if unit == "LSU1"
                                               else operation(unit, store_packet=True) for unit in shape))
@@ -187,9 +190,10 @@ def generate_packets(seed: int, count: int) -> list[str]:
     packets.extend(f"LSU1.LDO.32 i0 i0 {value}" for value in
                    (0, -1, 16383, -16384, *(1 << bit for bit in range(14)),
                     *(-(1 << bit) for bit in range(15))))
-    packets.extend(f"LSU0.LDIH i{r} {immediate}" for r in range(32)
-                   for immediate in ("0", "external_target"))
-    packets.extend(f"LSU0.LDIH i0 {value}" for value in (0, 65535, *(1 << bit for bit in range(16))))
+    for unit in ("LSU0", "LSU1"):
+        packets.extend(f"{unit}.LDIH i{r} {immediate}" for r in range(32)
+                       for immediate in ("0", "external_target"))
+        packets.extend(f"{unit}.LDIH i0 {value}" for value in (0, 65535, *(1 << bit for bit in range(16))))
     for position in range(3):
         for register in range(32):
             operands = ["i0"] * 3
