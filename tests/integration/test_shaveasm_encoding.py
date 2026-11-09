@@ -40,6 +40,62 @@ class EncodingTests(unittest.TestCase):
         with self.assertRaisesRegex(AssemblyError, "read port 6"):
             encode("CMU.CMII.U32 i1 i2 || LSU1.STO.32 i8 i9 0")
 
+    def test_subtraction_has_register_and_unsigned_immediate_forms(self) -> None:
+        self.assertEqual(encode("IAU.SUB i0 i0 i0"), bytes.fromhex("c6010000"))
+        self.assertEqual(encode("IAU.SUB i31 i31 i31"), bytes.fromhex("c6e1ff0f"))
+        self.assertEqual(encode("IAU.SUB i0 i0 1"), bytes.fromhex("c6018080"))
+        self.assertEqual(encode("IAU.SUB i31 i31 255"), bytes.fromhex("c6e1ffff"))
+        for source in ("IAU.SUB i0 i0 -1", "IAU.SUB i0 i0 256", "IAU.SUB i32 i0 i0"):
+            with self.subTest(source=source), self.assertRaises(AssemblyError):
+                encode(source)
+
+    def test_register_jump_has_a_sixteen_bit_payload_and_delay_span(self) -> None:
+        self.assertEqual(encode("BRU.JMP i0"), bytes.fromhex("470100"))
+        self.assertEqual(encode("BRU.JMP i31"), bytes.fromhex("47f900"))
+        jump = parse("BRU.JMP i30")[0]
+        data, fixups = encode_packet_with_fixups(jump, following=parse("NOP 6"))
+        self.assertEqual(data, bytes.fromhex("47f101"))
+        self.assertEqual(fixups, ())
+        data, _ = encode_packet_with_fixups(jump, following=parse("\n".join(["NOP"] * 6)))
+        self.assertEqual(data, bytes.fromhex("47f106"))
+        for source in ("BRU.JMP target", "BRU.JMP 30", "BRU.JMP i32",
+                       "BRU.JMP i0 || BRU.BRA target"):
+            with self.subTest(source=source), self.assertRaises(AssemblyError):
+                encode(source)
+        with self.assertRaisesRegex(AssemblyError, "control transfer"):
+            encode_packet_with_fixups(jump, following=parse("BRU.JMP i0\nNOP 6"))
+
+    def test_high_immediate_load_and_absolute_high_fixup(self) -> None:
+        self.assertEqual(encode("LSU0.LDIH i0 0"), bytes.fromhex("82030000"))
+        self.assertEqual(encode("LSU0.LDIH i31 65535"), bytes.fromhex("82fbffff"))
+        packet = parse("LSU0.LDIH i4 external_target")[0]
+        data, fixups = encode_packet_with_fixups(packet)
+        self.assertEqual(data, bytes.fromhex("82230000"))
+        self.assertEqual(fixups, (Fixup("external_target", 0, 16, 16, "R_SHAVE_HI16"),))
+        packet = parse("BRU.BRA target || LSU0.LDIH i4 external_target")[0]
+        data, fixups = encode_packet_with_fixups(packet)
+        self.assertEqual(data, bytes.fromhex("cec2230000050000"))
+        self.assertEqual(fixups, (Fixup("external_target", 0, 24, 16, "R_SHAVE_HI16"),
+                                  Fixup("target", 0, 40, 16, "R_SHAVE_PCREL16")))
+        for source in ("LSU0.LDIH i0 65536", "LSU0.LDIH i32 0",
+                       "LSU0.LDIH i0 target+2"):
+            with self.subTest(source=source), self.assertRaises(AssemblyError):
+                encode(source)
+        with self.assertRaisesRegex(AssemblyError, "symbolic fixups"):
+            encode("LSU0.LDIH i4 external_target")
+
+    def test_lsu1_signed_offset_load_uses_the_thirty_two_bit_lsu1_class(self) -> None:
+        self.assertEqual(encode("LSU1.LDO.32 i0 i0 -16384"), bytes.fromhex("c902400180"))
+        self.assertEqual(encode("LSU1.LDO.32 i31 i31 16383"), bytes.fromhex("c9f27fff7f"))
+        self.assertEqual(encode("LSU1.LDO.32 i1 i2 -3"), bytes.fromhex("c91244fbff"))
+        for source in ("LSU1.LDO.32 i0 i0 -16385", "LSU1.LDO.32 i0 i0 16384",
+                       "LSU1.LDO.32 i0 i1 0 || LSU1.LDIL i2 1"):
+            with self.subTest(source=source), self.assertRaises(AssemblyError):
+                encode(source)
+        for comparison in ("CMU.CMII.I32", "CMU.CMII.U32"):
+            with self.subTest(comparison=comparison), self.assertRaisesRegex(AssemblyError, "read port 6"):
+                encode(f"{comparison} i0 i1 || LSU1.LDO.32 i8 i9 0")
+
     def test_lsu0_scalar_copy_shares_the_twenty_four_bit_lsu0_class(self) -> None:
         self.assertEqual(encode("LSU0.CP.32 i0 i0"), bytes.fromhex("82070008"))
         self.assertEqual(encode("LSU0.CP.32 i31 i31"), bytes.fromhex("82f73f08"))

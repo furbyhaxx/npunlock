@@ -271,6 +271,103 @@ reported conflicting writes despite being in different sections. Each generated
 case now has a separate preceding `NOP 16` padding section. This makes cases
 independent without disabling the vendor analyzer or changing tested packets.
 
+### Scalar integer subtraction
+
+Separate `i0..i31` sweeps of all three registers, eight immediate bits and
+unsigned boundaries establish:
+
+| Form | Payload bits | Payload expression | Standalone prefix |
+| --- | ---: | --- | --- |
+| `IAU.SUB d l r` | 24 | `1 + (d<<10) + (l<<5) + (r<<15)` | `0xc6` |
+| `IAU.SUB d l imm8` | 24 | `0x800001 + (d<<10) + (l<<5) + (imm8<<15)` | `0xc6` |
+
+Immediate values are unsigned **0..255**; moviAsm rejects -1 and 256. Both
+forms matched every one of the **241** current `IAU.ADD24` header shapes,
+including register jumps and symbolic branches. The gate selects SUB among
+24-bit IAU forms and adds 482 explicit header cases, 96 register-field cases
+and ten immediate-bit/boundary cases.
+
+The diagnostic whole-corpus gate after SUB remains **0/55 exact**, with all
+55 files rejecting instruction forms. Report:
+`/mnt/cache/build-shave/corpus-parity-sub/summary.md`. Updated unsupported-form
+ranking starts CMU.CP.32 symbol (148), SAU.MUL.F32 (145), IAU.SHR.U32 immediate
+(139), SAU.AND (118), SAU.SHR.U32 immediate (113), LSU1.ST.32 (98) and
+CMU.CMII.F32 (96). Whole-file blockers should be checked in that report before
+choosing the next form; packet counts alone do not establish object parity.
+
+### Scalar register jump
+
+An independent `i0..i31` sweep establishes:
+
+| Form | Payload bits | Payload expression | Standalone prefix |
+| --- | ---: | --- | --- |
+| `BRU.JMP s` | 16 | `1 + (s<<3) + (delay_span<<8)` | `0x47` |
+
+The jump has no relocation. Its upper payload byte uses the same following-six-
+issue-slot span as BRA; the low byte retains the source register. Canonical
+position is after IAU and before PEU. Header derivation over **486** combinations
+of all measured non-BRU classes found one unique layout per combination. The
+**280** shapes at or below 128 bits are retained explicitly as `BRU.JMP16`.
+Counted-NOP, repeated-operation and 1000 random mixed suffixes are checked for
+both standalone JMP and IAU+JMP at each seed, alongside all retained headers.
+Symbol/immediate jump operands and nested control transfers remain rejected.
+
+The diagnostic whole-corpus gate after JMP remains **0/55 exact**, with all
+55 files rejecting instruction forms. Report:
+`/mnt/cache/build-shave/corpus-parity-jmp/summary.md`.
+The object writer passes packet suffixes for JMP, but its directive/alignment
+check currently identifies branches only through PC-relative fixups; its owner
+must also classify register jumps before claiming delay-window layout safety.
+
+### LSU0 high-half immediate and symbol load
+
+Sweeps of `i0..i31`, all 16 immediate bits and unsigned boundaries establish:
+
+| Form | Payload bits | Payload expression | Standalone prefix |
+| --- | ---: | --- | --- |
+| `LSU0.LDIH d imm16` | 24 | `3 + (d<<3) + (imm16<<8)` | `0x82` |
+| `LSU0.LDIH d symbol` | 24 | `3 + (d<<3)` plus HI16 fixup at payload bit 8 | `0x82` |
+
+The native immediate domain is explicitly **0..65535**. moviAsm also accepts
+-1 and 65536; truncation outside the measured unsigned domain remains unsupported.
+Plain symbols emit a 16-bit `R_SHAVE_HI16` fixup (vendor type **202**), with
+zero addend and a zero initialized field. Standalone field offset is bit 16;
+co-issuing CMU or other slots moves it with the payload. All **181** current
+24-bit LSU0 shapes were compared with each of immediate and symbolic LDIH.
+The gate adds 32 register sweeps for each form and 18 immediate-bit/boundary cases.
+
+Absolute fixups preserve instruction opcode/register bits and do not trigger
+branch PC bias or delay metadata. Packets containing both LDIH and BRA carry
+both fields. Vendor relocation rows are not ordered by field position, so the
+packet gate sorts extracted fixups by field offset before comparing every
+symbol, addend, width and kind; instruction bytes remain compared verbatim.
+
+The object-writer/corpus harness was merged from `feat/shaveasm-object` at
+`09f4cff`. The diagnostic whole-corpus gate after LDIH is **0/55 exact**:
+all 55 files still reject remaining instruction forms, with no differing objects.
+The report is `/mnt/cache/build-shave/corpus-parity-ldih/summary.md`.
+
+### LSU1 signed-offset scalar load
+
+Independent destination/base sweeps through `i0..i31`, signed immediate bit
+sweeps and range boundaries establish:
+
+| Form | Payload bits | Payload expression | Standalone prefix |
+| --- | ---: | --- | --- |
+| `LSU1.LDO.32 d a offset15` | 32 | `0x14002 + (d<<4) + (a<<9) + ((offset15 & 0x7fff)<<17)` | `0xc9` |
+
+Offsets are signed **-16384..16383**, without scaling; moviAsm rejects both
+adjacent values. All **150** existing `LSU1.STO32` header shapes match with
+LDO.32 substituted for STO.32. The class name records its first measured form;
+load/store share the same width and headers. The gate explicitly repeats all
+150 load shapes, 64 register-field cases and 33 signed immediate cases.
+
+Like STO.32, **LSU1.LDO.32 conflicts with CMU.CMII.I32/U32 on IRFrp6**, even
+with disjoint registers. Isolated comparisons confirmed both rejections while
+CMU.CP.32 with the same load/registers is accepted. Native encoding rejects
+both measured conflicts without rescheduling; generated load/store packets
+use CP.32 rather than CMII.
+
 ### LSU0 scalar register copy
 
 Independent destination/source sweeps through `i0..i31` establish:
@@ -582,8 +679,8 @@ command. The combined baseline is 3291/11912 accepted packets and **98** distinc
 mnemonics (97 in the literal corpus alone). With symbolic branches, signed
 loads/stores, indirect loads, integer addition, comparisons, PCCX, AND/OR,
 LMULL, INCS, scalar floating-point addition and immediate SHL, coverage is
-**8783/11912** packets, including 800 requiring symbolic fixups.
-Twenty-three distinct mnemonics occur in accepted packets (six at baseline); the
+**9325/11912** packets, including 878 requiring symbolic fixups.
+Twenty-seven distinct mnemonics occur in accepted packets (six at baseline); the
 corpus still has 98 mnemonics.
 `accepted_packets` counts bytes-plus-fixups support and `relocatable_packets`
 identifies that subset. Coverage tests isolated packet forms; it does not
@@ -602,7 +699,8 @@ python3 -m tools.shaveasm.corpus --native-dir build/linux \
   --output /mnt/cache/build-shave/native-asm-corpus
 ```
 
-Offline regressions: 34 passed. Each randomized gate passed **7357/7357 cases**
+Offline regressions: 56 passed, including the merged object-writer/corpus tests.
+Each randomized gate passed **12156/12156 cases**
 (seeds 3720 and 9001): the original 2362 isolated-packet cases (1000 random
 packets, 457 shapes, 352 mixed operand sweeps, 96 ADD sweeps, 384 PCCX pairs,
 eight immediate boundaries and 65 NOP cases), plus 64 counted-NOP branch
@@ -618,7 +716,12 @@ INCS adds 168 header cases, 32 register cases and 31 signed immediate cases.
 LSU0.LD.32 adds 181 header cases and 64 independent register-field cases.
 SAU.ADD.F32 adds 227 header cases and 96 independent register-field cases.
 LSU0.CP.32 adds 181 header cases and 64 independent register-field cases.
-The current total is 607 prefix shapes.
+LSU1.LDO.32 adds 150 header cases, 64 register cases and 33 signed immediate cases.
+LSU0.LDIH adds 362 immediate/symbol header cases, 64 register cases and 18 immediate cases.
+JMP adds 280 header shapes, 32 register cases and the same 2232 delay-window
+sequences as BRA; the expanded headers also repeat existing alternative forms.
+SUB adds 482 register/immediate header cases, 96 register-field cases and ten
+immediate-bit/boundary cases. The current total is 887 prefix shapes.
 Every case's full instruction bytes and fixups are compared to moviAsm, not
 merely round-tripped through native code. All measured instruction forms occur
 in the real compiler corpus.
@@ -649,7 +752,7 @@ The parser structurally accepted all 55 captured assemblies. The literal
 corpus contains 97 distinct mnemonics. Only **3291/11912** parsed packets are
 accepted by the original byte-only encoder across the two corpora; the symbolic
 branch, scalar-load/store, ADD, compare, PCCX, AND/OR, LMULL, INCS and SHL extensions raise
-bytes-plus-fixups support to **8783/11912**. These are
+bytes-plus-fixups support to **9325/11912**. These are
 syntactic coverage counts, **not** full-stream or whole-object parity claims.
 Calls, other branch forms, additional instruction/header classes, data and
 alignment directives, ELF symbols and relocations remain the next gate. Hybrid
