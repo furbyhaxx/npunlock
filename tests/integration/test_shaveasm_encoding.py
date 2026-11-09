@@ -34,6 +34,12 @@ class EncodingTests(unittest.TestCase):
         self.assertEqual(encode("NOP 17"), b"\xf0\x00")
         self.assertEqual(encode("NOP 32"), b"\xf0\xf0")
 
+    def test_unsigned_compare_has_no_signed_selector_bit(self) -> None:
+        self.assertEqual(encode("CMU.CMII.U32 i31 i0"), bytes.fromhex("81f00100"))
+        self.assertEqual(encode("CMU.CMII.U32 i0 i31"), bytes.fromhex("81003e00"))
+        with self.assertRaisesRegex(AssemblyError, "read port 6"):
+            encode("CMU.CMII.U32 i1 i2 || LSU1.STO.32 i8 i9 0")
+
     def test_or_uses_the_twenty_bit_logical_class(self) -> None:
         self.assertEqual(encode("IAU.OR i5 i5 i5"), bytes.fromhex("86b19402"))
         self.assertEqual(encode("IAU.OR i16 i17 i18 || PEU.PCCX NEQ 63"), bytes.fromhex("ed314299fd"))

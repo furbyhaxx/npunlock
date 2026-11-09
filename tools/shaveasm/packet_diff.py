@@ -33,7 +33,7 @@ def generate_packets(seed: int, count: int) -> list[str]:
         if unit == "CMU.CMZ16":
             return f"CMU.CMZ.I32 {registers[0]}"
         if unit == "CMU":
-            mnemonic = "CMU.CP.32" if store_packet else rng.choice(("CMU.CP.32", "CMU.CMII.I32"))
+            mnemonic = "CMU.CP.32" if store_packet else rng.choice(("CMU.CP.32", "CMU.CMII.I32", "CMU.CMII.U32"))
             return f"{mnemonic} {registers[0]} {registers[1]}"
         if unit in ("LSU0", "LSU1"):
             return f"{unit}.LDIL {registers[0]} {rng.randrange(65536)}"
@@ -79,7 +79,9 @@ def generate_packets(seed: int, count: int) -> list[str]:
             packets.append("\n || ".join(f"IAU.SHL i16 i17 {rng.randrange(32)}" if unit == "IAU.ADD24"
                                           else operation(unit, store_packet=store_packet) for unit in shape))
         if "CMU" in shape and not store_packet:
-            packets.append("\n || ".join(operation(unit) for unit in shape).replace("CMU.CP.32", "CMU.CMII.I32"))
+            for mnemonic in ("CMU.CMII.I32", "CMU.CMII.U32"):
+                packets.append("\n || ".join(f"{mnemonic} i0 i1" if unit == "CMU"
+                                              else operation(unit) for unit in shape))
     for mnemonic in ("IAU.AND", "IAU.OR"):
         for position in range(3):
             for register in range(32):
@@ -92,11 +94,12 @@ def generate_packets(seed: int, count: int) -> list[str]:
             operands[position] = f"i{register}"
             packets.append("IAU.SHL " + " ".join(operands))
     packets.extend(f"IAU.SHL i0 i0 {n}" for n in range(32))
-    for position in range(2):
-        for register in range(32):
-            operands = ["i0", "i0"]
-            operands[position] = f"i{register}"
-            packets.append("CMU.CMII.I32 " + " ".join(operands))
+    for mnemonic in ("CMU.CMII.I32", "CMU.CMII.U32"):
+        for position in range(2):
+            for register in range(32):
+                operands = ["i0", "i0"]
+                operands[position] = f"i{register}"
+                packets.append(mnemonic + " " + " ".join(operands))
     for position in range(2):
         for register in range(32):
             operands = ["i0", "i0", "0"]

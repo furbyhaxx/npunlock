@@ -680,9 +680,10 @@ def _operation(instruction: Instruction) -> _Operation:
     if mnemonic == "CMU.CMZ.I32" and len(operands) == 1:
         source = _register(operands[0], line)
         return _Operation(unit, source << 4, 16, prefix_class="CMU.CMZ16")
-    if mnemonic == "CMU.CMII.I32" and len(operands) == 2:
+    if mnemonic in ("CMU.CMII.I32", "CMU.CMII.U32") and len(operands) == 2:
         left, right = (_register(op, line) for op in operands)
-        return _Operation(unit, 0x10000 | left << 4 | right << 9, 24)
+        signed = 0x10000 if mnemonic == "CMU.CMII.I32" else 0
+        return _Operation(unit, signed | left << 4 | right << 9, 24)
     if mnemonic == "CMU.CP.32" and len(operands) == 2:
         destination, source = (_register(op, line) for op in operands)
         return _Operation(unit, 0x08000C | destination << 9 | source << 4, 24)
@@ -753,8 +754,8 @@ def encode_packet_with_fixups(
         full, remaining = divmod(count, 16)
         return b"\xf0" * full + (bytes([(remaining - 1) << 4]) if remaining else b""), ()
     mnemonics = {instruction.mnemonic for instruction in packet.operations}
-    if {"CMU.CMII.I32", "LSU1.STO.32"} <= mnemonics:
-        raise AssemblyError(f"line {first.line}: CMII.I32 and STO.32 conflict on scalar read port 6")
+    if "LSU1.STO.32" in mnemonics and mnemonics & {"CMU.CMII.I32", "CMU.CMII.U32"}:
+        raise AssemblyError(f"line {first.line}: CMII and STO.32 conflict on scalar read port 6")
     operations = [_operation(instruction) for instruction in packet.operations]
     if len({op.unit for op in operations}) != len(operations):
         raise AssemblyError(f"line {first.line}: repeated functional unit in packet")

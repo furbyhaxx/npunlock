@@ -287,26 +287,30 @@ measured non-LSU1 classes found unique layouts. The **150** shapes at or below
 position before SAU. AND, SHL and CMU comparison variants are additionally
 checked in the randomized gate wherever their resource usage allows co-issue.
 
-moviAsm rejects **CMU.CMII.I32 + LSU1.STO.32** on scalar read port `IRFrp6`, even
+moviAsm rejects **CMU.CMII.I32/U32 + LSU1.STO.32** on scalar read port `IRFrp6`, even
 with disjoint registers; CP.32 + STO.32 with those same registers is accepted.
 The native encoder rejects this measured conflict without changing scheduling.
 The generator selects CP.32 for store-containing CMU packets and never silently
 reschedules a conflicting CMII packet. This is a specific measured conflict,
 not a general functional-unit legality model.
 
-### Scalar signed register comparison
+### Scalar signed and unsigned register comparison
 
 Independent sweeps of both operands through `i0..i31` establish:
 
 | Form | Payload bits | Payload expression | Standalone prefix |
 | --- | ---: | --- | --- |
 | `CMU.CMII.I32 l r` | 24 | `0x10000 + (l<<4) + (r<<9)` | `0x81` |
+| `CMU.CMII.U32 l r` | 24 | `(l<<4) + (r<<9)` | `0x81` |
 
 The first source occupies the low register field, unlike CP.32's destination.
-All **124** measured CMU 24-bit header shapes matched when CMII.I32 replaced
-CP.32, including mixed branch/PCCX classes. The randomized gate chooses both
-forms and explicitly repeats those 124 shapes plus 64 independent register-field
-sweeps. Unsigned and immediate comparisons remain unmeasured.
+All **124** measured legal CMU 24-bit header shapes matched when either CMII.I32
+or CMII.U32 replaced CP.32, including mixed branch/PCCX classes. Each form has
+64 independent register-field sweeps; unsigned comparison clears payload bit 16.
+The randomized gate chooses all three forms and explicitly repeats the 124
+legal shapes with each comparison form. Both comparison variants conflict with
+STO.32 on scalar read port 6 and are rejected in those packets. Immediate
+comparisons remain unmeasured.
 
 ### Scalar immediate left shift
 
@@ -506,8 +510,8 @@ summed as packet totals. Parse failures are reported separately and fail the
 command. The combined baseline is 3291/11912 accepted packets and **98** distinct
 mnemonics (97 in the literal corpus alone). With symbolic branches, signed
 loads/stores, integer addition, comparisons, PCCX, AND/OR and immediate SHL,
-coverage is **7646/11912** packets, including 785 requiring symbolic fixups.
-Seventeen distinct mnemonics occur in accepted packets (six at baseline); the total
+coverage is **7911/11912** packets, including 785 requiring symbolic fixups.
+Eighteen distinct mnemonics occur in accepted packets (six at baseline); the
 corpus still has 98 mnemonics.
 `accepted_packets` counts bytes-plus-fixups support and `relocatable_packets`
 identifies that subset. Coverage tests isolated packet forms; it does not
@@ -526,7 +530,7 @@ python3 -m tools.shaveasm.corpus --native-dir build/linux \
   --output /mnt/cache/build-shave/native-asm-corpus
 ```
 
-Offline regressions: 28 passed. Each randomized gate passed **5849/5849 cases**
+Offline regressions: 29 passed. Each randomized gate passed **6037/6037 cases**
 (seeds 3720 and 9001): the original 2362 isolated-packet cases (1000 random
 packets, 457 shapes, 352 mixed operand sweeps, 96 ADD sweeps, 384 PCCX pairs,
 eight immediate boundaries and 65 NOP cases), plus 64 counted-NOP branch
@@ -536,7 +540,8 @@ An additional 140 AND header cases and 96 individual register sweeps cover AND;
 124 header cases and 64 independent register sweeps. STO.32 adds 150 header
 classes, 32 mixed store sweeps, 64 register-field sweeps, five boundaries and
 77 additional AND/SHL header cases. OR adds 180 header cases and 96 operand
-sweeps. The current total is 607 prefix shapes.
+sweeps. CMII.U32 adds 124 legal header cases and 64 register-field sweeps.
+The current total is 607 prefix shapes.
 Every case's full instruction bytes and fixups are compared to moviAsm, not
 merely round-tripped through native code. All measured instruction forms occur
 in the real compiler corpus.
@@ -567,7 +572,7 @@ The parser structurally accepted all 55 captured assemblies. The literal
 corpus contains 97 distinct mnemonics. Only **3291/11912** parsed packets are
 accepted by the original byte-only encoder across the two corpora; the symbolic
 branch, signed-load/store, ADD, compare, PCCX, AND/OR and SHL extensions raise
-bytes-plus-fixups support to **7646/11912**. These are
+bytes-plus-fixups support to **7911/11912**. These are
 syntactic coverage counts, **not** full-stream or whole-object parity claims.
 Calls, other branch forms, additional instruction/header classes, data and
 alignment directives, ELF symbols and relocations remain the next gate. Hybrid
