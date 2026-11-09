@@ -64,6 +64,16 @@ class EncodingTests(unittest.TestCase):
             with self.subTest(source=source), self.assertRaises(AssemblyError):
                 encode(source)
 
+    def test_iau_multiply_uses_signed_eight_bit_immediates(self) -> None:
+        self.assertEqual(encode("IAU.MUL i0 i0 i0"), bytes.fromhex("c6020000"))
+        self.assertEqual(encode("IAU.MUL i0 i0 0"), bytes.fromhex("c6020080"))
+        self.assertEqual(encode("IAU.MUL i1 i2 3"), bytes.fromhex("c6428481"))
+        self.assertEqual(encode("IAU.MUL i0 i0 -1"), bytes.fromhex("c60280ff"))
+        self.assertEqual(encode("IAU.MUL i0 i0 -128"), bytes.fromhex("c60200c0"))
+        for source in ("IAU.MUL i0 i0 -129", "IAU.MUL i0 i0 128", "IAU.MUL i0 i0 i32"):
+            with self.subTest(source=source), self.assertRaises(AssemblyError):
+                encode(source)
+
     def test_scalar_float_comparison_uses_its_type_selector(self) -> None:
         self.assertEqual(encode("CMU.CMII.F32 i0 i0"), bytes.fromhex("81000008"))
         self.assertEqual(encode("CMU.CMII.F32 i1 i2"), bytes.fromhex("81100408"))

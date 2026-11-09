@@ -1605,15 +1605,16 @@ def _operation(instruction: Instruction) -> _Operation:
         opcode = 0x0C if mnemonic == "IAU.SHL" else 0x0E
         return _Operation(unit, opcode | selector | destination << 10 | source << 5 | right << 15, 24,
                           prefix_class="IAU.ADD24")
-    if mnemonic in ("IAU.ADD", "IAU.SUB") and len(operands) == 3:
+    if mnemonic in ("IAU.ADD", "IAU.SUB", "IAU.MUL") and len(operands) == 3:
         destination, left = (_register(op, line) for op in operands[:2])
         if re.fullmatch(r"[iI][0-9]+", operands[2]):
             right = _register(operands[2], line)
             selector = 0
         else:
-            right = _immediate(operands[2], 8, line)
+            right = (_signed_immediate(operands[2], 8, line) if mnemonic == "IAU.MUL"
+                     else _immediate(operands[2], 8, line))
             selector = 1 << 23
-        opcode = 1 if mnemonic == "IAU.SUB" else 0
+        opcode = {"IAU.ADD": 0, "IAU.SUB": 1, "IAU.MUL": 2}[mnemonic]
         return _Operation(unit, opcode | selector | destination << 10 | left << 5 | right << 15, 24,
                           prefix_class="IAU.ADD24")
     if mnemonic in ("IAU.XOR", "IAU.AND", "IAU.OR", "IAU.LMULL", "IAU.LMULH", "IAU.ADDCI") and len(operands) == 3:

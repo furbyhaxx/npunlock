@@ -68,8 +68,9 @@ def generate_packets(seed: int, count: int) -> list[str]:
                 mnemonic = rng.choice(("IAU.SHL", "IAU.SHR.U32"))
                 right = registers[2] if rng.randrange(2) else str(rng.randrange(32))
                 return f"{mnemonic} {registers[0]} {registers[1]} {right}"
-            right = registers[2] if rng.randrange(2) else str(rng.randrange(256))
-            mnemonic = rng.choice(("IAU.ADD", "IAU.SUB"))
+            mnemonic = rng.choice(("IAU.ADD", "IAU.SUB", "IAU.MUL"))
+            immediate = rng.randrange(-128, 128) if mnemonic == "IAU.MUL" else rng.randrange(256)
+            right = registers[2] if rng.randrange(2) else str(immediate)
             return f"{mnemonic} {registers[0]} {registers[1]} {right}"
         if unit == "IAU":
             mnemonic = rng.choice(("IAU.XOR", "IAU.AND", "IAU.OR", "IAU.LMULL", "IAU.LMULH", "IAU.ADDCI"))
@@ -131,9 +132,10 @@ def generate_packets(seed: int, count: int) -> list[str]:
                                               else operation(unit, store_packet=store_packet) for unit in shape))
             packets.append("\n || ".join("IAU.INCS i16 -2345" if unit == "IAU.ADD24"
                                           else operation(unit, store_packet=store_packet) for unit in shape))
-            for right in ("i18", "255"):
-                packets.append("\n || ".join(f"IAU.SUB i16 i17 {right}" if unit == "IAU.ADD24"
-                                              else operation(unit, store_packet=store_packet) for unit in shape))
+            for mnemonic, values in (("IAU.SUB", ("i18", "255")), ("IAU.MUL", ("i18", "-123"))):
+                for right in values:
+                    packets.append("\n || ".join(f"{mnemonic} i16 i17 {right}" if unit == "IAU.ADD24"
+                                                  else operation(unit, store_packet=store_packet) for unit in shape))
         if "CMU" in shape:
             for lane in range(4):
                 packets.append("\n || ".join(f"CMU.CP.32 i0 v31.{lane}" if unit == "CMU"
@@ -208,8 +210,11 @@ def generate_packets(seed: int, count: int) -> list[str]:
         for register in range(32):
             operands = ["i0"] * 3
             operands[position] = f"i{register}"
-            packets.append("IAU.SUB " + " ".join(operands))
+            for mnemonic in ("IAU.SUB", "IAU.MUL"):
+                packets.append(mnemonic + " " + " ".join(operands))
     packets.extend(f"IAU.SUB i0 i0 {value}" for value in (0, 255, *(1 << bit for bit in range(8))))
+    packets.extend(f"IAU.MUL i0 i0 {value}" for value in
+                   (0, -1, -128, 127, *(1 << bit for bit in range(7)), *(-(1 << bit) for bit in range(8))))
     packets.extend(f"IAU.INCS i{r} 0" for r in range(32))
     packets.extend(f"IAU.INCS i0 {value}" for value in
                    (0, -1, 8191, -8192, *(1 << bit for bit in range(13)),
