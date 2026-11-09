@@ -197,3 +197,127 @@ and shared buffers. This is **not** end-to-end hybrid compilation: both compiler
 and assembler still ran under Wine offline. The unchanged default
 `python -m npunlock doctor --full` passed 32-element FP16 add-one with zero
 mismatches. Doctor in a new mode is not implemented or validated.
+
+## Independent native parser and packet encoder
+
+The follow-up implementation in `tools/shaveasm/` is independent stdlib Python;
+no third-party assembler or encoding table was imported. It remains a development
+library, not a complete `.s` -> `.o` assembler or a selectable toolchain mode.
+`parser.py` preserves directives and labels, strips comments without damaging
+quoted strings, and joins inline/continued packets without rescheduling.
+`encoding.py` fails closed outside the measured instruction forms below.
+`oracle.py` uses the existing bounded native process launcher and Wine worker,
+including correct ownership/release of the stage response buffers.
+
+### Measured scalar packing model
+
+For the six measured instruction forms, vendor output has these properties:
+
+1. Operations are encoded in canonical order **CMU, LSU0, LSU1, SAU, IAU, PEU**,
+   independent of textual order. This order is not yet established for BRU/VAU.
+2. Each standalone operation has an eight-bit prefix followed by its payload.
+   In a packet, the individual prefixes are replaced by **one combined prefix**.
+3. The combined prefix occupies **8, 16 or 24 bits** for the measured shapes.
+   All 56 combinations of one through four of these six forms were derived.
+   The complete measured `(width, value)` mapping is `_PREFIXES` in
+   `tools/shaveasm/encoding.py`; it is an encoding-rule table, not a vendor
+   object or captured instruction stream.
+4. Payloads are concatenated **least-significant first at bit granularity**.
+   Only the completed packet is zero-padded to a whole number of bytes, then
+   emitted little-endian. Padding each instruction separately is incorrect.
+5. Prefix selection depends on the instruction encoding classes; the current
+   table must not be generalized to arbitrary instructions on those units.
+
+For example, LSU0.LDIL has a 24-bit payload and IAU.XOR a 20-bit payload.
+Their packet has an eight-bit prefix `0xaa` and 44 payload bits: 52 bits total,
+rounded to seven bytes. Adding PEU.PC1C after IAU.XOR starts its eight-bit
+payload immediately after the 20-bit XOR payload, not on a byte boundary.
+
+The table was derived by encoding each operation independently, removing its
+low eight prefix bits, arranging the payloads in canonical order, and finding
+the unique header width making the combined vendor word equal those payloads.
+Each observed shape had exactly one width among 4, 8, ..., 32 bits. Randomized
+operands, textual permutations and full scalar register sweeps independently
+checked the resulting model.
+
+Payload fields below use least-significant-bit offsets **after removing the
+standalone eight-bit prefix**; `d`, `s`, `l`, `r` are five-bit register numbers:
+
+| Form | Payload bits | Payload expression | Standalone prefix |
+| --- | ---: | --- | --- |
+| `CMU.CP.32 d s` | 24 | `0x08000c + (d<<9) + (s<<4)` | `0x81` |
+| `LSU0.LDIL d imm16` | 24 | `2 + (d<<3) + (imm16<<8)` | `0x82` |
+| `LSU1.LDIL d imm16` | 24 | same payload expression | `0x89` |
+| `SAU.ADD.i32 d s imm5` | 24 | `0x100000 + (d<<10) + (s<<5) + (imm5<<15)` | `0x3c` |
+| `IAU.XOR d l r` | 20 | `0x12 + (d<<10) + (l<<5) + (r<<15)` | `0x86` |
+| `PEU.PC1C condition` | 8 | `0xb + (condition<<4)` | `0x85` |
+
+The measured immediates are unsigned; other forms/ranges are rejected.
+Predicate selectors are EQ=1, NEQ=14, LT=4, LTE=5, GT=2, GTE=3.
+Register sweeps cover `i0..i31`; this is encoding parity, not a new claim about
+hardware safety or register ABI.
+
+`NOP` and `BRU.NOP` without a count encode as `0x07`. Explicit `NOP n` is
+**different**: each full group of 16 slots emits `0xf0`; a remaining 1..15 slots
+emits `(remaining-1)<<4`. In particular `NOP 1` is `0x00`, `NOP 6` is `0x50`,
+and `NOP 17` is `f0 00`. Counted runs 1..64 were compared to moviAsm. These
+measurements do not yet define all context-sensitive branch-delay compression.
+
+The vendor analyzer retains write-back hazard state across `.code` switches:
+adjacent standalone SAU/IAU register-sweep cases writing the same register
+reported conflicting writes despite being in different sections. Each generated
+case now has a separate preceding `NOP 16` padding section. This makes cases
+independent without disabling the vendor analyzer or changing tested packets.
+
+### Differential gates and corpus inventory
+
+```sh
+python3 -m unittest discover -s tests/integration -p 'test_shaveasm_*.py'
+python3 -m tools.shaveasm.packet_diff --native-dir build/linux \
+  --movitools-dir "$NPUNLOCK_MOVITOOLS_DIR" \
+  --output /mnt/cache/build-shave/native-packets-3720-v3 --seed 3720 --count 1000
+python3 -m tools.shaveasm.packet_diff --native-dir build/linux \
+  --movitools-dir "$NPUNLOCK_MOVITOOLS_DIR" \
+  --output /mnt/cache/build-shave/native-packets-9001 --seed 9001 --count 1000
+python3 -m tools.shaveasm.corpus --native-dir build/linux \
+  --movitools-dir "$NPUNLOCK_MOVITOOLS_DIR" \
+  --output /mnt/cache/build-shave/native-asm-corpus
+```
+
+Offline regressions: 14 passed. Each randomized gate passed **1316/1316**
+packets: 1000 random packets, 56 shapes, 192 register/predicate sweep cases, three
+immediate boundaries, and 65 bare/counted NOP cases. Every generated packet's
+actual bytes are compared to moviAsm, not merely round-tripped through native
+code. The six instruction forms all occur in the real compiler corpus.
+
+Original C, compiler `.s`, vendor `.o` and JSON manifests stay under the cache
+paths above. `elf.py` provides bounded ELF32 section inspection and a comparator
+which reports every section-attribute or byte difference while ignoring only
+file offsets. There are **no whole-object native parity results yet** because
+the native object writer, expressions, symbol/relocation lowering and remaining
+instruction classes are not implemented.
+
+The captured corpus has **55 distinct complete kernel sources**: 39 literal
+sources (including all seven contrib `.c` kernels) and 16 generated variants
+from the three dynamic example files. Those variants cover per-row scalar
+`f16/f32/u16/u32` in both operand positions, scalar-first in those four types,
+and scalar/row unsigned broadcasts in `u16/u32`. The reviewed pure generator
+functions were called in isolation, without running application bodies or NPU
+inference; their originals and manifests are in
+`/mnt/cache/build-shave/native-dynamic-example-corpus/`.
+
+All 35 example files containing `controlled_act` are represented. The initial
+literal scan also attempted a one-line entry fragment in the XGBoost generator,
+which correctly failed compilation; discovery now reports it as dynamic input
+rather than a complete source. Model-dependent XGBoost sources remain
+uncaptured and require explicit model/generator inputs.
+
+The parser structurally accepted all 55 captured assemblies. The literal
+corpus contains 97 distinct mnemonics. Only **3291/11912** parsed packets are
+currently accepted by the narrow encoder across the two corpora; this is a
+syntactic coverage count, **not** a full-stream or whole-object parity claim.
+BRU branches/calls and fixups, additional instruction/header classes, data and
+alignment directives, ELF symbols and relocations remain the next gate. Hybrid
+worker/config/cache integration and new-mode doctor/NPU acceptance must wait
+for whole-corpus object parity. The existing default and prior linker-only
+hardware evidence are unchanged; no branch push is justified yet.
