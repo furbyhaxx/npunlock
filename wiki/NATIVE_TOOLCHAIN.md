@@ -717,6 +717,16 @@ predicate instead of duplicating mnemonic checks.
 **0/55** exact objects and 2391 diagnostic instruction rejections. First
 rejections are SAU.SHR.U32 (40 files), CMPI (8), and STO.64 (7).
 
+### Scalar SAU unsigned immediate right shift
+
+`SAU.SHR.U32 dst src imm5` uses the 24-bit SAU class and payload
+`0x100012 | dst<<10 | src<<5 | imm5<<15`. All 323 SAU header combinations,
+64 register sweeps and 32 shift amounts match moviAsm. Both seeds pass
+**15759/15759** packet cases and 59 offline tests pass. Coverage is
+**9887/11912** packets (33 accepted mnemonics, 1210 prefix shapes), with
+**0/55** exact objects and 2279 diagnostic instruction rejections. First
+rejections are IAU.ADDCI (40 files), CMPI (8), and STO.64 (7).
+
 ### Differential gates and corpus inventory
 
 Cached assembly can be inventoried without Wine or recompilation:
