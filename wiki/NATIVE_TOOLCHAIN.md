@@ -831,6 +831,16 @@ remain unsupported. Both seeds pass **22244/22244** packet cases and
 exact objects**, zero different objects, and 1620 diagnostic instruction
 rejections. No object-writer changes were needed.
 
+### Scalar SAU register right shift
+
+`SAU.SHR.U32 dst src amount` accepts a scalar register shift amount in the
+24-bit SAU class, with payload `0x12 | dst<<10 | src<<5 | amount<<15`.
+The immediate form retains selector bit 20. All 379 SAU header shapes and
+96 independent register sweeps match moviAsm. Register SHL remains unsupported.
+Both seeds pass **22719/22719** packet cases and 68 offline tests pass.
+Coverage is **10508/11912** packets, with **7/55 exact objects**, zero
+different objects, and 1603 diagnostic instruction rejections.
+
 ### Differential gates and corpus inventory
 
 Cached assembly can be inventoried without Wine or recompilation:

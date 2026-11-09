@@ -46,6 +46,15 @@ class EncodingTests(unittest.TestCase):
             with self.subTest(source=source), self.assertRaises(AssemblyError):
                 encode(source)
 
+    def test_sau_register_right_shift_clears_the_immediate_selector(self) -> None:
+        self.assertEqual(encode("SAU.SHR.U32 i0 i0 i0"), bytes.fromhex("3c120000"))
+        self.assertEqual(encode("SAU.SHR.U32 i1 i2 i3"), bytes.fromhex("3c528401"))
+        self.assertEqual(encode("SAU.SHR.U32 i31 i31 i31"), bytes.fromhex("3cf2ff0f"))
+        for source in ("SAU.SHR.U32 i0 i0 i32", "SAU.SHR.U32 i0 i0 v1",
+                       "SAU.SHL.X32 i0 i0 i1"):
+            with self.subTest(source=source), self.assertRaises(AssemblyError):
+                encode(source)
+
     def test_register_right_shift_uses_the_twenty_four_bit_iau_class(self) -> None:
         self.assertEqual(encode("IAU.SHR.U32 i0 i0 i0"), bytes.fromhex("c60e0000"))
         self.assertEqual(encode("IAU.SHR.U32 i1 i2 i3"), bytes.fromhex("c64e8401"))

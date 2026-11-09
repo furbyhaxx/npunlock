@@ -1629,9 +1629,14 @@ def _operation(instruction: Instruction) -> _Operation:
         return _Operation(unit, opcode | destination << 10 | left << 5 | right << 15, 24)
     if mnemonic in ("SAU.ADD.I32", "SAU.SHL.X32", "SAU.SHR.U32") and len(operands) == 3:
         destination, source = (_register(op, line) for op in operands[:2])
-        immediate = _immediate(operands[2], 5, line)
-        opcode = {"SAU.ADD.I32": 0x100000, "SAU.SHL.X32": 0x100011, "SAU.SHR.U32": 0x100012}[mnemonic]
-        return _Operation(unit, opcode | destination << 10 | source << 5 | immediate << 15, 24)
+        if mnemonic == "SAU.SHR.U32" and re.fullmatch(r"[iI][0-9]+", operands[2]):
+            right = _register(operands[2], line)
+            selector = 0
+        else:
+            right = _immediate(operands[2], 5, line)
+            selector = 0x100000
+        opcode = {"SAU.ADD.I32": 0, "SAU.SHL.X32": 0x11, "SAU.SHR.U32": 0x12}[mnemonic]
+        return _Operation(unit, opcode | selector | destination << 10 | source << 5 | right << 15, 24)
     if mnemonic == "PEU.PCCX" and len(operands) == 2 and operands[0].upper() in _PCCX_PREDICATES:
         condition = _PCCX_PREDICATES[operands[0].upper()]
         immediate = _immediate(operands[1], 6, line)
