@@ -64,6 +64,14 @@ class EncodingTests(unittest.TestCase):
             with self.subTest(source=source), self.assertRaises(AssemblyError):
                 encode(source)
 
+    def test_sau_integer_add_accepts_a_register_right_operand(self) -> None:
+        self.assertEqual(encode("SAU.ADD.I32 i0 i0 i0"), bytes.fromhex("3c000000"))
+        self.assertEqual(encode("SAU.ADD.I32 i1 i2 i3"), bytes.fromhex("3c408401"))
+        self.assertEqual(encode("SAU.ADD.I32 i31 i31 i31"), bytes.fromhex("3ce0ff0f"))
+        for source in ("SAU.ADD.I32 i0 i0 i32", "SAU.ADD.I32 i0 i0 v1"):
+            with self.subTest(source=source), self.assertRaises(AssemblyError):
+                encode(source)
+
     def test_lsu0_offset_store_shares_the_offset_load_class(self) -> None:
         self.assertEqual(encode("LSU0.STO.32 i0 i0 0"), bytes.fromhex("c206400100"))
         self.assertEqual(encode("LSU0.STO.32 i1 i2 -1"), bytes.fromhex("c21644ffff"))
