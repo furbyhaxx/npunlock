@@ -342,7 +342,7 @@ static void run_tool(const worker_request *request, worker_result *result) {
     struct {
       movi_buffer_list bl;
       movi_buffer_list _[7];
-    } inputs = {{request->inputs, request->input_count}, {0}};
+    } inputs = {{request->inputs, request->input_count}, {{0}}};
     memcpy(&entry, &raw_entry, sizeof(entry));
     return_value = entry((int)request->argument_count, request->arguments, &inputs.bl, &linked.b);
     output = linked.b.data;
