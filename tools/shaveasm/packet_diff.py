@@ -31,7 +31,7 @@ def generate_packets(seed: int, count: int) -> list[str]:
             base = _UNITS.index(unit.split(".")[0]) * 4
             registers = tuple(f"i{base + rng.randrange(4)}" for _ in range(3))
         if unit in ("LSU0.LDO32", "LSU1.STO32"):
-            mnemonic = ("LSU0.LDO.32" if unit == "LSU0.LDO32"
+            mnemonic = (rng.choice(("LSU0.LDO.32", "LSU0.STO.32")) if unit == "LSU0.LDO32"
                         else rng.choice(("LSU1.STO.32", "LSU1.LDO.32")))
             return f"{mnemonic} {registers[0]} {registers[1]} {rng.randrange(-16384, 16384)}"
         if unit == "CMU.CMPI28":
@@ -99,6 +99,9 @@ def generate_packets(seed: int, count: int) -> list[str]:
     for key in _PREFIXES:
         shape = key.split(",")
         store_packet = "LSU1.STO32" in shape
+        if "LSU0.LDO32" in shape:
+            packets.append("\n || ".join("LSU0.STO.32 i4 i5 -3" if unit == "LSU0.LDO32"
+                                          else operation(unit, store_packet=store_packet) for unit in shape))
         if "LSU1.STO32" in shape:
             packets.append("\n || ".join("LSU1.LDO.32 i8 i9 -3" if unit == "LSU1.STO32"
                                           else operation(unit, store_packet=True) for unit in shape))
@@ -186,7 +189,11 @@ def generate_packets(seed: int, count: int) -> list[str]:
         for register in range(32):
             operands = ["i0", "i0", "0"]
             operands[position] = f"i{register}"
-            packets.append("LSU1.STO.32 " + " ".join(operands))
+            for mnemonic in ("LSU0.STO.32", "LSU1.STO.32"):
+                packets.append(mnemonic + " " + " ".join(operands))
+    packets.extend(f"LSU0.STO.32 i0 i0 {value}" for value in
+                   (0, -1, 16383, -16384, *(1 << bit for bit in range(14)),
+                    *(-(1 << bit) for bit in range(15))))
     packets.extend(f"LSU1.STO.32 i31 i0 {value}" for value in (-16384, -1, 0, 1, 16383))
     for mnemonic in ("LSU0.LD.32", "LSU0.CP.32"):
         for position in range(2):
@@ -268,9 +275,10 @@ def verify_packets(oracle: Oracle, output: Path, seed: int, count: int) -> None:
     output.mkdir(parents=True, exist_ok=True)
     packets = generate_packets(seed, count)
     # The vendor hazard analyzer carries write-back state across .code switches.
+    # Reuse the gap section to stay below ELF32's section-count limit.
     source = (
         "\n".join(
-            f".code .text.gap_{index}\n NOP 16\n.code .text.case_{index}\ncase_{index}:\n {packet}"
+            f".code .text.gap\n NOP 16\n.code .text.case_{index}\ncase_{index}:\n {packet}"
             for index, packet in enumerate(packets)
         )
         + "\n.end\n"

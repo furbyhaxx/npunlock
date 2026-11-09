@@ -1535,11 +1535,12 @@ def _operation(instruction: Instruction) -> _Operation:
         return _Operation(unit, opcode | register << 3, 16, prefix_class="BRU.JMP16")
     if mnemonic == "BRU.BRA" and len(operands) == 1 and re.fullmatch(r"[A-Za-z_.$][A-Za-z_0-9.$]*", operands[0]):
         return _Operation(unit, 0, 24, Fixup(operands[0], 0, 0, 16, "R_SHAVE_PCREL16"))
-    if mnemonic in ("LSU0.LDO.32", "LSU1.LDO.32", "LSU1.STO.32") and len(operands) == 3:
+    if mnemonic in ("LSU0.LDO.32", "LSU0.STO.32", "LSU1.LDO.32", "LSU1.STO.32") and len(operands) == 3:
         register, base = (_register(op, line) for op in operands[:2])
         immediate = _signed_immediate(operands[2], 15, line)
         opcode, prefix_class = {
             "LSU0.LDO.32": (0x14002, "LSU0.LDO32"),
+            "LSU0.STO.32": (0x14006, "LSU0.LDO32"),
             "LSU1.STO.32": (0x14006, "LSU1.STO32"),
             "LSU1.LDO.32": (0x14002, "LSU1.STO32"),
         }[mnemonic]

@@ -64,6 +64,16 @@ class EncodingTests(unittest.TestCase):
             with self.subTest(source=source), self.assertRaises(AssemblyError):
                 encode(source)
 
+    def test_lsu0_offset_store_shares_the_offset_load_class(self) -> None:
+        self.assertEqual(encode("LSU0.STO.32 i0 i0 0"), bytes.fromhex("c206400100"))
+        self.assertEqual(encode("LSU0.STO.32 i1 i2 -1"), bytes.fromhex("c21644ffff"))
+        self.assertEqual(encode("LSU0.STO.32 i31 i31 -16384"), bytes.fromhex("c2f67f0180"))
+        self.assertEqual(encode("LSU0.STO.32 i31 i31 16383"), bytes.fromhex("c2f67fff7f"))
+        for source in ("LSU0.STO.32 i0 i0 -16385", "LSU0.STO.32 i0 i0 16384",
+                       "LSU0.STO.32 i32 i0 0", "LSU0.STO.32 i0 i0 symbol"):
+            with self.subTest(source=source), self.assertRaises(AssemblyError):
+                encode(source)
+
     def test_iau_multiply_uses_signed_eight_bit_immediates(self) -> None:
         self.assertEqual(encode("IAU.MUL i0 i0 i0"), bytes.fromhex("c6020000"))
         self.assertEqual(encode("IAU.MUL i0 i0 0"), bytes.fromhex("c6020080"))
