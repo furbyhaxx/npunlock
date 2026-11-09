@@ -42,16 +42,21 @@ def generate_packets(seed: int, count: int) -> list[str]:
             return f"IAU.ADD {registers[0]} {registers[1]} {right}"
         if unit == "IAU":
             return f"IAU.XOR {registers[0]} {registers[1]} {registers[2]}"
-        return "PEU.PC1C " + rng.choice(("EQ", "NEQ", "LT", "LTE", "GT", "GTE"))
+        condition = rng.choice(("EQ", "NEQ", "LT", "LTE", "GT", "GTE"))
+        if unit == "PEU.PCCX12":
+            return f"PEU.PCCX {condition} {rng.randrange(64)}"
+        return "PEU.PC1C " + condition
 
     packets = ["NOP", *(f"NOP {n}" for n in range(1, 65))]
     for register in range(32):
-        for unit in (*_UNITS, "LSU0.LDO32", "IAU.ADD24", "CMU.CMZ16"):
+        for unit in (*_UNITS, "LSU0.LDO32", "IAU.ADD24", "CMU.CMZ16", "PEU.PCCX12"):
             packets.append(operation(unit, (f"i{register}", f"i{31 - register}", f"i{(register + 11) % 32}")))
     packets.extend(("LSU0.LDIL i31 65535", "LSU1.LDIL i0 0", "SAU.ADD.i32 i0 i31 31"))
     packets.extend(f"LSU0.LDO.32 i31 i0 {value}" for value in (-16384, -1, 0, 1, 16383))
     packets.extend(f"IAU.ADD i{r} i{31-r} i{(r+11)%32}" for r in range(32))
     packets.extend(f"IAU.ADD i{r} i{31-r} {value}" for r in range(32) for value in (0, 255))
+    packets.extend(f"PEU.PCCX {condition} {n}"
+                   for condition in ("EQ", "NEQ", "LT", "LTE", "GT", "GTE") for n in range(64))
     shapes = [tuple(key.split(",")) for key in _PREFIXES]
     shapes.extend(rng.choices(shapes, k=count))
     for shape in shapes:

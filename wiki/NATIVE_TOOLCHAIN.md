@@ -270,6 +270,23 @@ reported conflicting writes despite being in different sections. Each generated
 case now has a separate preceding `NOP 16` padding section. This makes cases
 independent without disabling the vendor analyzer or changing tested packets.
 
+### Predicate cross-condition
+
+All six predicates crossed with every immediate 0..63 were compared to moviAsm:
+
+| Form | Payload bits | Payload expression | Standalone prefix |
+| --- | ---: | --- | --- |
+| `PEU.PCCX condition imm6` | 12 | `1 + (condition<<2) + (imm6<<6)` | `0xc5` |
+
+The selectors are EQ=1, **NEQ=6**, LT=4, LTE=5, GT=2, GTE=3. NEQ differs from
+PC1C's selector 14 and must not be shared. The immediate is unsigned six-bit;
+moviAsm rejected 64. Standalone byte padding obscures this class's width:
+co-issuing IAU.XOR proves the payload is **12**, rather than 16 bits. For example,
+`IAU.XOR i16 i17 i18 || PEU.PCCX NEQ 63` is `ed 32 42 99 fd`, not a padded
+six-byte packet. Header sweeps of 172 combinations of measured non-PEU classes
+yielded unique layouts. The **135** shapes at or below 128 bits are explicitly
+retained as class `PEU.PCCX12`. PEU remains after BRU in the canonical order.
+
 ### Scalar compare against zero
 
 A complete `i0..i31` source-register sweep establishes:
@@ -380,11 +397,12 @@ also fail alone; `rejected_packets` includes supported forms co-issued with an
 unsupported form or header class. Counts overlap across shapes and must not be
 summed as packet totals. Parse failures are reported separately and fail the
 command. The combined baseline is 3291/11912 accepted packets and **98** distinct
-mnemonics (97 in the literal corpus alone). With symbolic branches, signed loads
-integer addition and zero compare, coverage is 6084/11912 packets, including 740 requiring
-symbolic fixups. `accepted_packets` counts bytes-plus-fixups support and
-`relocatable_packets` identifies that subset;
-this does not assert whole-object parity.
+mnemonics (97 in the literal corpus alone). With symbolic branches, signed
+loads, integer addition, zero compare and PCCX, coverage is **6126/11912** packets,
+including 767 requiring symbolic fixups. Twelve distinct mnemonics occur in
+accepted packets (six at baseline); the total corpus still has 98 mnemonics.
+`accepted_packets` counts bytes-plus-fixups support and `relocatable_packets`
+identifies that subset; this does not assert whole-object parity.
 
 ```sh
 python3 -m unittest discover -s tests/integration -p 'test_shaveasm_*.py'
@@ -399,12 +417,12 @@ python3 -m tools.shaveasm.corpus --native-dir build/linux \
   --output /mnt/cache/build-shave/native-asm-corpus
 ```
 
-Offline regressions: 20 passed. Each randomized gate passed **1811/1811** packets
-(seeds 3720 and 9001): 1000 random packets, 322 shapes, 320 mixed operand sweep
-cases, 96 dedicated ADD register/immediate sweep cases, eight immediate
-boundaries, and 65 bare/counted NOP cases. Every generated packet's
-actual bytes are compared to moviAsm, not merely round-tripped through native
-code. The six instruction forms all occur in the real compiler corpus.
+Offline regressions: 22 passed. Each randomized gate passed **2362/2362** packets
+(seeds 3720 and 9001): 1000 random packets, 457 shapes, 352 mixed operand sweep
+cases, 96 dedicated ADD register/immediate sweep cases, 384 PCCX predicate/index
+pairs, eight immediate boundaries, and 65 bare/counted NOP cases. Every generated
+packet's actual bytes are compared to moviAsm, not merely round-tripped through
+native code. All measured instruction forms occur in the real compiler corpus.
 
 Original C, compiler `.s`, vendor `.o` and JSON manifests stay under the cache
 paths above. `elf.py` provides bounded ELF32 section inspection and a comparator
@@ -431,8 +449,8 @@ uncaptured and require explicit model/generator inputs.
 The parser structurally accepted all 55 captured assemblies. The literal
 corpus contains 97 distinct mnemonics. Only **3291/11912** parsed packets are
 accepted by the original byte-only encoder across the two corpora; the symbolic
-branch, signed-load, ADD and compare extensions raise bytes-plus-fixups support
-to **6084/11912**. These are
+branch, signed-load, ADD, compare and PCCX extensions raise bytes-plus-fixups
+support to **6126/11912**. These are
 syntactic coverage counts, **not** full-stream or whole-object parity claims.
 Calls, other branch forms, additional instruction/header classes, data and
 alignment directives, ELF symbols and relocations remain the next gate. Hybrid

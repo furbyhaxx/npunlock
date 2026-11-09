@@ -34,6 +34,16 @@ class EncodingTests(unittest.TestCase):
         self.assertEqual(encode("NOP 17"), b"\xf0\x00")
         self.assertEqual(encode("NOP 32"), b"\xf0\xf0")
 
+    def test_pccx_has_twelve_payload_bits_and_its_own_neq_selector(self) -> None:
+        self.assertEqual(encode("PEU.PCCX NEQ 63"), bytes.fromhex("c5d90f"))
+        self.assertEqual(encode("PEU.PCCX EQ 0"), bytes.fromhex("c50500"))
+        self.assertEqual(encode("IAU.XOR i16 i17 i18 || PEU.PCCX NEQ 63"),
+                         bytes.fromhex("ed324299fd"))
+        for source in ("PEU.PCCX EQ 64", "PEU.PCCX EQ -1", "PEU.PCCX BAD 0",
+                       "PEU.PCCX EQ 0 || PEU.PC1C EQ"):
+            with self.subTest(source=source), self.assertRaises(AssemblyError):
+                encode(source)
+
     def test_compare_zero_uses_a_sixteen_bit_payload(self) -> None:
         self.assertEqual(encode("CMU.CMZ.I32 i0"), bytes.fromhex("410000"))
         self.assertEqual(encode("CMU.CMZ.I32 i31"), bytes.fromhex("41f001"))

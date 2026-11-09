@@ -39,6 +39,15 @@ class CorpusTests(unittest.TestCase):
             self.assertEqual(rows[("LSU0.LDIL", "ireg immediate")]["unsupported_packets"], 0)
             self.assertEqual(result["parse_errors"], [])
 
+    def test_coverage_identifies_packets_requiring_fixups(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "authored.s").write_text("NOP\nBRU.BRA target\n")
+            result = report([root])
+            self.assertEqual((result["packets"], result["accepted_packets"]), (2, 2))
+            self.assertEqual(result["relocatable_packets"], 1)
+            self.assertEqual(result["rejected_shapes"], [])
+
     def test_capture_discovery_rejects_entry_fragments(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
