@@ -214,7 +214,8 @@ including correct ownership/release of the stage response buffers.
 For the six measured instruction forms, vendor output has these properties:
 
 1. Operations are encoded in canonical order **CMU, LSU0, LSU1, SAU, IAU, PEU**,
-   independent of textual order. This order is not yet established for BRU/VAU.
+   independent of textual order. Symbolic `BRU.BRA` is measured between IAU and
+   PEU (see below); VAU order remains unmeasured.
 2. Each standalone operation has an eight-bit prefix followed by its payload.
    In a packet, the individual prefixes are replaced by **one combined prefix**.
 3. The combined prefix occupies **8, 16 or 24 bits** for the measured shapes.
@@ -261,7 +262,8 @@ hardware safety or register ABI.
 **different**: each full group of 16 slots emits `0xf0`; a remaining 1..15 slots
 emits `(remaining-1)<<4`. In particular `NOP 1` is `0x00`, `NOP 6` is `0x50`,
 and `NOP 17` is `f0 00`. Counted runs 1..64 were compared to moviAsm. These
-measurements do not yet define all context-sensitive branch-delay compression.
+measurements define NOP bytes; branch delay-window metadata additionally depends
+on the following packets, as described below.
 
 The vendor analyzer retains write-back hazard state across `.code` switches:
 adjacent standalone SAU/IAU register-sweep cases writing the same register
@@ -269,7 +271,189 @@ reported conflicting writes despite being in different sections. Each generated
 case now has a separate preceding `NOP 16` padding section. This makes cases
 independent without disabling the vendor analyzer or changing tested packets.
 
+### Scalar bitwise AND
+
+Sweeping each of the three register operands independently through `i0..i31`
+establishes:
+
+| Form | Payload bits | Payload expression | Standalone prefix |
+| --- | ---: | --- | --- |
+| `IAU.AND d l r` | 20 | `0x10 + (d<<10) + (l<<5) + (r<<15)` | `0x86` |
+
+Every one of the **140** measured header shapes containing the 20-bit IAU class
+was independently checked with AND substituted for XOR. All retained the same
+prefix and bit layout, including branches and twelve-bit PCCX suffixes. The
+random generator selects both mnemonics, and explicitly repeats all 140 shapes
+with AND plus the 96 individual register-field sweeps. Immediate AND forms remain
+unmeasured and rejected.
+
+### Predicate cross-condition
+
+All six predicates crossed with every immediate 0..63 were compared to moviAsm:
+
+| Form | Payload bits | Payload expression | Standalone prefix |
+| --- | ---: | --- | --- |
+| `PEU.PCCX condition imm6` | 12 | `1 + (condition<<2) + (imm6<<6)` | `0xc5` |
+
+The selectors are EQ=1, **NEQ=6**, LT=4, LTE=5, GT=2, GTE=3. NEQ differs from
+PC1C's selector 14 and must not be shared. The immediate is unsigned six-bit;
+moviAsm rejected 64. Standalone byte padding obscures this class's width:
+co-issuing IAU.XOR proves the payload is **12**, rather than 16 bits. For example,
+`IAU.XOR i16 i17 i18 || PEU.PCCX NEQ 63` is `ed 32 42 99 fd`, not a padded
+six-byte packet. Header sweeps of 172 combinations of measured non-PEU classes
+yielded unique layouts. The **135** shapes at or below 128 bits are explicitly
+retained as class `PEU.PCCX12`. PEU remains after BRU in the canonical order.
+
+### Scalar compare against zero
+
+A complete `i0..i31` source-register sweep establishes:
+
+| Form | Payload bits | Payload expression | Standalone prefix |
+| --- | ---: | --- | --- |
+| `CMU.CMZ.I32 s` | 16 | `s<<4` | `0x41` |
+
+`CMU.CMZ16` is a distinct header class from 24-bit CMU.CP.32. Co-issuing with
+LSU0.LDIL uses prefix `0x94`, with the load starting after 16 CMU bits. Header
+sweeps of 128 combinations of the already measured non-CMU classes each yielded
+one matching layout; the **104** at or below 128 bits are explicitly retained.
+Scalar compare variants other than this signed zero form remain rejected.
+
+### Scalar integer addition
+
+Separate sweeps of all three register fields and immediate bit/range boundaries
+establish these forms, with a common 24-bit payload/header class:
+
+| Form | Payload bits | Payload expression | Standalone prefix |
+| --- | ---: | --- | --- |
+| `IAU.ADD d l r` | 24 | `(d<<10) + (l<<5) + (r<<15)` | `0xc6` |
+| `IAU.ADD d l imm8` | 24 | `0x800000 + (d<<10) + (l<<5) + (imm8<<15)` | `0xc6` |
+
+Immediate values are unsigned 0..255; negative operands were rejected by moviAsm.
+Unlike IAU.XOR's 20-bit class, both ADD forms use `_Operation.prefix_class`
+`IAU.ADD24`. Both were measured independently against each of **83** combinations
+of zero through four other slots, including either LSU0.LDIL or LSU0.LDO.32.
+Each pair had the same unique header; **68** shapes at or below 128 bits are
+retained in `_PREFIXES`. Payload order is unchanged, but subsequent branch and
+PEU fields move by four bits relative to XOR, changing branch relocation kind
+where necessary. No arithmetic mnemonic other than the explicitly measured ADD
+forms is accepted by inference from these fields.
+
+### Signed scalar load offsets
+
+Register sweeps `i0..i31` for each operand, positive/negative immediate bit sweeps,
+and range boundaries establish this additional class:
+
+| Form | Payload bits | Payload expression | Standalone prefix |
+| --- | ---: | --- | --- |
+| `LSU0.LDO.32 d s offset15` | 32 | `0x14002 + (d<<4) + (s<<9) + ((offset15 & 0x7fff)<<17)` | `0xc2` |
+
+Offsets are signed **-16384..16383**, in source units without scaling. Both
+out-of-range neighbors were rejected by moviAsm. This is a different header
+class from LSU0.LDIL: `_Operation.prefix_class` distinguishes `LSU0.LDO32`
+while functional-unit conflict detection and ordering still use physical LSU0.
+Combined-header sweeps with zero through four other measured scalar/branch slots
+found unique 8/16/24-bit headers for all 57 shapes. The **42** shapes at or below
+128 bits are retained explicitly in `_PREFIXES`. For example, sharing IAU.XOR
+uses eight-bit prefix `0xba`, rather than LDIL/XOR's `0xaa`; the 32-bit load
+payload precedes XOR's 20 bits. Sharing BRU updates the branch field position and
+initial byte-offset bias normally. LSU1 loads and other load sizes remain
+unmeasured and rejected.
+
+### Symbolic branch packets
+
+Operand and combined-header sweeps against moviAsm establish the extended order
+**CMU, LSU0, LSU1, SAU, IAU, BRU, PEU** for `BRU.BRA symbol`. The 24-bit BRU
+payload follows IAU without byte padding and precedes PEU. For each of the 57
+combinations of zero through four scalar slots, a search over branch positions
+and header widths 4, 8, ..., 32 found exactly one matching layout. The encoder
+retains the **52** branch shapes at or below its current 128-bit packet limit;
+those prefixes are explicitly recorded in `_PREFIXES`, never inferred from unit
+names. Some vendor packets exceed this limit and remain rejected.
+
+| Form | Payload bits | Initial payload | Standalone prefix |
+| --- | ---: | --- | --- |
+| `BRU.BRA symbol` | 24 | `floor(b/8) + (delay_span<<16)` | `0xc7` |
+
+Here `b` is the packet-relative bit offset of the branch payload. Standalone
+`b=8` initializes the field to 1. After a 16-bit header and one LSU payload,
+`b=40` initializes it to 5. Following IAU, `b` can be four bits into a byte;
+the relocation field is still 16 bits. The upper eight payload bits record the
+following delay window's byte span, independently of the relocation.
+
+`encode_packet_with_fixups(packet, following=...)` returns
+`(bytes, tuple[Fixup, ...])`. `following` must contain the remaining packets in
+the same code section; the empty default describes an isolated/end-of-section
+packet. A whole-stream writer must pass the actual suffix rather than relying
+on that default. `Fixup(symbol, addend, bit_offset, bit_width, kind)` is immutable
+and its offset is packet-relative, least-significant-bit first. The byte-only `encode_packet`
+continues to reject any packet requiring relocation.
+
+| Field placement | Vendor relocation number | `Fixup.kind` | Width |
+| --- | ---: | --- | ---: |
+| `b % 8 == 0` | 209 | `R_SHAVE_PCREL16` | 16 |
+| `b % 8 == 4` | 210 | `R_SHAVE_PCREL16_AT4` | 16 |
+
+Vendor `.rela` entries place `r_offset` at `floor(b/8)` and have addend zero.
+The initialized field compensates for relocation's byte-relative `P`; object
+writers must retain it rather than replacing it with zero. Both data bytes and
+symbol/addend/field placement/kind are checked by `packet_diff`. Names here match
+the locally named, measured relocation types in `lld-shave.patch`; the vendor
+objects themselves provide numeric types only. Targets are restricted to plain
+symbol names. A probe of `target+2` treated that entire token as a symbol,
+not an arithmetic addend, so expression syntax remains rejected. Calls, resolved
+branch distances and VAU classes remain unmeasured.
+
+#### Branch delay-window byte span
+
+Sweeping counted `NOP 1..32`, repeated bare NOPs, scalar loads and mixed measured
+packets establishes the upper BRU byte:
+
+| Following code in the same section | `delay_span` |
+| --- | ---: |
+| Fewer than six following issue slots | 0 |
+| At least six following issue slots | Bytes from the branch packet's end through the encoded packet/byte containing slot six |
+| `NOP 1..5` only | 0 |
+| `NOP 6..32` | 1 |
+| Six bare `NOP` packets | 6 |
+| Six `LSU0.LDIL` packets | 24 |
+| `NOP 4`, one LDIL, one bare NOP | 6 |
+
+An ordinary packet consumes one issue slot regardless of its number of co-issued
+operations. Counted `NOP n` consumes `n` slots; each encoded NOP byte represents
+up to 16 slots, so `NOP 17` still ends the six-slot window after its first byte.
+The byte span is independent of the BRU payload's bit alignment. For example,
+IAU.XOR+BRU followed by NOP6 sets bit 16 of its BRU payload, just as a standalone
+BRU does. Its fixup offset/type/addend do not change.
+
+The derivation's 738 repeated/mixed sequences matched every vendor byte. The
+randomized gate includes the 1..32 sweep, repeated measured operations, and 1000
+random mixed suffixes for each of standalone BRU and IAU.XOR+BRU. Control
+transfers inside the first six delay slots fail closed. Non-packet layout
+changes inside a delay window remain unmeasured; section boundaries must not be
+silently treated as ordinary packet boundaries.
+
 ### Differential gates and corpus inventory
+
+Cached assembly can be inventoried without Wine or recompilation:
+
+```sh
+python3 -m tools.shaveasm.coverage /mnt/cache/build-shave/native-asm-corpus \
+  /mnt/cache/build-shave/native-dynamic-example-corpus
+```
+
+The JSON report groups rejected packets by mnemonic and operand shape, counting
+one occurrence per shape per packet. `unsupported_packets` identifies forms that
+also fail alone; `rejected_packets` includes supported forms co-issued with an
+unsupported form or header class. Counts overlap across shapes and must not be
+summed as packet totals. Parse failures are reported separately and fail the
+command. The combined baseline is 3291/11912 accepted packets and **98** distinct
+mnemonics (97 in the literal corpus alone). With symbolic branches, signed
+loads, integer addition, zero compare and PCCX, and bitwise AND, coverage is **6477/11912** packets,
+including 767 requiring symbolic fixups. Thirteen distinct mnemonics occur in
+accepted packets (six at baseline); the total corpus still has 98 mnemonics.
+`accepted_packets` counts bytes-plus-fixups support and `relocatable_packets`
+identifies that subset. Coverage tests isolated packet forms; it does not
+validate whole-stream branch suffixes or assert whole-object parity.
 
 ```sh
 python3 -m unittest discover -s tests/integration -p 'test_shaveasm_*.py'
@@ -284,11 +468,15 @@ python3 -m tools.shaveasm.corpus --native-dir build/linux \
   --output /mnt/cache/build-shave/native-asm-corpus
 ```
 
-Offline regressions: 14 passed. Each randomized gate passed **1316/1316**
-packets: 1000 random packets, 56 shapes, 192 register/predicate sweep cases, three
-immediate boundaries, and 65 bare/counted NOP cases. Every generated packet's
-actual bytes are compared to moviAsm, not merely round-tripped through native
-code. The six instruction forms all occur in the real compiler corpus.
+Offline regressions: 24 passed. Each randomized gate passed **4830/4830 cases**
+(seeds 3720 and 9001): the original 2362 isolated-packet cases (1000 random
+packets, 457 shapes, 352 mixed operand sweeps, 96 ADD sweeps, 384 PCCX pairs,
+eight immediate boundaries and 65 NOP cases), plus 64 counted-NOP branch
+suffixes, 168 repeated-operation suffixes and 2000 random mixed branch suffixes.
+An additional 140 AND header cases and 96 individual register sweeps cover AND.
+Every case's full instruction bytes and fixups are compared to moviAsm, not
+merely round-tripped through native code. All measured instruction forms occur
+in the real compiler corpus.
 
 Original C, compiler `.s`, vendor `.o` and JSON manifests stay under the cache
 paths above. `elf.py` provides bounded ELF32 section inspection and a comparator
@@ -314,9 +502,11 @@ uncaptured and require explicit model/generator inputs.
 
 The parser structurally accepted all 55 captured assemblies. The literal
 corpus contains 97 distinct mnemonics. Only **3291/11912** parsed packets are
-currently accepted by the narrow encoder across the two corpora; this is a
-syntactic coverage count, **not** a full-stream or whole-object parity claim.
-BRU branches/calls and fixups, additional instruction/header classes, data and
+accepted by the original byte-only encoder across the two corpora; the symbolic
+branch, signed-load, ADD, compare, PCCX and AND extensions raise bytes-plus-fixups
+support to **6477/11912**. These are
+syntactic coverage counts, **not** full-stream or whole-object parity claims.
+Calls, other branch forms, additional instruction/header classes, data and
 alignment directives, ELF symbols and relocations remain the next gate. Hybrid
 worker/config/cache integration and new-mode doctor/NPU acceptance must wait
 for whole-corpus object parity. The existing default and prior linker-only

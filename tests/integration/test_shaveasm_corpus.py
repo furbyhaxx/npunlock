@@ -6,6 +6,7 @@ import unittest
 from pathlib import Path
 
 from tools.shaveasm.corpus import discover
+from tools.shaveasm.coverage import report
 from tools.shaveasm.elf import Elf32, ElfError, compare_sections
 
 
@@ -22,6 +23,31 @@ def authored_object(payload: bytes) -> bytes:
 
 
 class CorpusTests(unittest.TestCase):
+    def test_coverage_counts_shapes_once_per_rejected_packet(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "authored.s").write_text(
+                "NOP\nCMU.UNMEASURED i1 || IAU.ADD i2 i3 -1\n"
+                "CMU.UNMEASURED i2 || IAU.ADD i4 i5 -2\n"
+                "LSU0.LDIL i0 1 || IAU.UNMEASURED i1 i2 i3\n"
+            )
+            result = report([root, root])
+            self.assertEqual((result["packets"], result["accepted_packets"]), (4, 1))
+            rows = {(r["mnemonic"], r["operand_shape"]): r for r in result["rejected_shapes"]}
+            self.assertEqual(rows[("CMU.UNMEASURED", "ireg")]["unsupported_packets"], 2)
+            self.assertEqual(rows[("IAU.ADD", "ireg ireg negative")]["rejected_packets"], 2)
+            self.assertEqual(rows[("LSU0.LDIL", "ireg immediate")]["unsupported_packets"], 0)
+            self.assertEqual(result["parse_errors"], [])
+
+    def test_coverage_identifies_packets_requiring_fixups(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "authored.s").write_text("NOP\nBRU.BRA target\n")
+            result = report([root])
+            self.assertEqual((result["packets"], result["accepted_packets"]), (2, 2))
+            self.assertEqual(result["relocatable_packets"], 1)
+            self.assertEqual(result["rejected_shapes"], [])
+
     def test_capture_discovery_rejects_entry_fragments(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
