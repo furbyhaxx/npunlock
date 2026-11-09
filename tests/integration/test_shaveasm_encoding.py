@@ -89,6 +89,26 @@ class EncodingTests(unittest.TestCase):
                 self.assertEqual(data, bytes.fromhex(expected))
                 self.assertEqual(fixups, (Fixup("target", 0, offset, 16, kind),))
 
+    def test_branch_delay_span_ends_at_six_issue_slots(self) -> None:
+        cases = [
+            ("NOP 5", 0), ("NOP 6", 1), ("NOP 16", 1), ("NOP 17", 1),
+            ("\n".join(["NOP"] * 6), 6),
+            ("\n".join(["LSU0.LDIL i4 1"] * 6), 24),
+            ("NOP 4\nLSU0.LDIL i4 1\nNOP", 6),
+        ]
+        branch = parse("BRU.BRA target")[0]
+        for following, span in cases:
+            with self.subTest(following=following):
+                data, fixups = encode_packet_with_fixups(branch, following=parse(following))
+                self.assertEqual(data, bytes((0xc7, 1, 0, span)))
+                self.assertEqual(fixups, (Fixup("target", 0, 8, 16, "R_SHAVE_PCREL16"),))
+        mixed = parse("IAU.XOR i5 i6 i7 || BRU.BRA target")[0]
+        data, fixups = encode_packet_with_fixups(mixed, following=parse("NOP 6"))
+        self.assertEqual(data, bytes.fromhex("ae38d29443001000"))
+        self.assertEqual(fixups[0].bit_offset, 36)
+        with self.assertRaisesRegex(AssemblyError, "control transfer"):
+            encode_packet_with_fixups(branch, following=parse("BRU.BRA other\nNOP 6"))
+
     def test_branch_unmeasured_targets_fail_closed(self) -> None:
         for source in ("BRU.BRA 4", "BRU.BRA target+2", "BRU.CALL target"):
             with self.subTest(source=source), self.assertRaises(AssemblyError):

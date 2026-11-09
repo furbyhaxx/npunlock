@@ -262,7 +262,8 @@ hardware safety or register ABI.
 **different**: each full group of 16 slots emits `0xf0`; a remaining 1..15 slots
 emits `(remaining-1)<<4`. In particular `NOP 1` is `0x00`, `NOP 6` is `0x50`,
 and `NOP 17` is `f0 00`. Counted runs 1..64 were compared to moviAsm. These
-measurements do not yet define all context-sensitive branch-delay compression.
+measurements define NOP bytes; branch delay-window metadata additionally depends
+on the following packets, as described below.
 
 The vendor analyzer retains write-back hazard state across `.code` switches:
 adjacent standalone SAU/IAU register-sweep cases writing the same register
@@ -355,16 +356,20 @@ names. Some vendor packets exceed this limit and remain rejected.
 
 | Form | Payload bits | Initial payload | Standalone prefix |
 | --- | ---: | --- | --- |
-| `BRU.BRA symbol` | 24 | `floor(b/8)` in low 16 bits; upper eight bits zero | `0xc7` |
+| `BRU.BRA symbol` | 24 | `floor(b/8) + (delay_span<<16)` | `0xc7` |
 
 Here `b` is the packet-relative bit offset of the branch payload. Standalone
 `b=8` initializes the field to 1. After a 16-bit header and one LSU payload,
 `b=40` initializes it to 5. Following IAU, `b` can be four bits into a byte;
-the field is still 16 bits and the upper eight payload bits remain zero.
+the relocation field is still 16 bits. The upper eight payload bits record the
+following delay window's byte span, independently of the relocation.
 
-`encode_packet_with_fixups(packet)` returns `(bytes, tuple[Fixup, ...])`.
-`Fixup(symbol, addend, bit_offset, bit_width, kind)` is immutable and its offset
-is packet-relative, least-significant-bit first. The byte-only `encode_packet`
+`encode_packet_with_fixups(packet, following=...)` returns
+`(bytes, tuple[Fixup, ...])`. `following` must contain the remaining packets in
+the same code section; the empty default describes an isolated/end-of-section
+packet. A whole-stream writer must pass the actual suffix rather than relying
+on that default. `Fixup(symbol, addend, bit_offset, bit_width, kind)` is immutable
+and its offset is packet-relative, least-significant-bit first. The byte-only `encode_packet`
 continues to reject any packet requiring relocation.
 
 | Field placement | Vendor relocation number | `Fixup.kind` | Width |
@@ -380,7 +385,36 @@ the locally named, measured relocation types in `lld-shave.patch`; the vendor
 objects themselves provide numeric types only. Targets are restricted to plain
 symbol names. A probe of `target+2` treated that entire token as a symbol,
 not an arithmetic addend, so expression syntax remains rejected. Calls, resolved
-branch distances, delay compression and VAU classes remain unmeasured.
+branch distances and VAU classes remain unmeasured.
+
+#### Branch delay-window byte span
+
+Sweeping counted `NOP 1..32`, repeated bare NOPs, scalar loads and mixed measured
+packets establishes the upper BRU byte:
+
+| Following code in the same section | `delay_span` |
+| --- | ---: |
+| Fewer than six following issue slots | 0 |
+| At least six following issue slots | Bytes from the branch packet's end through the encoded packet/byte containing slot six |
+| `NOP 1..5` only | 0 |
+| `NOP 6..32` | 1 |
+| Six bare `NOP` packets | 6 |
+| Six `LSU0.LDIL` packets | 24 |
+| `NOP 4`, one LDIL, one bare NOP | 6 |
+
+An ordinary packet consumes one issue slot regardless of its number of co-issued
+operations. Counted `NOP n` consumes `n` slots; each encoded NOP byte represents
+up to 16 slots, so `NOP 17` still ends the six-slot window after its first byte.
+The byte span is independent of the BRU payload's bit alignment. For example,
+IAU.XOR+BRU followed by NOP6 sets bit 16 of its BRU payload, just as a standalone
+BRU does. Its fixup offset/type/addend do not change.
+
+The derivation's 738 repeated/mixed sequences matched every vendor byte. The
+randomized gate includes the 1..32 sweep, repeated measured operations, and 1000
+random mixed suffixes for each of standalone BRU and IAU.XOR+BRU. Control
+transfers inside the first six delay slots fail closed. Non-packet layout
+changes inside a delay window remain unmeasured; section boundaries must not be
+silently treated as ordinary packet boundaries.
 
 ### Differential gates and corpus inventory
 
@@ -402,7 +436,8 @@ loads, integer addition, zero compare and PCCX, coverage is **6126/11912** packe
 including 767 requiring symbolic fixups. Twelve distinct mnemonics occur in
 accepted packets (six at baseline); the total corpus still has 98 mnemonics.
 `accepted_packets` counts bytes-plus-fixups support and `relocatable_packets`
-identifies that subset; this does not assert whole-object parity.
+identifies that subset. Coverage tests isolated packet forms; it does not
+validate whole-stream branch suffixes or assert whole-object parity.
 
 ```sh
 python3 -m unittest discover -s tests/integration -p 'test_shaveasm_*.py'
@@ -417,12 +452,14 @@ python3 -m tools.shaveasm.corpus --native-dir build/linux \
   --output /mnt/cache/build-shave/native-asm-corpus
 ```
 
-Offline regressions: 22 passed. Each randomized gate passed **2362/2362** packets
-(seeds 3720 and 9001): 1000 random packets, 457 shapes, 352 mixed operand sweep
-cases, 96 dedicated ADD register/immediate sweep cases, 384 PCCX predicate/index
-pairs, eight immediate boundaries, and 65 bare/counted NOP cases. Every generated
-packet's actual bytes are compared to moviAsm, not merely round-tripped through
-native code. All measured instruction forms occur in the real compiler corpus.
+Offline regressions: 23 passed. Each randomized gate passed **4594/4594 cases**
+(seeds 3720 and 9001): the original 2362 isolated-packet cases (1000 random
+packets, 457 shapes, 352 mixed operand sweeps, 96 ADD sweeps, 384 PCCX pairs,
+eight immediate boundaries and 65 NOP cases), plus 64 counted-NOP branch
+suffixes, 168 repeated-operation suffixes and 2000 random mixed branch suffixes.
+Every case's full instruction bytes and fixups are compared to moviAsm, not
+merely round-tripped through native code. All measured instruction forms occur
+in the real compiler corpus.
 
 Original C, compiler `.s`, vendor `.o` and JSON manifests stay under the cache
 paths above. `elf.py` provides bounded ELF32 section inspection and a comparator

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Sequence
 from dataclasses import dataclass
 
 from .fixups import Fixup
@@ -554,8 +555,25 @@ def _operation(instruction: Instruction) -> _Operation:
     raise AssemblyError(f"line {line}: unsupported instruction form {mnemonic} {' '.join(operands)}")
 
 
-def encode_packet_with_fixups(packet: Packet) -> tuple[bytes, tuple[Fixup, ...]]:
-    """Pack measured forms and retain symbolic relocation fields relative to this packet."""
+def _branch_delay_span(following: Sequence[Packet]) -> int:
+    slots = size = 0
+    for packet in following:
+        if any(op.mnemonic.startswith("BRU.") and op.mnemonic != "BRU.NOP" for op in packet.operations):
+            raise AssemblyError("unmeasured control transfer in branch delay slots")
+        data, _ = encode_packet_with_fixups(packet)
+        first = packet.operations[0]
+        count = int(first.operands[0], 0) if first.mnemonic == "NOP" and first.operands else 1
+        if slots + count >= 6:
+            return size + (1 if first.mnemonic == "NOP" else len(data))
+        slots += count
+        size += len(data)
+    return 0
+
+
+def encode_packet_with_fixups(
+    packet: Packet, *, following: Sequence[Packet] = ()
+) -> tuple[bytes, tuple[Fixup, ...]]:
+    """Pack measured forms; following must be the remaining packets in this code section."""
     if not packet.operations:
         raise AssemblyError("empty packet")
     first = packet.operations[0]
@@ -585,7 +603,7 @@ def encode_packet_with_fixups(packet: Packet) -> tuple[bytes, tuple[Fixup, ...]]
             fixup = operation.fixup
             kind = fixup.kind + ("_AT4" if bits % 8 == 4 else "")
             fixups.append(Fixup(fixup.symbol, fixup.addend, bits, fixup.bit_width, kind))
-            value |= (bits // 8) << bits
+            value |= ((bits // 8) | _branch_delay_span(following) << 16) << bits
         else:
             value |= operation.value << bits
         bits += operation.bits

@@ -63,6 +63,18 @@ def generate_packets(seed: int, count: int) -> list[str]:
         order = list(shape)
         rng.shuffle(order)
         packets.append("\n || ".join(operation(unit) for unit in order))
+    delay_operations = (
+        "NOP", "NOP 1", "NOP 2", "NOP 4", "NOP 6", "NOP 16", "NOP 17", "NOP 32",
+        "LSU0.LDIL i4 1", "CMU.CMZ.I32 i0", "IAU.ADD i16 i17 231",
+        "IAU.XOR i16 i17 i18 || PEU.PCCX NEQ 63",
+    )
+    branches = ("BRU.BRA external_target", "IAU.XOR i5 i6 i7 || BRU.BRA external_target")
+    for branch in branches:
+        packets.extend(f"{branch}\n NOP {n}" for n in range(1, 33))
+        packets.extend(branch + "\n " + "\n ".join([op] * n)
+                       for op in delay_operations for n in range(1, 8))
+        packets.extend(branch + "\n " + "\n ".join(rng.choices(delay_operations, k=rng.randrange(1, 10)))
+                       for _ in range(count))
     return packets
 
 
@@ -103,20 +115,28 @@ def verify_packets(oracle: Oracle, output: Path, seed: int, count: int) -> None:
     failures = []
     for index, source_packet in enumerate(packets):
         statements = parse(source_packet)
-        if len(statements) != 1 or not isinstance(statements[0], Packet):
-            raise AssertionError("generated source is not a single packet")
-        actual, fixups = encode_packet_with_fixups(statements[0])
+        if not statements or any(not isinstance(statement, Packet) for statement in statements):
+            raise AssertionError("generated source is not a packet sequence")
+        sequence = [statement for statement in statements if isinstance(statement, Packet)]
+        actual = b""
+        fixups = []
+        for position, packet in enumerate(sequence):
+            data, packet_fixups = encode_packet_with_fixups(packet, following=sequence[position + 1:])
+            fixups.extend(Fixup(f.symbol, f.addend, f.bit_offset + len(actual) * 8, f.bit_width, f.kind)
+                          for f in packet_fixups)
+            actual += data
         name = f".text.case_{index}"
         expected = image.section(name).data
         expected_fixups = _vendor_fixups(image, name)
-        if actual != expected or fixups != expected_fixups:
+        if actual != expected or tuple(fixups) != expected_fixups:
             failures.append({"index": index, "source": source_packet, "vendor": expected.hex(), "native": actual.hex(),
                              "vendor_fixups": repr(expected_fixups), "native_fixups": repr(fixups)})
-    report = {"seed": seed, "random_packets": count, "total": len(packets), "failures": failures}
+    report = {"seed": seed, "random_packets": count, "random_delay_sequences": 2 * count,
+              "total": len(packets), "failures": failures}
     (output / "report.json").write_text(json.dumps(report, indent=2) + "\n")
     if failures:
         raise AssertionError(f"{len(failures)}/{len(packets)} packet mismatches; first: {failures[0]}")
-    print(f"packet differential: PASS ({len(packets)} packets, seed={seed}, {len(_PREFIXES)} prefix shapes, bytes and fixups)")
+    print(f"packet differential: PASS ({len(packets)} cases, seed={seed}, {len(_PREFIXES)} prefix shapes, bytes and fixups)")
 
 
 def main() -> None:
