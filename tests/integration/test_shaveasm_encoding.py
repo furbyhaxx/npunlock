@@ -64,6 +64,20 @@ class EncodingTests(unittest.TestCase):
             with self.subTest(source=source), self.assertRaises(AssemblyError):
                 encode(source)
 
+    def test_scalar_float_comparison_uses_its_type_selector(self) -> None:
+        self.assertEqual(encode("CMU.CMII.F32 i0 i0"), bytes.fromhex("81000008"))
+        self.assertEqual(encode("CMU.CMII.F32 i1 i2"), bytes.fromhex("81100408"))
+        self.assertEqual(encode("CMU.CMII.F32 i31 i31"), bytes.fromhex("81f03f08"))
+        for source in ("CMU.CMII.F32 i32 i0", "CMU.CMII.F32 i0 1.0"):
+            with self.subTest(source=source), self.assertRaises(AssemblyError):
+                encode(source)
+        for mnemonic in ("LSU1.ST.32", "LSU1.LD.32", "LSU1.STI.32"):
+            with self.subTest(mnemonic=mnemonic), self.assertRaisesRegex(AssemblyError, "read port 6"):
+                encode(f"CMU.CMII.F32 i0 i1 || {mnemonic} i8 i9")
+        for mnemonic in ("LSU1.STO.32", "LSU1.LDO.32"):
+            with self.subTest(mnemonic=mnemonic), self.assertRaisesRegex(AssemblyError, "read port 6"):
+                encode(f"CMU.CMII.F32 i0 i1 || {mnemonic} i8 i9 0")
+
     def test_scalar_float_subtraction_uses_the_sau_class(self) -> None:
         self.assertEqual(encode("SAU.SUB.F32 i0 i0 i0"), bytes.fromhex("3c020020"))
         self.assertEqual(encode("SAU.SUB.F32 i1 i2 i3"), bytes.fromhex("3c428421"))

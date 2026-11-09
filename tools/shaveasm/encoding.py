@@ -1575,10 +1575,10 @@ def _operation(instruction: Instruction) -> _Operation:
     if mnemonic == "CMU.CMZ.I32" and len(operands) == 1:
         source = _register(operands[0], line)
         return _Operation(unit, source << 4, 16, prefix_class="CMU.CMZ16")
-    if mnemonic in ("CMU.CMII.I32", "CMU.CMII.U32") and len(operands) == 2:
+    if mnemonic in ("CMU.CMII.I32", "CMU.CMII.U32", "CMU.CMII.F32") and len(operands) == 2:
         left, right = (_register(op, line) for op in operands)
-        signed = 0x10000 if mnemonic == "CMU.CMII.I32" else 0
-        return _Operation(unit, signed | left << 4 | right << 9, 24)
+        selector = {"CMU.CMII.I32": 0x10000, "CMU.CMII.U32": 0, "CMU.CMII.F32": 0x80000}[mnemonic]
+        return _Operation(unit, selector | left << 4 | right << 9, 24)
     if mnemonic == "CMU.CP.32" and len(operands) == 2:
         destination = _register(operands[0], line)
         vector = re.fullmatch(r"[vV]([0-9]+)\.([0-9]+)", operands[1])
@@ -1689,7 +1689,7 @@ def encode_packet_with_fixups(
         full, remaining = divmod(count, 16)
         return b"\xf0" * full + (bytes([(remaining - 1) << 4]) if remaining else b""), ()
     mnemonics = {instruction.mnemonic for instruction in packet.operations}
-    if mnemonics & {"LSU1.STO.32", "LSU1.LDO.32", "LSU1.STI.32", "LSU1.LD.32", "LSU1.ST.32"} and mnemonics & {"CMU.CMII.I32", "CMU.CMII.U32"}:
+    if mnemonics & {"LSU1.STO.32", "LSU1.LDO.32", "LSU1.STI.32", "LSU1.LD.32", "LSU1.ST.32"} and mnemonics & {"CMU.CMII.I32", "CMU.CMII.U32", "CMU.CMII.F32"}:
         raise AssemblyError(f"line {first.line}: CMII and LSU1 memory operation conflict on scalar read port 6")
     operations = [_operation(instruction) for instruction in packet.operations]
     if len({op.unit for op in operations}) != len(operations):

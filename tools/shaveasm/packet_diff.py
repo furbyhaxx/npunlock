@@ -41,7 +41,7 @@ def generate_packets(seed: int, count: int) -> list[str]:
         if unit == "CMU" and rng.randrange(4) == 0:
             return f"CMU.CP.32 {registers[0]} v{rng.randrange(32)}.{rng.randrange(4)}"
         if unit == "CMU":
-            mnemonic = "CMU.CP.32" if store_packet else rng.choice(("CMU.CP.32", "CMU.CMII.I32", "CMU.CMII.U32"))
+            mnemonic = "CMU.CP.32" if store_packet else rng.choice(("CMU.CP.32", "CMU.CMII.I32", "CMU.CMII.U32", "CMU.CMII.F32"))
             return f"{mnemonic} {registers[0]} {registers[1]}"
         if unit in ("LSU0", "LSU1") and rng.randrange(3) == 0:
             immediate = "external_target" if rng.randrange(2) else str(rng.randrange(65536))
@@ -139,7 +139,7 @@ def generate_packets(seed: int, count: int) -> list[str]:
                 packets.append("\n || ".join(f"CMU.CP.32 i0 v31.{lane}" if unit == "CMU"
                                               else operation(unit, store_packet=store_packet) for unit in shape))
         if "CMU" in shape and not store_packet:
-            for mnemonic in ("CMU.CMII.I32", "CMU.CMII.U32"):
+            for mnemonic in ("CMU.CMII.I32", "CMU.CMII.U32", "CMU.CMII.F32"):
                 packets.append("\n || ".join(f"{mnemonic} i0 i1" if unit == "CMU"
                                               else operation(unit) for unit in shape))
     for key in _PREFIXES:
@@ -174,7 +174,7 @@ def generate_packets(seed: int, count: int) -> list[str]:
                 packets.append(mnemonic + " " + " ".join(operands))
     packets.extend(f"{mnemonic} i0 i0 {n}"
                    for mnemonic in ("IAU.SHL", "IAU.SHR.U32", "SAU.SHL.X32", "SAU.SHR.U32") for n in range(32))
-    for mnemonic in ("CMU.CMII.I32", "CMU.CMII.U32"):
+    for mnemonic in ("CMU.CMII.I32", "CMU.CMII.U32", "CMU.CMII.F32"):
         for position in range(2):
             for register in range(32):
                 operands = ["i0", "i0"]
