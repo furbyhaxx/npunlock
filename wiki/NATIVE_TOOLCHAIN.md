@@ -782,6 +782,17 @@ Both seeds pass **19086/19086** packet cases and 62 offline tests pass.
 Coverage is **10235/11912** packets, with **7/55 exact objects**, zero
 different objects, and 1896 diagnostic instruction rejections.
 
+### Scalar IAU register right shift
+
+`IAU.SHR.U32 dst src amount` also accepts a scalar register as the shift
+amount. It uses the existing 24-bit `IAU.ADD24` class and payload
+`0x0e | dst<<10 | src<<5 | amount<<15`, with the immediate selector cleared.
+All 376 current header shapes and 96 independent register sweeps match
+moviAsm. Register-amount SHL remains unmeasured and unsupported. Both seeds
+pass **19558/19558** packet cases and 63 offline tests pass. Coverage is
+**10243/11912** packets, with **7/55 exact objects**, zero different objects,
+and 1879 diagnostic instruction rejections.
+
 ### Differential gates and corpus inventory
 
 Cached assembly can be inventoried without Wine or recompilation:

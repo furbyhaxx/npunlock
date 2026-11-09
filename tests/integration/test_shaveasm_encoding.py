@@ -34,6 +34,15 @@ class EncodingTests(unittest.TestCase):
         self.assertEqual(encode("NOP 17"), b"\xf0\x00")
         self.assertEqual(encode("NOP 32"), b"\xf0\xf0")
 
+    def test_register_right_shift_uses_the_twenty_four_bit_iau_class(self) -> None:
+        self.assertEqual(encode("IAU.SHR.U32 i0 i0 i0"), bytes.fromhex("c60e0000"))
+        self.assertEqual(encode("IAU.SHR.U32 i1 i2 i3"), bytes.fromhex("c64e8401"))
+        self.assertEqual(encode("IAU.SHR.U32 i31 i31 i31"), bytes.fromhex("c6eeff0f"))
+        for source in ("IAU.SHR.U32 i0 i0 i32", "IAU.SHR.U32 i0 i0 v1",
+                       "IAU.SHL i0 i0 i1"):
+            with self.subTest(source=source), self.assertRaises(AssemblyError):
+                encode(source)
+
     def test_lsu1_indirect_load_uses_the_twenty_four_bit_class(self) -> None:
         self.assertEqual(encode("LSU1.LD.32 i0 i0"), bytes.fromhex("890d0001"))
         self.assertEqual(encode("LSU1.LD.32 i31 i31"), bytes.fromhex("89fd3f01"))

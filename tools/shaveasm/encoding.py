@@ -1584,9 +1584,14 @@ def _operation(instruction: Instruction) -> _Operation:
                           prefix_class="IAU.ADD24")
     if mnemonic in ("IAU.SHL", "IAU.SHR.U32") and len(operands) == 3:
         destination, source = (_register(op, line) for op in operands[:2])
-        immediate = _immediate(operands[2], 5, line)
-        opcode = 0x80000C if mnemonic == "IAU.SHL" else 0x80000E
-        return _Operation(unit, opcode | destination << 10 | source << 5 | immediate << 15, 24,
+        if mnemonic == "IAU.SHR.U32" and re.fullmatch(r"[iI][0-9]+", operands[2]):
+            right = _register(operands[2], line)
+            selector = 0
+        else:
+            right = _immediate(operands[2], 5, line)
+            selector = 0x800000
+        opcode = 0x0C if mnemonic == "IAU.SHL" else 0x0E
+        return _Operation(unit, opcode | selector | destination << 10 | source << 5 | right << 15, 24,
                           prefix_class="IAU.ADD24")
     if mnemonic in ("IAU.ADD", "IAU.SUB") and len(operands) == 3:
         destination, left = (_register(op, line) for op in operands[:2])
