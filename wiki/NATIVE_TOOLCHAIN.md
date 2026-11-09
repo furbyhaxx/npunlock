@@ -762,6 +762,16 @@ and 60 offline tests pass. Coverage is **10040/11912** packets, with the
 first **5/55 exact objects**, zero different objects, and 2102 diagnostic
 instruction rejections. The five exact files previously rejected only STI.32.
 
+### Scalar SAU floating-point multiplication
+
+`SAU.MUL.F32 dst left right` uses scalar registers, the existing 24-bit SAU
+class, and payload `0x200004 | dst<<10 | left<<5 | right<<15`. All 379
+current SAU header shapes and 96 independent register sweeps match moviAsm.
+Float-immediate variants remain unsupported. Both seeds pass **18614/18614**
+packet cases and 61 offline tests pass. Coverage is **10178/11912** packets,
+with **6/55 exact objects**, zero different objects, and 1957 diagnostic
+instruction rejections.
+
 ### Differential gates and corpus inventory
 
 Cached assembly can be inventoried without Wine or recompilation:

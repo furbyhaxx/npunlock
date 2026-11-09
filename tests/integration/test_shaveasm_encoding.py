@@ -119,6 +119,15 @@ class EncodingTests(unittest.TestCase):
             with self.subTest(source=source), self.assertRaises(AssemblyError):
                 encode(source)
 
+    def test_float_multiply_uses_scalar_registers_in_the_sau_class(self) -> None:
+        self.assertEqual(encode("SAU.MUL.F32 i0 i0 i0"), bytes.fromhex("3c040020"))
+        self.assertEqual(encode("SAU.MUL.f32 i31 i31 i31"), bytes.fromhex("3ce4ff2f"))
+        self.assertEqual(encode("SAU.MUL.F32 i1 i2 i3"), bytes.fromhex("3c448421"))
+        for source in ("SAU.MUL.F32 i0 i1 0.5", "SAU.MUL.F32 i32 i0 i0",
+                       "SAU.MUL.F32 i0 i0 i32", "SAU.MUL.F16 i0 i1 i2"):
+            with self.subTest(source=source), self.assertRaises(AssemblyError):
+                encode(source)
+
     def test_float_add_uses_scalar_registers_in_the_sau_class(self) -> None:
         self.assertEqual(encode("SAU.ADD.F32 i0 i0 i0"), bytes.fromhex("3c000020"))
         self.assertEqual(encode("SAU.ADD.f32 i31 i31 i31"), bytes.fromhex("3ce0ff2f"))
