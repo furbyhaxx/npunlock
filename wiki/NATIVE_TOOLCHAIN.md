@@ -120,8 +120,10 @@ Native source (same operations, normalized syntax):
 Native --exact bytes: 8222010086b29402
 ```
 
-The native object path concatenates separately encoded slot bytes. The vendor
-packs the issue packet differently (seven bytes versus eight). A return-only
+As individual vendor instructions, the same operations produce `82220100` and
+`86b29402`, exactly matching the individual native encodings. Thus the native
+object path concatenates correctly encoded slot bytes while the vendor packs
+the issue packet differently (seven bytes versus eight). A return-only
 control did match: `BRU.JMP i30` followed by vendor `NOP 6` or native
 `.byte 0x50` produced `47f10150`. No mismatching packet was executed on hardware.
 A correct vendor-dialect parser **and packet encoder**, including predicate and
