@@ -128,13 +128,15 @@ def generate_packets(seed: int, count: int) -> list[str]:
     for key in _PREFIXES:
         shape = key.split(",")
         if "LSU1" in shape:
-            packets.append("\n || ".join("LSU1.STI.32 i8 i9" if unit == "LSU1"
-                                          else operation(unit, store_packet=True) for unit in shape))
+            for mnemonic in ("LSU1.STI.32", "LSU1.LD.32"):
+                packets.append("\n || ".join(f"{mnemonic} i8 i9" if unit == "LSU1"
+                                              else operation(unit, store_packet=True) for unit in shape))
     for position in range(2):
         for register in range(32):
             operands = ["i0", "i0"]
             operands[position] = f"i{register}"
-            packets.append("LSU1.STI.32 " + " ".join(operands))
+            for mnemonic in ("LSU1.STI.32", "LSU1.LD.32"):
+                packets.append(mnemonic + " " + " ".join(operands))
     for mnemonic in ("IAU.AND", "IAU.OR", "IAU.LMULL", "IAU.LMULH", "IAU.ADDCI",
                      "SAU.ADD.F32", "SAU.MUL.I32", "SAU.MUL.F32", "SAU.AND"):
         for position in range(3):

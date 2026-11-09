@@ -772,6 +772,16 @@ packet cases and 61 offline tests pass. Coverage is **10178/11912** packets,
 with **6/55 exact objects**, zero different objects, and 1957 diagnostic
 instruction rejections.
 
+### Scalar LSU1 indirect load
+
+`LSU1.LD.32 dst base` shares the 24-bit LSU1 class, with payload
+`0x1000d | dst<<4 | base<<9`. All 408 current LSU1 header combinations and
+64 independent register sweeps match moviAsm. Like STI.32, it conflicts with
+both CMII variants on scalar read port 6, and such packets are rejected.
+Both seeds pass **19086/19086** packet cases and 62 offline tests pass.
+Coverage is **10235/11912** packets, with **7/55 exact objects**, zero
+different objects, and 1896 diagnostic instruction rejections.
+
 ### Differential gates and corpus inventory
 
 Cached assembly can be inventoried without Wine or recompilation:
