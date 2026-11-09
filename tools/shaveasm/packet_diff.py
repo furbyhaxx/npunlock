@@ -50,7 +50,8 @@ def generate_packets(seed: int, count: int) -> list[str]:
             mnemonic = rng.choice(("LSU0.LD.32", "LSU0.CP.32"))
             return f"{mnemonic} {registers[0]} {registers[1]}"
         if unit in ("LSU0", "LSU1"):
-            return f"{unit}.LDIL {registers[0]} {rng.randrange(65536)}"
+            immediate = "external_target" if unit == "LSU1" and rng.randrange(2) else str(rng.randrange(65536))
+            return f"{unit}.LDIL {registers[0]} {immediate}"
         if unit == "SAU.AND20":
             return f"SAU.AND {registers[0]} {registers[1]} {registers[2]}"
         if unit == "SAU":
@@ -137,6 +138,8 @@ def generate_packets(seed: int, count: int) -> list[str]:
     for key in _PREFIXES:
         shape = key.split(",")
         if "LSU1" in shape:
+            packets.append("\n || ".join("LSU1.LDIL i8 external_target" if unit == "LSU1"
+                                          else operation(unit, store_packet="LSU1.STO32" in shape) for unit in shape))
             for immediate in ("43210", "external_target"):
                 packets.append("\n || ".join(f"LSU1.LDIH i8 {immediate}" if unit == "LSU1"
                                               else operation(unit, store_packet="LSU1.STO32" in shape) for unit in shape))
@@ -204,6 +207,7 @@ def generate_packets(seed: int, count: int) -> list[str]:
     packets.extend(f"IAU.INCS i0 {value}" for value in
                    (0, -1, 8191, -8192, *(1 << bit for bit in range(13)),
                     *(-(1 << bit) for bit in range(14))))
+    packets.extend(f"LSU1.LDIL i{r} external_target" for r in range(32))
     packets.extend(f"CMU.CP.32 i{r} v0.0" for r in range(32))
     packets.extend(f"CMU.CP.32 i0 v{r}.{lane}" for r in range(32) for lane in range(4))
     packets.extend(f"CMU.CMPI i{r} 0" for r in range(32))
@@ -234,7 +238,8 @@ def _vendor_fixups(image: Elf32, name: str) -> tuple[Fixup, ...]:
             symbol_offset = struct.unpack_from("<I", symbols.data, (info >> 8) * symbols.entry_size)[0]
             end = strings.index(b"\0", symbol_offset)
             symbol = strings[symbol_offset:end].decode()
-            kind = {202: "R_SHAVE_HI16", 203: "R_SHAVE_HI16_AT4",
+            kind = {200: "R_SHAVE_LO16", 201: "R_SHAVE_LO16_AT4",
+                    202: "R_SHAVE_HI16", 203: "R_SHAVE_HI16_AT4",
                     209: "R_SHAVE_PCREL16", 210: "R_SHAVE_PCREL16_AT4"}[info & 255]
             result.append(Fixup(symbol, addend, offset * 8 + (4 if kind.endswith("_AT4") else 0), 16, kind))
     # Vendor relocation rows are not ordered by field position.

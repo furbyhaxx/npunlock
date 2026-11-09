@@ -112,6 +112,20 @@ class EncodingTests(unittest.TestCase):
         with self.assertRaisesRegex(AssemblyError, "control transfer"):
             encode_packet_with_fixups(jump, following=parse("BRU.JMP i0\nNOP 6"))
 
+    def test_lsu1_symbolic_low_load_emits_byte_and_half_byte_fixups(self) -> None:
+        data, fixups = encode_packet_with_fixups(parse("LSU1.LDIL i0 external_target")[0])
+        self.assertEqual(data, bytes.fromhex("89020000"))
+        self.assertEqual(fixups, (Fixup("external_target", 0, 16, 16, "R_SHAVE_LO16"),))
+        packet = parse("CMU.CMPI i0 0 || LSU1.LDIL i31 external_target")[0]
+        data, fixups = encode_packet_with_fixups(packet)
+        self.assertEqual(data, bytes.fromhex("0e8c0a0000a00f0000"))
+        self.assertEqual(fixups, (Fixup("external_target", 0, 52, 16, "R_SHAVE_LO16_AT4"),))
+        for source in ("LSU1.LDIL i0 target+2", "LSU1.LDIL i0 -1"):
+            with self.subTest(source=source), self.assertRaises(AssemblyError):
+                encode(source)
+        with self.assertRaisesRegex(AssemblyError, "symbolic fixups"):
+            encode("LSU1.LDIL i0 external_target")
+
     def test_lsu1_high_immediate_load_and_fixup(self) -> None:
         self.assertEqual(encode("LSU1.LDIH i0 0"), bytes.fromhex("89030000"))
         self.assertEqual(encode("LSU1.LDIH i31 65535"), bytes.fromhex("89fbffff"))

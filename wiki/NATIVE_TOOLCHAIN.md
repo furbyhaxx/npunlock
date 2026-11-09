@@ -819,6 +819,18 @@ Both seeds pass **21804/21804** packet cases and 66 offline tests pass.
 Coverage is **10423/11912** packets, with **7/55 exact objects**, zero
 different objects, and 1697 diagnostic instruction rejections.
 
+### Symbolic LSU1 low-half loads
+
+`LSU1.LDIL dst symbol` uses the existing 24-bit LSU1 class and payload
+`2 | dst<<3`. The 16-bit field at payload bit 8 emits `R_SHAVE_LO16` (200),
+or `R_SHAVE_LO16_AT4` (201) for a half-byte-aligned field, matching vendor
+relocation rows. All 408 current LSU1 header shapes and all 32 destinations
+match moviAsm, including packets after a 28-bit CMPI. Symbol expressions
+remain unsupported. Both seeds pass **22244/22244** packet cases and
+67 offline tests pass. Coverage is **10499/11912** packets, with **7/55
+exact objects**, zero different objects, and 1620 diagnostic instruction
+rejections. No object-writer changes were needed.
+
 ### Differential gates and corpus inventory
 
 Cached assembly can be inventoried without Wine or recompilation:
