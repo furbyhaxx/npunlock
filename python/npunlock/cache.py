@@ -9,6 +9,8 @@ from pathlib import Path
 from time import perf_counter
 from typing import TYPE_CHECKING, Mapping
 
+from ._native import NATIVE_RUNTIME_FILES
+
 if TYPE_CHECKING:
     from . import NativeLibraries, Program, ProgramContract
 
@@ -20,7 +22,6 @@ _MOVITOOLS_FILES = (
     "bin/moviLLD64.dll",
     "lib/mlibm.a",
 )
-_NATIVE_FILES = ("npunlock.dll", "npunlock_worker.exe")
 
 
 def _hash_file_stable(path: Path) -> dict[str, object]:
@@ -63,7 +64,7 @@ def movitools_manifest(root: str | Path) -> dict[str, dict[str, object]]:
 
 
 def native_runtime_identity(root: str | Path) -> list[dict[str, object]]:
-    return dependency_identity(root, _NATIVE_FILES)
+    return dependency_identity(root, NATIVE_RUNTIME_FILES)
 
 
 def worker_identity(worker: str | os.PathLike[str] | None) -> dict[str, object]:

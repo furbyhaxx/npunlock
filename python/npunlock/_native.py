@@ -8,6 +8,12 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Iterable
 
+NATIVE_RUNTIME_FILES = (
+    ("npunlock.dll", "npunlock_worker.exe")
+    if os.name == "nt"
+    else ("libnpunlock.so", "npunlock-ir-worker", "npunlock_movi_worker.exe")
+)
+
 _GRAPHINFER_DTYPES = {
     1: "f32",
     2: "f16",
@@ -1049,7 +1055,7 @@ class NativeLibraries:
         native_dir = _native_directory(directory)
         if not native_dir.is_dir():
             raise FileNotFoundError(
-                f"native runtime directory does not exist: {native_dir}; install a Windows "
+                f"native runtime directory does not exist: {native_dir}; install a native "
                 "wheel containing the bundled runtime or pass native_dir explicitly"
             )
         self._dll_cookie = os.add_dll_directory(str(native_dir)) if os.name == "nt" else None

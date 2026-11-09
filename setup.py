@@ -1,4 +1,7 @@
+from __future__ import annotations
+
 import os
+import platform
 from pathlib import Path
 import shutil
 import struct
@@ -9,28 +12,29 @@ from setuptools import setup
 from setuptools.command.build_py import build_py
 from wheel.bdist_wheel import bdist_wheel
 
-
 ROOT = Path(__file__).resolve().parent
 
 
 def run_cmake(*arguments: str) -> None:
-    command = [
-        "powershell.exe",
-        "-NoProfile",
-        "-ExecutionPolicy",
-        "Bypass",
-        "-File",
-        str(ROOT / "tools/msvc-run.ps1"),
-        "cmake",
-        *arguments,
-    ]
+    command = ["cmake", *arguments]
+    if sys.platform == "win32":
+        command = [
+            "powershell.exe",
+            "-NoProfile",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-File",
+            str(ROOT / "tools/msvc-run.ps1"),
+            "cmake",
+            *arguments,
+        ]
     subprocess.check_call(command, cwd=ROOT)
 
 
 class BuildPy(build_py):
     def run(self) -> None:
-        if sys.platform != "win32":
-            raise RuntimeError("npunlock native wheels currently require Windows x64")
+        if sys.platform not in ("win32", "linux") or platform.machine().lower() not in ("x86_64", "amd64"):
+            raise RuntimeError("npunlock native wheels require Windows or Linux x64")
         if struct.calcsize("P") != 8:
             raise RuntimeError("npunlock native wheels require 64-bit Python")
         super().run()
@@ -45,6 +49,7 @@ class BuildPy(build_py):
             "-B",
             str(native_build),
             "-DNPUNLOCK_BUILD_TESTS=OFF",
+            "-DCMAKE_INSTALL_LIBDIR=lib",
         )
         run_cmake(
             "--build",
@@ -54,6 +59,7 @@ class BuildPy(build_py):
             "--target",
             "npunlock_native",
             "npunlock_worker",
+            *(("npunlock_ir_worker_posix",) if sys.platform == "linux" else ()),
         )
         run_cmake(
             "--install",
@@ -67,8 +73,13 @@ class BuildPy(build_py):
         )
         package_bin = Path(self.build_lib) / "npunlock/_bin"
         package_bin.mkdir(parents=True, exist_ok=True)
-        for filename in ("npunlock.dll", "npunlock_worker.exe"):
-            shutil.copy2(native_stage / "bin" / filename, package_bin / filename)
+        runtime_files = (
+            ("bin/npunlock.dll", "bin/npunlock_worker.exe")
+            if sys.platform == "win32"
+            else ("lib/libnpunlock.so", "bin/npunlock-ir-worker", "bin/npunlock_movi_worker.exe")
+        )
+        for filename in runtime_files:
+            shutil.copy2(native_stage / filename, package_bin / Path(filename).name)
         package_include = Path(self.build_lib) / "npunlock/include/npunlock"
         package_include.mkdir(parents=True, exist_ok=True)
         shutil.copy2(

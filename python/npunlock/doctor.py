@@ -7,7 +7,7 @@ from pathlib import Path
 
 import numpy as np
 
-from ._native import NativeLibraries, _native_directory
+from ._native import NATIVE_RUNTIME_FILES, NativeLibraries, _native_directory
 from .graph import Graph, input
 
 _MOVITOOLS_FILES = (
@@ -100,7 +100,7 @@ def collect_diagnostics(
     if isinstance(timeout_ms, bool) or not isinstance(timeout_ms, int) or timeout_ms <= 0:
         raise ValueError("timeout_ms must be a positive integer")
     runtime_root = _native_directory(native_dir)
-    runtime_files = tuple(_file_report(runtime_root / name) for name in ("npunlock.dll", "npunlock_worker.exe"))
+    runtime_files = tuple(_file_report(runtime_root / name) for name in NATIVE_RUNTIME_FILES)
     runtime: dict[str, object] = {
         "path": str(runtime_root),
         "files": list(runtime_files),

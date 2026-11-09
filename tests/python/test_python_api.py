@@ -3949,8 +3949,7 @@ class ContribFoundationTests(unittest.TestCase):
             movi / "bin" / "moviAsm64.dll": b"assemble",
             movi / "bin" / "moviLLD64.dll": b"link",
             movi / "lib" / "mlibm.a": b"math",
-            native / "npunlock.dll": b"native",
-            native / "npunlock_worker.exe": b"worker",
+            **{native / name: b"native-" + name.encode() for name in _native.NATIVE_RUNTIME_FILES},
             ir_worker: b"ir-worker-v1",
             movi_worker: b"movi-worker-v1",
         }
@@ -4050,8 +4049,7 @@ class ContribFoundationTests(unittest.TestCase):
             movi / "bin" / "moviAsm64.dll": b"assemble",
             movi / "bin" / "moviLLD64.dll": b"link",
             movi / "lib" / "mlibm.a": b"math",
-            native / "npunlock.dll": b"native",
-            native / "npunlock_worker.exe": b"worker",
+            **{native / name: b"native-" + name.encode() for name in _native.NATIVE_RUNTIME_FILES},
             worker: b"custom-worker-v1",
         }
         for path, contents in dependencies.items():

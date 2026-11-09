@@ -9,6 +9,7 @@ description = "Symbolic Python frontend for the npunlock ACT-SHAVE toolchain"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = ["numpy>=1.24"]
+classifiers = ["Operating System :: Microsoft :: Windows", "Operating System :: POSIX :: Linux"]
 
 [project.scripts]
 npunlock-viz = "npunlock.viz.cli:main"
@@ -21,7 +22,7 @@ where = ["python"]
 
 [tool.setuptools.package-data]
 npunlock = ["py.typed", "*.pyi", "include/npunlock/*.h"]
-"npunlock._bin" = ["*.dll", "*.exe"]
+"npunlock._bin" = ["*.dll", "*.exe", "*.so", "npunlock-ir-worker"]
 "npunlock.viz" = ["static/*.html", "static/*.css", "static/*.js", "schemas/*.json"]
 
 [tool.black]
