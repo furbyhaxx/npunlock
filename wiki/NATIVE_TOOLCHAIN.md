@@ -793,6 +793,21 @@ pass **19558/19558** packet cases and 63 offline tests pass. Coverage is
 **10243/11912** packets, with **7/55 exact objects**, zero different objects,
 and 1879 diagnostic instruction rejections.
 
+### CMU copy from a vector word lane
+
+`CMU.CP.32 dst vN.lane` accepts scalar destinations i0..i31, vector registers
+v0..v31, and word lanes 0..3. Its existing 24-bit CMU payload is
+`0x70000c | dst<<9 | N<<4 | lane<<14`. All four lanes in all 297 current CMU
+header shapes, all 32 destinations and all 128 vector/word pairs match
+moviAsm. Both seeds pass **20906/20906** packet cases and 65 offline tests
+pass. Coverage is **10390/11912** packets, with **7/55 exact objects**, zero
+different objects, and 1731 diagnostic instruction rejections.
+
+The parser already preserves lane-qualified tokens. Coverage now classifies
+`v13.2` as `vreg_lane` and `i6.0` as `ireg_lane`, rather than `symbol`;
+actual symbolic addresses such as `memcpy` retain the `symbol` shape.
+This classification does not enable any additional unmeasured encodings.
+
 ### Differential gates and corpus inventory
 
 Cached assembly can be inventoried without Wine or recompilation:

@@ -38,6 +38,8 @@ def generate_packets(seed: int, count: int) -> list[str]:
             return f"CMU.CMPI {registers[0]} {rng.randrange(65536)}"
         if unit == "CMU.CMZ16":
             return f"CMU.CMZ.I32 {registers[0]}"
+        if unit == "CMU" and rng.randrange(4) == 0:
+            return f"CMU.CP.32 {registers[0]} v{rng.randrange(32)}.{rng.randrange(4)}"
         if unit == "CMU":
             mnemonic = "CMU.CP.32" if store_packet else rng.choice(("CMU.CP.32", "CMU.CMII.I32", "CMU.CMII.U32"))
             return f"{mnemonic} {registers[0]} {registers[1]}"
@@ -124,6 +126,10 @@ def generate_packets(seed: int, count: int) -> list[str]:
             for right in ("i18", "255"):
                 packets.append("\n || ".join(f"IAU.SUB i16 i17 {right}" if unit == "IAU.ADD24"
                                               else operation(unit, store_packet=store_packet) for unit in shape))
+        if "CMU" in shape:
+            for lane in range(4):
+                packets.append("\n || ".join(f"CMU.CP.32 i0 v31.{lane}" if unit == "CMU"
+                                              else operation(unit, store_packet=store_packet) for unit in shape))
         if "CMU" in shape and not store_packet:
             for mnemonic in ("CMU.CMII.I32", "CMU.CMII.U32"):
                 packets.append("\n || ".join(f"{mnemonic} i0 i1" if unit == "CMU"
@@ -194,6 +200,8 @@ def generate_packets(seed: int, count: int) -> list[str]:
     packets.extend(f"IAU.INCS i0 {value}" for value in
                    (0, -1, 8191, -8192, *(1 << bit for bit in range(13)),
                     *(-(1 << bit) for bit in range(14))))
+    packets.extend(f"CMU.CP.32 i{r} v0.0" for r in range(32))
+    packets.extend(f"CMU.CP.32 i0 v{r}.{lane}" for r in range(32) for lane in range(4))
     packets.extend(f"CMU.CMPI i{r} 0" for r in range(32))
     packets.extend(f"CMU.CMPI i0 {value}" for value in (0, 65535, *(1 << bit for bit in range(16))))
     delay_operations = (

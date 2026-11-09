@@ -34,6 +34,18 @@ class EncodingTests(unittest.TestCase):
         self.assertEqual(encode("NOP 17"), b"\xf0\x00")
         self.assertEqual(encode("NOP 32"), b"\xf0\xf0")
 
+    def test_cmu_copy_reads_a_vector_word_lane(self) -> None:
+        self.assertEqual(encode("CMU.CP.32 i0 v0.0"), bytes.fromhex("810c0070"))
+        self.assertEqual(encode("CMU.CP.32 i1 v0.0"), bytes.fromhex("810c0270"))
+        self.assertEqual(encode("CMU.CP.32 i0 v1.0"), bytes.fromhex("811c0070"))
+        self.assertEqual(encode("CMU.CP.32 i0 v0.1"), bytes.fromhex("810c4070"))
+        self.assertEqual(encode("CMU.CP.32 I31 V31.3"), bytes.fromhex("81fcff70"))
+        for source in ("CMU.CP.32 i0 v32.0", "CMU.CP.32 i0 v0.4",
+                       "CMU.CP.32 i0 v0", "CMU.CP.32 i32 v0.0",
+                       "CMU.CP.32 v0.0 i0"):
+            with self.subTest(source=source), self.assertRaises(AssemblyError):
+                encode(source)
+
     def test_register_right_shift_uses_the_twenty_four_bit_iau_class(self) -> None:
         self.assertEqual(encode("IAU.SHR.U32 i0 i0 i0"), bytes.fromhex("c60e0000"))
         self.assertEqual(encode("IAU.SHR.U32 i1 i2 i3"), bytes.fromhex("c64e8401"))

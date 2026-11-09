@@ -1575,7 +1575,14 @@ def _operation(instruction: Instruction) -> _Operation:
         signed = 0x10000 if mnemonic == "CMU.CMII.I32" else 0
         return _Operation(unit, signed | left << 4 | right << 9, 24)
     if mnemonic == "CMU.CP.32" and len(operands) == 2:
-        destination, source = (_register(op, line) for op in operands)
+        destination = _register(operands[0], line)
+        vector = re.fullmatch(r"[vV]([0-9]+)\.([0-9]+)", operands[1])
+        if vector is not None:
+            source, lane = int(vector[1]), int(vector[2])
+            if not 0 <= source < 32 or not 0 <= lane < 4:
+                raise AssemblyError(f"line {line}: invalid vector word register {operands[1]!r}")
+            return _Operation(unit, 0x70000C | destination << 9 | source << 4 | lane << 14, 24)
+        source = _register(operands[1], line)
         return _Operation(unit, 0x08000C | destination << 9 | source << 4, 24)
     if mnemonic == "IAU.INCS" and len(operands) == 2:
         register = _register(operands[0], line)
