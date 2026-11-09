@@ -468,6 +468,156 @@ _PREFIXES = {
     "CMU.CMZ16,LSU1,SAU,IAU.ADD24,PEU.PCCX12": (24, 0xCF840F),
     "CMU.CMZ16,LSU1,IAU.ADD24,BRU,PEU.PCCX12": (24, 0xFC840F),
     "CMU.CMZ16,SAU,IAU.ADD24,BRU,PEU.PCCX12": (24, 0xFF040F),
+    "LSU1.STO32": (8, 0xC9),
+    "CMU,LSU1.STO32": (16, 0xC80E),
+    "LSU0,LSU1.STO32": (8, 0xE9),
+    "LSU1.STO32,SAU": (16, 0xF08E),
+    "LSU1.STO32,IAU": (16, 0xB05E),
+    "LSU1.STO32,PEU": (16, 0xB07E),
+    "CMU,LSU0,LSU1.STO32": (16, 0xE80E),
+    "CMU,LSU1.STO32,SAU": (16, 0xF28E),
+    "CMU,LSU1.STO32,IAU": (16, 0xB26E),
+    "CMU,LSU1.STO32,PEU": (16, 0xB27E),
+    "LSU0,LSU1.STO32,SAU": (16, 0xF88E),
+    "LSU0,LSU1.STO32,IAU": (16, 0xB85E),
+    "LSU0,LSU1.STO32,PEU": (16, 0xB87E),
+    "LSU1.STO32,SAU,IAU": (16, 0xBCBE),
+    "LSU1.STO32,SAU,PEU": (24, 0x83C00F),
+    "LSU1.STO32,IAU,PEU": (16, 0xACDE),
+    "CMU,LSU0,LSU1.STO32,SAU": (16, 0xFA8E),
+    "CMU,LSU0,LSU1.STO32,IAU": (16, 0xBA6E),
+    "CMU,LSU0,LSU1.STO32,PEU": (16, 0xBA7E),
+    "CMU,LSU1.STO32,SAU,IAU": (24, 0xBC80F),
+    "CMU,LSU1.STO32,SAU,PEU": (24, 0x83C80F),
+    "CMU,LSU1.STO32,IAU,PEU": (24, 0x88C80F),
+    "LSU0,LSU1.STO32,SAU,IAU": (16, 0xBEBE),
+    "LSU0,LSU1.STO32,SAU,PEU": (24, 0x83E00F),
+    "LSU0,LSU1.STO32,IAU,PEU": (16, 0xAEDE),
+    "LSU1.STO32,SAU,IAU,PEU": (24, 0x8BC00F),
+    "LSU1.STO32,BRU": (16, 0xCCCE),
+    "CMU,LSU1.STO32,BRU": (24, 0x30C80F),
+    "LSU0,LSU1.STO32,BRU": (16, 0xCECE),
+    "LSU1.STO32,SAU,BRU": (24, 0x33C00F),
+    "LSU1.STO32,IAU,BRU": (16, 0xECCE),
+    "LSU1.STO32,BRU,PEU": (24, 0xB0C00F),
+    "CMU,LSU0,LSU1.STO32,BRU": (24, 0x30E80F),
+    "CMU,LSU1.STO32,SAU,BRU": (24, 0x33C80F),
+    "CMU,LSU1.STO32,IAU,BRU": (24, 0x38C80F),
+    "CMU,LSU1.STO32,BRU,PEU": (24, 0xB0C80F),
+    "LSU0,LSU1.STO32,SAU,BRU": (24, 0x33E00F),
+    "LSU0,LSU1.STO32,IAU,BRU": (16, 0xEECE),
+    "LSU0,LSU1.STO32,BRU,PEU": (24, 0xB0E00F),
+    "LSU1.STO32,SAU,IAU,BRU": (24, 0x3BC00F),
+    "LSU1.STO32,SAU,BRU,PEU": (24, 0xB3C00F),
+    "LSU1.STO32,IAU,BRU,PEU": (24, 0xB8C00F),
+    "LSU0.LDO32,LSU1.STO32": (8, 0xF9),
+    "CMU,LSU0.LDO32,LSU1.STO32": (16, 0xF80E),
+    "LSU0.LDO32,LSU1.STO32,SAU": (16, 0xFC8E),
+    "LSU0.LDO32,LSU1.STO32,IAU": (16, 0xBC5E),
+    "LSU0.LDO32,LSU1.STO32,BRU": (16, 0xCFCE),
+    "LSU0.LDO32,LSU1.STO32,PEU": (16, 0xBC7E),
+    "CMU,LSU0.LDO32,LSU1.STO32,SAU": (16, 0xFE8E),
+    "CMU,LSU0.LDO32,LSU1.STO32,IAU": (16, 0xBE6E),
+    "CMU,LSU0.LDO32,LSU1.STO32,PEU": (16, 0xBE7E),
+    "LSU0.LDO32,LSU1.STO32,SAU,IAU": (16, 0xBFBE),
+    "LSU0.LDO32,LSU1.STO32,SAU,PEU": (24, 0x83F00F),
+    "LSU0.LDO32,LSU1.STO32,IAU,BRU": (16, 0xEFCE),
+    "LSU0.LDO32,LSU1.STO32,IAU,PEU": (16, 0xAFDE),
+    "LSU0.LDO32,LSU1.STO32,BRU,PEU": (24, 0xB0F00F),
+    "LSU1.STO32,IAU.ADD24": (16, 0xF05E),
+    "CMU,LSU1.STO32,IAU.ADD24": (16, 0xF26E),
+    "LSU0,LSU1.STO32,IAU.ADD24": (16, 0xF85E),
+    "LSU0.LDO32,LSU1.STO32,IAU.ADD24": (16, 0xFC5E),
+    "LSU1.STO32,SAU,IAU.ADD24": (16, 0xFCBE),
+    "LSU1.STO32,IAU.ADD24,BRU": (16, 0xFCCE),
+    "LSU1.STO32,IAU.ADD24,PEU": (16, 0xBCDE),
+    "CMU,LSU0,LSU1.STO32,IAU.ADD24": (16, 0xFA6E),
+    "CMU,LSU0.LDO32,LSU1.STO32,IAU.ADD24": (16, 0xFE6E),
+    "CMU,LSU1.STO32,SAU,IAU.ADD24": (24, 0xFC80F),
+    "CMU,LSU1.STO32,IAU.ADD24,BRU": (24, 0x3CC80F),
+    "CMU,LSU1.STO32,IAU.ADD24,PEU": (24, 0x8CC80F),
+    "LSU0,LSU1.STO32,SAU,IAU.ADD24": (16, 0xFEBE),
+    "LSU0,LSU1.STO32,IAU.ADD24,BRU": (16, 0xFECE),
+    "LSU0,LSU1.STO32,IAU.ADD24,PEU": (16, 0xBEDE),
+    "LSU0.LDO32,LSU1.STO32,SAU,IAU.ADD24": (16, 0xFFBE),
+    "LSU0.LDO32,LSU1.STO32,IAU.ADD24,BRU": (16, 0xFFCE),
+    "LSU0.LDO32,LSU1.STO32,IAU.ADD24,PEU": (16, 0xBFDE),
+    "LSU1.STO32,SAU,IAU.ADD24,BRU": (24, 0x3FC00F),
+    "LSU1.STO32,SAU,IAU.ADD24,PEU": (24, 0x8FC00F),
+    "LSU1.STO32,IAU.ADD24,BRU,PEU": (24, 0xBCC00F),
+    "CMU.CMZ16,LSU1.STO32": (16, 0xC40E),
+    "CMU.CMZ16,LSU0,LSU1.STO32": (16, 0xE40E),
+    "CMU.CMZ16,LSU1.STO32,SAU": (16, 0xF18E),
+    "CMU.CMZ16,LSU1.STO32,IAU": (16, 0xB16E),
+    "CMU.CMZ16,LSU1.STO32,PEU": (16, 0xB17E),
+    "CMU.CMZ16,LSU0,LSU1.STO32,SAU": (16, 0xF98E),
+    "CMU.CMZ16,LSU0,LSU1.STO32,IAU": (16, 0xB96E),
+    "CMU.CMZ16,LSU0,LSU1.STO32,PEU": (16, 0xB97E),
+    "CMU.CMZ16,LSU1.STO32,SAU,IAU": (24, 0xBC40F),
+    "CMU.CMZ16,LSU1.STO32,SAU,PEU": (24, 0x83C40F),
+    "CMU.CMZ16,LSU1.STO32,IAU,PEU": (24, 0x88C40F),
+    "CMU.CMZ16,LSU0,LSU1.STO32,SAU,PEU": (24, 0x83E40F),
+    "CMU.CMZ16,LSU0,LSU1.STO32,IAU,PEU": (24, 0x88E40F),
+    "CMU.CMZ16,LSU1.STO32,SAU,IAU,PEU": (24, 0x8BC40F),
+    "CMU.CMZ16,LSU1.STO32,BRU": (24, 0x30C40F),
+    "CMU.CMZ16,LSU0,LSU1.STO32,BRU": (24, 0x30E40F),
+    "CMU.CMZ16,LSU1.STO32,SAU,BRU": (24, 0x33C40F),
+    "CMU.CMZ16,LSU1.STO32,IAU,BRU": (24, 0x38C40F),
+    "CMU.CMZ16,LSU1.STO32,BRU,PEU": (24, 0xB0C40F),
+    "CMU.CMZ16,LSU0,LSU1.STO32,BRU,PEU": (24, 0xB0E40F),
+    "CMU.CMZ16,LSU1.STO32,SAU,BRU,PEU": (24, 0xB3C40F),
+    "CMU.CMZ16,LSU1.STO32,IAU,BRU,PEU": (24, 0xB8C40F),
+    "CMU.CMZ16,LSU0.LDO32,LSU1.STO32": (16, 0xF40E),
+    "CMU.CMZ16,LSU0.LDO32,LSU1.STO32,SAU": (16, 0xFD8E),
+    "CMU.CMZ16,LSU0.LDO32,LSU1.STO32,IAU": (16, 0xBD6E),
+    "CMU.CMZ16,LSU0.LDO32,LSU1.STO32,BRU": (24, 0x30F40F),
+    "CMU.CMZ16,LSU0.LDO32,LSU1.STO32,PEU": (16, 0xBD7E),
+    "CMU.CMZ16,LSU1.STO32,IAU.ADD24": (16, 0xF16E),
+    "CMU.CMZ16,LSU0,LSU1.STO32,IAU.ADD24": (16, 0xF96E),
+    "CMU.CMZ16,LSU0.LDO32,LSU1.STO32,IAU.ADD24": (16, 0xFD6E),
+    "CMU.CMZ16,LSU1.STO32,SAU,IAU.ADD24": (24, 0xFC40F),
+    "CMU.CMZ16,LSU1.STO32,IAU.ADD24,BRU": (24, 0x3CC40F),
+    "CMU.CMZ16,LSU1.STO32,IAU.ADD24,PEU": (24, 0x8CC40F),
+    "CMU.CMZ16,LSU0,LSU1.STO32,IAU.ADD24,PEU": (24, 0x8CE40F),
+    "CMU.CMZ16,LSU1.STO32,SAU,IAU.ADD24,PEU": (24, 0x8FC40F),
+    "CMU.CMZ16,LSU1.STO32,IAU.ADD24,BRU,PEU": (24, 0xBCC40F),
+    "LSU1.STO32,PEU.PCCX12": (16, 0xF07E),
+    "CMU,LSU1.STO32,PEU.PCCX12": (16, 0xF27E),
+    "LSU0,LSU1.STO32,PEU.PCCX12": (16, 0xF87E),
+    "LSU1.STO32,SAU,PEU.PCCX12": (24, 0xC3C00F),
+    "LSU1.STO32,IAU,PEU.PCCX12": (16, 0xECDE),
+    "CMU,LSU0,LSU1.STO32,PEU.PCCX12": (16, 0xFA7E),
+    "CMU,LSU1.STO32,SAU,PEU.PCCX12": (24, 0xC3C80F),
+    "CMU,LSU1.STO32,IAU,PEU.PCCX12": (24, 0xC8C80F),
+    "LSU0,LSU1.STO32,SAU,PEU.PCCX12": (24, 0xC3E00F),
+    "LSU0,LSU1.STO32,IAU,PEU.PCCX12": (16, 0xEEDE),
+    "LSU1.STO32,SAU,IAU,PEU.PCCX12": (24, 0xCBC00F),
+    "LSU1.STO32,BRU,PEU.PCCX12": (24, 0xF0C00F),
+    "CMU,LSU1.STO32,BRU,PEU.PCCX12": (24, 0xF0C80F),
+    "LSU0,LSU1.STO32,BRU,PEU.PCCX12": (24, 0xF0E00F),
+    "LSU1.STO32,SAU,BRU,PEU.PCCX12": (24, 0xF3C00F),
+    "LSU1.STO32,IAU,BRU,PEU.PCCX12": (24, 0xF8C00F),
+    "LSU0.LDO32,LSU1.STO32,PEU.PCCX12": (16, 0xFC7E),
+    "CMU,LSU0.LDO32,LSU1.STO32,PEU.PCCX12": (16, 0xFE7E),
+    "LSU0.LDO32,LSU1.STO32,SAU,PEU.PCCX12": (24, 0xC3F00F),
+    "LSU0.LDO32,LSU1.STO32,IAU,PEU.PCCX12": (16, 0xEFDE),
+    "LSU0.LDO32,LSU1.STO32,BRU,PEU.PCCX12": (24, 0xF0F00F),
+    "LSU1.STO32,IAU.ADD24,PEU.PCCX12": (16, 0xFCDE),
+    "CMU,LSU1.STO32,IAU.ADD24,PEU.PCCX12": (24, 0xCCC80F),
+    "LSU0,LSU1.STO32,IAU.ADD24,PEU.PCCX12": (16, 0xFEDE),
+    "LSU0.LDO32,LSU1.STO32,IAU.ADD24,PEU.PCCX12": (16, 0xFFDE),
+    "LSU1.STO32,SAU,IAU.ADD24,PEU.PCCX12": (24, 0xCFC00F),
+    "LSU1.STO32,IAU.ADD24,BRU,PEU.PCCX12": (24, 0xFCC00F),
+    "CMU.CMZ16,LSU1.STO32,PEU.PCCX12": (16, 0xF17E),
+    "CMU.CMZ16,LSU0,LSU1.STO32,PEU.PCCX12": (16, 0xF97E),
+    "CMU.CMZ16,LSU1.STO32,SAU,PEU.PCCX12": (24, 0xC3C40F),
+    "CMU.CMZ16,LSU1.STO32,IAU,PEU.PCCX12": (24, 0xC8C40F),
+    "CMU.CMZ16,LSU0,LSU1.STO32,IAU,PEU.PCCX12": (24, 0xC8E40F),
+    "CMU.CMZ16,LSU1.STO32,SAU,IAU,PEU.PCCX12": (24, 0xCBC40F),
+    "CMU.CMZ16,LSU1.STO32,BRU,PEU.PCCX12": (24, 0xF0C40F),
+    "CMU.CMZ16,LSU1.STO32,IAU,BRU,PEU.PCCX12": (24, 0xF8C40F),
+    "CMU.CMZ16,LSU0.LDO32,LSU1.STO32,PEU.PCCX12": (16, 0xFD7E),
+    "CMU.CMZ16,LSU1.STO32,IAU.ADD24,PEU.PCCX12": (24, 0xCCC40F),
 }
 _PREDICATES = {"EQ": 1, "NEQ": 14, "LT": 4, "LTE": 5, "GT": 2, "GTE": 3}
 _PCCX_PREDICATES = {**_PREDICATES, "NEQ": 6}
@@ -514,11 +664,19 @@ def _operation(instruction: Instruction) -> _Operation:
     unit = mnemonic.split(".")[0]
     if mnemonic == "BRU.BRA" and len(operands) == 1 and re.fullmatch(r"[A-Za-z_.$][A-Za-z_0-9.$]*", operands[0]):
         return _Operation(unit, 0, 24, Fixup(operands[0], 0, 0, 16, "R_SHAVE_PCREL16"))
-    if mnemonic == "LSU0.LDO.32" and len(operands) == 3:
-        destination, source = (_register(op, line) for op in operands[:2])
+    if mnemonic in ("LSU0.LDO.32", "LSU1.STO.32") and len(operands) == 3:
+        register, base = (_register(op, line) for op in operands[:2])
         immediate = _signed_immediate(operands[2], 15, line)
-        return _Operation(unit, 0x14002 | destination << 4 | source << 9 | immediate << 17, 32,
-                          prefix_class="LSU0.LDO32")
+        opcode, prefix_class = {
+            "LSU0.LDO.32": (0x14002, "LSU0.LDO32"),
+            "LSU1.STO.32": (0x14006, "LSU1.STO32"),
+        }[mnemonic]
+        return _Operation(unit, opcode | register << 4 | base << 9 | immediate << 17, 32,
+                          prefix_class=prefix_class)
+    if mnemonic in ("LSU0.LD.32", "LSU0.CP.32") and len(operands) == 2:
+        destination, source = (_register(op, line) for op in operands)
+        opcode = {"LSU0.LD.32": 0x1000D, "LSU0.CP.32": 0x80007}[mnemonic]
+        return _Operation(unit, opcode | destination << 4 | source << 9, 24)
     if mnemonic in ("LSU0.LDIL", "LSU1.LDIL") and len(operands) == 2:
         destination = _register(operands[0], line)
         immediate = _immediate(operands[1], 16, line)
@@ -526,9 +684,23 @@ def _operation(instruction: Instruction) -> _Operation:
     if mnemonic == "CMU.CMZ.I32" and len(operands) == 1:
         source = _register(operands[0], line)
         return _Operation(unit, source << 4, 16, prefix_class="CMU.CMZ16")
+    if mnemonic in ("CMU.CMII.I32", "CMU.CMII.U32") and len(operands) == 2:
+        left, right = (_register(op, line) for op in operands)
+        signed = 0x10000 if mnemonic == "CMU.CMII.I32" else 0
+        return _Operation(unit, signed | left << 4 | right << 9, 24)
     if mnemonic == "CMU.CP.32" and len(operands) == 2:
         destination, source = (_register(op, line) for op in operands)
         return _Operation(unit, 0x08000C | destination << 9 | source << 4, 24)
+    if mnemonic == "IAU.INCS" and len(operands) == 2:
+        register = _register(operands[0], line)
+        immediate = _signed_immediate(operands[1], 14, line)
+        return _Operation(unit, 3 | register << 5 | immediate << 10, 24,
+                          prefix_class="IAU.ADD24")
+    if mnemonic == "IAU.SHL" and len(operands) == 3:
+        destination, source = (_register(op, line) for op in operands[:2])
+        immediate = _immediate(operands[2], 5, line)
+        return _Operation(unit, 0x80000C | destination << 10 | source << 5 | immediate << 15, 24,
+                          prefix_class="IAU.ADD24")
     if mnemonic == "IAU.ADD" and len(operands) == 3:
         destination, left = (_register(op, line) for op in operands[:2])
         if re.fullmatch(r"[iI][0-9]+", operands[2]):
@@ -539,10 +711,13 @@ def _operation(instruction: Instruction) -> _Operation:
             selector = 1 << 23
         return _Operation(unit, selector | destination << 10 | left << 5 | right << 15, 24,
                           prefix_class="IAU.ADD24")
-    if mnemonic in ("IAU.XOR", "IAU.AND") and len(operands) == 3:
+    if mnemonic in ("IAU.XOR", "IAU.AND", "IAU.OR", "IAU.LMULL") and len(operands) == 3:
         destination, left, right = (_register(op, line) for op in operands)
-        opcode = {"IAU.XOR": 0x12, "IAU.AND": 0x10}[mnemonic]
+        opcode = {"IAU.XOR": 0x12, "IAU.AND": 0x10, "IAU.OR": 0x11, "IAU.LMULL": 0x04}[mnemonic]
         return _Operation(unit, opcode | destination << 10 | left << 5 | right << 15, 20)
+    if mnemonic == "SAU.ADD.F32" and len(operands) == 3:
+        destination, left, right = (_register(op, line) for op in operands)
+        return _Operation(unit, 0x200000 | destination << 10 | left << 5 | right << 15, 24)
     if mnemonic == "SAU.ADD.I32" and len(operands) == 3:
         destination, source = (_register(op, line) for op in operands[:2])
         immediate = _immediate(operands[2], 5, line)
@@ -590,6 +765,9 @@ def encode_packet_with_fixups(
             raise AssemblyError(f"line {first.line}: NOP count must be positive")
         full, remaining = divmod(count, 16)
         return b"\xf0" * full + (bytes([(remaining - 1) << 4]) if remaining else b""), ()
+    mnemonics = {instruction.mnemonic for instruction in packet.operations}
+    if "LSU1.STO.32" in mnemonics and mnemonics & {"CMU.CMII.I32", "CMU.CMII.U32"}:
+        raise AssemblyError(f"line {first.line}: CMII and STO.32 conflict on scalar read port 6")
     operations = [_operation(instruction) for instruction in packet.operations]
     if len({op.unit for op in operations}) != len(operations):
         raise AssemblyError(f"line {first.line}: repeated functional unit in packet")

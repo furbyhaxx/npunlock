@@ -271,7 +271,135 @@ reported conflicting writes despite being in different sections. Each generated
 case now has a separate preceding `NOP 16` padding section. This makes cases
 independent without disabling the vendor analyzer or changing tested packets.
 
-### Scalar bitwise AND
+### LSU0 scalar register copy
+
+Independent destination/source sweeps through `i0..i31` establish:
+
+| Form | Payload bits | Payload expression | Standalone prefix |
+| --- | ---: | --- | --- |
+| `LSU0.CP.32 d s` | 24 | `0x80007 + (d<<4) + (s<<9)` | `0x82` |
+
+All **181** measured 24-bit LSU0 header shapes match with CP.32 substituted
+for LD.32. The randomized gate selects LDIL, LD.32 and CP.32; copy additionally
+has 181 explicit header cases and 64 independent register-field cases.
+Symbol sources and other copy sizes remain unsupported.
+
+### Scalar floating-point addition
+
+Independent sweeps of each register through `i0..i31` establish:
+
+| Form | Payload bits | Payload expression | Standalone prefix |
+| --- | ---: | --- | --- |
+| `SAU.ADD.F32 d l r` | 24 | `0x200000 + (d<<10) + (l<<5) + (r<<15)` | `0x3c` |
+
+All **227** measured SAU header shapes match with ADD.F32 substituted for the
+integer immediate addition. The randomized gate selects both forms, repeats
+all 227 float-add shapes, and includes 96 independent register-field cases.
+Both sources must be scalar registers; immediate operands and other floating
+point widths remain unsupported.
+
+### Scalar indirect load
+
+Independent destination/base sweeps through `i0..i31` establish:
+
+| Form | Payload bits | Payload expression | Standalone prefix |
+| --- | ---: | --- | --- |
+| `LSU0.LD.32 d a` | 24 | `0x1000d + (d<<4) + (a<<9)` | `0x82` |
+
+All **181** current 24-bit `LSU0` header shapes match with LD.32 substituted for
+LDIL, including branch, store and predicate packets. The randomized gate selects
+both forms and explicitly checks all 181 LD.32 shapes plus 64 independent register
+cases. Conversion suffixes have different payload/header classes and remain
+unsupported; the bare mnemonic must not be generalized to them.
+
+### Scalar signed immediate increment
+
+Sweeping `i0..i31`, positive/negative immediate bits and both range boundaries
+establishes the read-modify-write form:
+
+| Form | Payload bits | Payload expression | Standalone prefix |
+| --- | ---: | --- | --- |
+| `IAU.INCS d imm14` | 24 | `3 + (d<<5) + ((imm14 & 0x3fff)<<10)` | `0xc6` |
+
+The immediate is signed **-8192..8191**; moviAsm rejects both adjacent values.
+All **168** current `IAU.ADD24` header shapes were independently compared with
+INCS substituted for SHL. Each preserves its prefix and 24-bit payload boundary,
+including branch and store packets. The randomized gate selects INCS, repeats
+all 168 shapes explicitly, and includes 32 register cases plus 31 signed
+immediate cases. Register increments and three-operand forms remain unsupported.
+
+### Scalar low-word multiply
+
+Independent sweeps of all three registers through `i0..i31` establish:
+
+| Form | Payload bits | Payload expression | Standalone prefix |
+| --- | ---: | --- | --- |
+| `IAU.LMULL d l r` | 20 | `0x04 + (d<<10) + (l<<5) + (r<<15)` | `0x86` |
+
+The 96 register-field cases and all **180** existing 20-bit IAU header shapes
+matched moviAsm, including branch and PCCX packets. LMULL reuses the measured
+`IAU` class without changing ordering or padding. Positive and negative immediate
+operands were rejected by moviAsm and remain unsupported. The randomized gate
+selects LMULL and explicitly repeats every measured IAU shape with it.
+
+### Scalar signed-offset store
+
+Independent `i0..i31` sweeps of both registers, offset-bit sweeps and signed
+range boundaries establish:
+
+| Form | Payload bits | Payload expression | Standalone prefix |
+| --- | ---: | --- | --- |
+| `LSU1.STO.32 v a offset15` | 32 | `0x14006 + (v<<4) + (a<<9) + ((offset15 & 0x7fff)<<17)` | `0xc9` |
+
+Offsets are signed -16384..16383, without scaling; both out-of-range neighbors
+were rejected by moviAsm. Header derivation across **277** combinations of the
+measured non-LSU1 classes found unique layouts. The **150** shapes at or below
+128 bits are retained explicitly as class `LSU1.STO32`; LSU1 keeps its original
+position before SAU. AND, SHL and CMU comparison variants are additionally
+checked in the randomized gate wherever their resource usage allows co-issue.
+
+moviAsm rejects **CMU.CMII.I32/U32 + LSU1.STO.32** on scalar read port `IRFrp6`, even
+with disjoint registers; CP.32 + STO.32 with those same registers is accepted.
+The native encoder rejects this measured conflict without changing scheduling.
+The generator selects CP.32 for store-containing CMU packets and never silently
+reschedules a conflicting CMII packet. This is a specific measured conflict,
+not a general functional-unit legality model.
+
+### Scalar signed and unsigned register comparison
+
+Independent sweeps of both operands through `i0..i31` establish:
+
+| Form | Payload bits | Payload expression | Standalone prefix |
+| --- | ---: | --- | --- |
+| `CMU.CMII.I32 l r` | 24 | `0x10000 + (l<<4) + (r<<9)` | `0x81` |
+| `CMU.CMII.U32 l r` | 24 | `(l<<4) + (r<<9)` | `0x81` |
+
+The first source occupies the low register field, unlike CP.32's destination.
+All **124** measured legal CMU 24-bit header shapes matched when either CMII.I32
+or CMII.U32 replaced CP.32, including mixed branch/PCCX classes. Each form has
+64 independent register-field sweeps; unsigned comparison clears payload bit 16.
+The randomized gate chooses all three forms and explicitly repeats the 124
+legal shapes with each comparison form. Both comparison variants conflict with
+STO.32 on scalar read port 6 and are rejected in those packets. Immediate
+comparisons remain unmeasured.
+
+### Scalar immediate left shift
+
+Both register fields were swept separately through `i0..i31`, and every shift
+amount 0..31 was measured:
+
+| Form | Payload bits | Payload expression | Standalone prefix |
+| --- | ---: | --- | --- |
+| `IAU.SHL d s imm5` | 24 | `0x80000c + (d<<10) + (s<<5) + (imm5<<15)` | `0xc6` |
+
+moviAsm rejected both -1 and 32. All **131** measured `IAU.ADD24` header shapes
+were independently compared with SHL substituted for ADD; every header and
+24-bit payload boundary remained unchanged. The class name records its original
+measured ADD form, not a restriction to that mnemonic. Random packets now choose
+SHL as well as both ADD forms, with 96 dedicated operand sweeps and all 131 SHL
+header shapes repeated explicitly. Register-controlled shifts remain rejected.
+
+### Scalar bitwise AND and OR
 
 Sweeping each of the three register operands independently through `i0..i31`
 establishes:
@@ -279,13 +407,17 @@ establishes:
 | Form | Payload bits | Payload expression | Standalone prefix |
 | --- | ---: | --- | --- |
 | `IAU.AND d l r` | 20 | `0x10 + (d<<10) + (l<<5) + (r<<15)` | `0x86` |
+| `IAU.OR d l r` | 20 | `0x11 + (d<<10) + (l<<5) + (r<<15)` | `0x86` |
 
 Every one of the **140** measured header shapes containing the 20-bit IAU class
 was independently checked with AND substituted for XOR. All retained the same
 prefix and bit layout, including branches and twelve-bit PCCX suffixes. The
 random generator selects both mnemonics, and explicitly repeats all 140 shapes
 with AND plus the 96 individual register-field sweeps. Immediate AND forms remain
-unmeasured and rejected.
+unmeasured and rejected. OR was independently swept through all 96 register-field
+cases. With the store extension, every one of the **180** current 20-bit IAU
+header shapes is explicitly tested with each of AND and OR, alongside randomized
+selection among XOR/AND/OR. Immediate OR remains rejected.
 
 ### Predicate cross-condition
 
@@ -448,9 +580,11 @@ unsupported form or header class. Counts overlap across shapes and must not be
 summed as packet totals. Parse failures are reported separately and fail the
 command. The combined baseline is 3291/11912 accepted packets and **98** distinct
 mnemonics (97 in the literal corpus alone). With symbolic branches, signed
-loads, integer addition, zero compare and PCCX, and bitwise AND, coverage is **6477/11912** packets,
-including 767 requiring symbolic fixups. Thirteen distinct mnemonics occur in
-accepted packets (six at baseline); the total corpus still has 98 mnemonics.
+loads/stores, indirect loads, integer addition, comparisons, PCCX, AND/OR,
+LMULL, INCS, scalar floating-point addition and immediate SHL, coverage is
+**8783/11912** packets, including 800 requiring symbolic fixups.
+Twenty-three distinct mnemonics occur in accepted packets (six at baseline); the
+corpus still has 98 mnemonics.
 `accepted_packets` counts bytes-plus-fixups support and `relocatable_packets`
 identifies that subset. Coverage tests isolated packet forms; it does not
 validate whole-stream branch suffixes or assert whole-object parity.
@@ -468,12 +602,23 @@ python3 -m tools.shaveasm.corpus --native-dir build/linux \
   --output /mnt/cache/build-shave/native-asm-corpus
 ```
 
-Offline regressions: 24 passed. Each randomized gate passed **4830/4830 cases**
+Offline regressions: 34 passed. Each randomized gate passed **7357/7357 cases**
 (seeds 3720 and 9001): the original 2362 isolated-packet cases (1000 random
 packets, 457 shapes, 352 mixed operand sweeps, 96 ADD sweeps, 384 PCCX pairs,
 eight immediate boundaries and 65 NOP cases), plus 64 counted-NOP branch
 suffixes, 168 repeated-operation suffixes and 2000 random mixed branch suffixes.
-An additional 140 AND header cases and 96 individual register sweeps cover AND.
+An additional 140 AND header cases and 96 individual register sweeps cover AND;
+131 SHL header cases and 96 operand sweeps cover immediate SHL. CMII.I32 adds
+124 header cases and 64 independent register sweeps. STO.32 adds 150 header
+classes, 32 mixed store sweeps, 64 register-field sweeps, five boundaries and
+77 additional AND/SHL header cases. OR adds 180 header cases and 96 operand
+sweeps. CMII.U32 adds 124 legal header cases and 64 register-field sweeps.
+LMULL adds 180 header cases and 96 independent register-field sweeps.
+INCS adds 168 header cases, 32 register cases and 31 signed immediate cases.
+LSU0.LD.32 adds 181 header cases and 64 independent register-field cases.
+SAU.ADD.F32 adds 227 header cases and 96 independent register-field cases.
+LSU0.CP.32 adds 181 header cases and 64 independent register-field cases.
+The current total is 607 prefix shapes.
 Every case's full instruction bytes and fixups are compared to moviAsm, not
 merely round-tripped through native code. All measured instruction forms occur
 in the real compiler corpus.
@@ -503,8 +648,8 @@ uncaptured and require explicit model/generator inputs.
 The parser structurally accepted all 55 captured assemblies. The literal
 corpus contains 97 distinct mnemonics. Only **3291/11912** parsed packets are
 accepted by the original byte-only encoder across the two corpora; the symbolic
-branch, signed-load, ADD, compare, PCCX and AND extensions raise bytes-plus-fixups
-support to **6477/11912**. These are
+branch, scalar-load/store, ADD, compare, PCCX, AND/OR, LMULL, INCS and SHL extensions raise
+bytes-plus-fixups support to **8783/11912**. These are
 syntactic coverage counts, **not** full-stream or whole-object parity claims.
 Calls, other branch forms, additional instruction/header classes, data and
 alignment directives, ELF symbols and relocations remain the next gate. Hybrid

@@ -34,6 +34,86 @@ class EncodingTests(unittest.TestCase):
         self.assertEqual(encode("NOP 17"), b"\xf0\x00")
         self.assertEqual(encode("NOP 32"), b"\xf0\xf0")
 
+    def test_unsigned_compare_has_no_signed_selector_bit(self) -> None:
+        self.assertEqual(encode("CMU.CMII.U32 i31 i0"), bytes.fromhex("81f00100"))
+        self.assertEqual(encode("CMU.CMII.U32 i0 i31"), bytes.fromhex("81003e00"))
+        with self.assertRaisesRegex(AssemblyError, "read port 6"):
+            encode("CMU.CMII.U32 i1 i2 || LSU1.STO.32 i8 i9 0")
+
+    def test_lsu0_scalar_copy_shares_the_twenty_four_bit_lsu0_class(self) -> None:
+        self.assertEqual(encode("LSU0.CP.32 i0 i0"), bytes.fromhex("82070008"))
+        self.assertEqual(encode("LSU0.CP.32 i31 i31"), bytes.fromhex("82f73f08"))
+        self.assertEqual(encode("LSU0.CP.32 i1 i2"), bytes.fromhex("82170408"))
+        for source in ("LSU0.CP.32 i0 symbol", "LSU0.CP.32 i0 i32",
+                       "LSU0.CP.32 i0 i1 0", "LSU0.CP.64 i0 i1"):
+            with self.subTest(source=source), self.assertRaises(AssemblyError):
+                encode(source)
+
+    def test_float_add_uses_scalar_registers_in_the_sau_class(self) -> None:
+        self.assertEqual(encode("SAU.ADD.F32 i0 i0 i0"), bytes.fromhex("3c000020"))
+        self.assertEqual(encode("SAU.ADD.f32 i31 i31 i31"), bytes.fromhex("3ce0ff2f"))
+        self.assertEqual(encode("SAU.ADD.F32 i1 i2 i3"), bytes.fromhex("3c408421"))
+        for source in ("SAU.ADD.F32 i0 i1 3", "SAU.ADD.F32 i32 i0 i0",
+                       "SAU.ADD.F16 i0 i1 i2"):
+            with self.subTest(source=source), self.assertRaises(AssemblyError):
+                encode(source)
+
+    def test_indirect_scalar_load_shares_the_twenty_four_bit_lsu0_class(self) -> None:
+        self.assertEqual(encode("LSU0.LD.32 i0 i0"), bytes.fromhex("820d0001"))
+        self.assertEqual(encode("LSU0.LD.32 i31 i31"), bytes.fromhex("82fd3f01"))
+        self.assertEqual(encode("LSU0.LD.32 i1 i2"), bytes.fromhex("821d0401"))
+        for source in ("LSU0.LD.32 i0 0", "LSU0.LD.32 i0 i32",
+                       "LSU0.LD.32 i0 i1 0", "LSU0.LD.32.f16.f32 i0 i1"):
+            with self.subTest(source=source), self.assertRaises(AssemblyError):
+                encode(source)
+
+    def test_incs_updates_a_register_with_a_signed_fourteen_bit_immediate(self) -> None:
+        self.assertEqual(encode("IAU.INCS i0 -8192"), bytes.fromhex("c6030080"))
+        self.assertEqual(encode("IAU.INCS i31 8191"), bytes.fromhex("c6e3ff7f"))
+        self.assertEqual(encode("IAU.INCS i1 1"), bytes.fromhex("c6230400"))
+        for source in ("IAU.INCS i0 -8193", "IAU.INCS i0 8192", "IAU.INCS i0 i1",
+                       "IAU.INCS i32 0", "IAU.INCS i0 i1 0"):
+            with self.subTest(source=source), self.assertRaises(AssemblyError):
+                encode(source)
+
+    def test_lmull_uses_the_twenty_bit_integer_class(self) -> None:
+        self.assertEqual(encode("IAU.LMULL i0 i0 i0"), bytes.fromhex("86040000"))
+        self.assertEqual(encode("IAU.LMULL i31 i31 i31"), bytes.fromhex("86e4ff0f"))
+        self.assertEqual(encode("IAU.LMULL i16 i17 i18 || PEU.PCCX NEQ 63"),
+                         bytes.fromhex("ed244299fd"))
+        for source in ("IAU.LMULL i0 i1 3", "IAU.LMULL i0 i1 -1",
+                       "IAU.LMULL i32 i0 i0"):
+            with self.subTest(source=source), self.assertRaises(AssemblyError):
+                encode(source)
+
+    def test_or_uses_the_twenty_bit_logical_class(self) -> None:
+        self.assertEqual(encode("IAU.OR i5 i5 i5"), bytes.fromhex("86b19402"))
+        self.assertEqual(encode("IAU.OR i16 i17 i18 || PEU.PCCX NEQ 63"), bytes.fromhex("ed314299fd"))
+        with self.assertRaises(AssemblyError):
+            encode("IAU.OR i0 i1 3")
+
+    def test_signed_store_offset_has_its_own_lsu1_header_class(self) -> None:
+        self.assertEqual(encode("LSU1.STO.32 i0 i0 -16384"), bytes.fromhex("c906400180"))
+        self.assertEqual(encode("LSU1.STO.32 i31 i31 16383"), bytes.fromhex("c9f67fff7f"))
+        for source in ("LSU1.STO.32 i0 i1 -16385", "LSU1.STO.32 i0 i1 16384",
+                       "LSU1.STO.32 i0 i1 0 || LSU1.LDIL i2 1",
+                       "LSU1.STO.32 i8 i9 0 || CMU.CMII.I32 i1 i2"):
+            with self.subTest(source=source), self.assertRaises(AssemblyError):
+                encode(source)
+
+    def test_signed_compare_register_order_differs_from_copy_destination_order(self) -> None:
+        self.assertEqual(encode("CMU.CMII.I32 i31 i0"), bytes.fromhex("81f00101"))
+        self.assertEqual(encode("CMU.CMII.I32 i0 i31"), bytes.fromhex("81003e01"))
+        with self.assertRaises(AssemblyError):
+            encode("CMU.CMII.I32 i0 1")
+
+    def test_immediate_shift_uses_the_twenty_four_bit_add_class(self) -> None:
+        self.assertEqual(encode("IAU.SHL i0 i0 0"), bytes.fromhex("c60c0080"))
+        self.assertEqual(encode("IAU.SHL i31 i31 31"), bytes.fromhex("c6ecff8f"))
+        for source in ("IAU.SHL i0 i1 -1", "IAU.SHL i0 i1 32", "IAU.SHL i0 i1 i2"):
+            with self.subTest(source=source), self.assertRaises(AssemblyError):
+                encode(source)
+
     def test_and_shares_the_measured_twenty_bit_xor_class(self) -> None:
         self.assertEqual(encode("IAU.AND i5 i5 i5"), bytes.fromhex("86b09402"))
         self.assertEqual(encode("IAU.AND i5 i5 i5 || PEU.PC1C EQ"), bytes.fromhex("adb094b201"))
