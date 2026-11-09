@@ -5,9 +5,10 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
+from .fixups import Fixup
 from .parser import AssemblyError, Instruction, Packet
 
-_ORDER = ("CMU", "LSU0", "LSU1", "SAU", "IAU", "PEU")
+_ORDER = ("CMU", "LSU0", "LSU1", "SAU", "IAU", "BRU", "PEU")
 _PREFIXES = {
     "CMU": (8, 0x81),
     "LSU0": (8, 0x82),
@@ -65,6 +66,58 @@ _PREFIXES = {
     "LSU0,LSU1,IAU,PEU": (16, 0xAADE),
     "LSU0,SAU,IAU,PEU": (16, 0xAEEE),
     "LSU1,SAU,IAU,PEU": (24, 0x8B800F),
+    "BRU": (8, 0xC7),
+    "CMU,BRU": (8, 0xE7),
+    "LSU0,BRU": (16, 0xC2CE),
+    "LSU1,BRU": (16, 0xC8CE),
+    "SAU,BRU": (24, 0x33000F),
+    "IAU,BRU": (16, 0x38AE),
+    "BRU,PEU": (8, 0xB5),
+    "CMU,LSU0,BRU": (24, 0x30280F),
+    "CMU,LSU1,BRU": (24, 0x30880F),
+    "CMU,SAU,BRU": (24, 0x33080F),
+    "CMU,IAU,BRU": (16, 0x3AAE),
+    "CMU,BRU,PEU": (16, 0xB2AE),
+    "LSU0,LSU1,BRU": (16, 0xCACE),
+    "LSU0,SAU,BRU": (24, 0x33200F),
+    "LSU0,IAU,BRU": (16, 0xE2CE),
+    "LSU0,BRU,PEU": (24, 0xB0200F),
+    "LSU1,SAU,BRU": (24, 0x33800F),
+    "LSU1,IAU,BRU": (16, 0xE8CE),
+    "LSU1,BRU,PEU": (24, 0xB0800F),
+    "SAU,IAU,BRU": (24, 0x3B000F),
+    "SAU,BRU,PEU": (24, 0xB3000F),
+    "IAU,BRU,PEU": (16, 0xB8AE),
+    "CMU,LSU0,LSU1,BRU": (24, 0x30A80F),
+    "CMU,LSU0,SAU,BRU": (24, 0x33280F),
+    "CMU,LSU0,IAU,BRU": (24, 0x38280F),
+    "CMU,LSU0,BRU,PEU": (24, 0xB0280F),
+    "CMU,LSU1,SAU,BRU": (24, 0x33880F),
+    "CMU,LSU1,IAU,BRU": (24, 0x38880F),
+    "CMU,LSU1,BRU,PEU": (24, 0xB0880F),
+    "CMU,SAU,IAU,BRU": (24, 0x3B080F),
+    "CMU,SAU,BRU,PEU": (24, 0xB3080F),
+    "CMU,IAU,BRU,PEU": (16, 0xBAAE),
+    "LSU0,LSU1,SAU,BRU": (24, 0x33A00F),
+    "LSU0,LSU1,IAU,BRU": (16, 0xEACE),
+    "LSU0,LSU1,BRU,PEU": (24, 0xB0A00F),
+    "LSU0,SAU,IAU,BRU": (24, 0x3B200F),
+    "LSU0,SAU,BRU,PEU": (24, 0xB3200F),
+    "LSU0,IAU,BRU,PEU": (24, 0xB8200F),
+    "LSU1,SAU,IAU,BRU": (24, 0x3B800F),
+    "LSU1,SAU,BRU,PEU": (24, 0xB3800F),
+    "LSU1,IAU,BRU,PEU": (24, 0xB8800F),
+    "SAU,IAU,BRU,PEU": (24, 0xBB000F),
+    "CMU,LSU0,LSU1,BRU,PEU": (24, 0xB0A80F),
+    "CMU,LSU0,SAU,BRU,PEU": (24, 0xB3280F),
+    "CMU,LSU0,IAU,BRU,PEU": (24, 0xB8280F),
+    "CMU,LSU1,SAU,BRU,PEU": (24, 0xB3880F),
+    "CMU,LSU1,IAU,BRU,PEU": (24, 0xB8880F),
+    "CMU,SAU,IAU,BRU,PEU": (24, 0xBB080F),
+    "LSU0,LSU1,SAU,BRU,PEU": (24, 0xB3A00F),
+    "LSU0,LSU1,IAU,BRU,PEU": (24, 0xB8A00F),
+    "LSU0,SAU,IAU,BRU,PEU": (24, 0xBB200F),
+    "LSU1,SAU,IAU,BRU,PEU": (24, 0xBB800F),
 }
 _PREDICATES = {"EQ": 1, "NEQ": 14, "LT": 4, "LTE": 5, "GT": 2, "GTE": 3}
 
@@ -74,6 +127,7 @@ class _Operation:
     unit: str
     value: int
     bits: int
+    fixup: Fixup | None = None
 
 
 def _register(text: str, line: int) -> int:
@@ -96,6 +150,8 @@ def _immediate(text: str, bits: int, line: int) -> int:
 def _operation(instruction: Instruction) -> _Operation:
     mnemonic, operands, line = instruction.mnemonic, instruction.operands, instruction.line
     unit = mnemonic.split(".")[0]
+    if mnemonic == "BRU.BRA" and len(operands) == 1 and re.fullmatch(r"[A-Za-z_.$][A-Za-z_0-9.$]*", operands[0]):
+        return _Operation(unit, 0, 24, Fixup(operands[0], 0, 0, 16, "R_SHAVE_PCREL16"))
     if mnemonic in ("LSU0.LDIL", "LSU1.LDIL") and len(operands) == 2:
         destination = _register(operands[0], line)
         immediate = _immediate(operands[1], 16, line)
@@ -115,8 +171,8 @@ def _operation(instruction: Instruction) -> _Operation:
     raise AssemblyError(f"line {line}: unsupported instruction form {mnemonic} {' '.join(operands)}")
 
 
-def encode_packet(packet: Packet) -> bytes:
-    """Pack measured scalar forms; reject every unmeasured class or unsupported packet."""
+def encode_packet_with_fixups(packet: Packet) -> tuple[bytes, tuple[Fixup, ...]]:
+    """Pack measured forms and retain symbolic relocation fields relative to this packet."""
     if not packet.operations:
         raise AssemblyError("empty packet")
     first = packet.operations[0]
@@ -124,14 +180,14 @@ def encode_packet(packet: Packet) -> bytes:
         if len(packet.operations) != 1:
             raise AssemblyError(f"line {first.line}: NOP cannot share this packet")
         if not first.operands:
-            return b"\x07"
+            return b"\x07", ()
         if first.mnemonic != "NOP" or len(first.operands) != 1:
             raise AssemblyError(f"line {first.line}: unsupported NOP form")
         count = _immediate(first.operands[0], 16, first.line)
         if count == 0:
             raise AssemblyError(f"line {first.line}: NOP count must be positive")
         full, remaining = divmod(count, 16)
-        return b"\xf0" * full + (bytes([(remaining - 1) << 4]) if remaining else b"")
+        return b"\xf0" * full + (bytes([(remaining - 1) << 4]) if remaining else b""), ()
     operations = [_operation(instruction) for instruction in packet.operations]
     if len({op.unit for op in operations}) != len(operations):
         raise AssemblyError(f"line {first.line}: repeated functional unit in packet")
@@ -140,9 +196,24 @@ def encode_packet(packet: Packet) -> bytes:
     if key not in _PREFIXES:
         raise AssemblyError(f"line {first.line}: unmeasured packet class {key}")
     bits, value = _PREFIXES[key]
+    fixups = []
     for operation in operations:
-        value |= operation.value << bits
+        if operation.fixup is not None:
+            fixup = operation.fixup
+            kind = fixup.kind + ("_AT4" if bits % 8 == 4 else "")
+            fixups.append(Fixup(fixup.symbol, fixup.addend, bits, fixup.bit_width, kind))
+            value |= (bits // 8) << bits
+        else:
+            value |= operation.value << bits
         bits += operation.bits
     if bits > 128:
         raise AssemblyError(f"line {first.line}: packet exceeds 128 bits")
-    return value.to_bytes((bits + 7) // 8, "little")
+    return value.to_bytes((bits + 7) // 8, "little"), tuple(fixups)
+
+
+def encode_packet(packet: Packet) -> bytes:
+    """Pack resolved measured forms; reject packets requiring symbolic relocation."""
+    data, fixups = encode_packet_with_fixups(packet)
+    if fixups:
+        raise AssemblyError(f"line {packet.operations[0].line}: packet requires symbolic fixups")
+    return data

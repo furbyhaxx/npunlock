@@ -214,7 +214,8 @@ including correct ownership/release of the stage response buffers.
 For the six measured instruction forms, vendor output has these properties:
 
 1. Operations are encoded in canonical order **CMU, LSU0, LSU1, SAU, IAU, PEU**,
-   independent of textual order. This order is not yet established for BRU/VAU.
+   independent of textual order. Symbolic `BRU.BRA` is measured between IAU and
+   PEU (see below); VAU order remains unmeasured.
 2. Each standalone operation has an eight-bit prefix followed by its payload.
    In a packet, the individual prefixes are replaced by **one combined prefix**.
 3. The combined prefix occupies **8, 16 or 24 bits** for the measured shapes.
@@ -269,6 +270,46 @@ reported conflicting writes despite being in different sections. Each generated
 case now has a separate preceding `NOP 16` padding section. This makes cases
 independent without disabling the vendor analyzer or changing tested packets.
 
+### Symbolic branch packets
+
+Operand and combined-header sweeps against moviAsm establish the extended order
+**CMU, LSU0, LSU1, SAU, IAU, BRU, PEU** for `BRU.BRA symbol`. The 24-bit BRU
+payload follows IAU without byte padding and precedes PEU. For each of the 57
+combinations of zero through four scalar slots, a search over branch positions
+and header widths 4, 8, ..., 32 found exactly one matching layout. The encoder
+retains the **52** branch shapes at or below its current 128-bit packet limit;
+those prefixes are explicitly recorded in `_PREFIXES`, never inferred from unit
+names. Some vendor packets exceed this limit and remain rejected.
+
+| Form | Payload bits | Initial payload | Standalone prefix |
+| --- | ---: | --- | --- |
+| `BRU.BRA symbol` | 24 | `floor(b/8)` in low 16 bits; upper eight bits zero | `0xc7` |
+
+Here `b` is the packet-relative bit offset of the branch payload. Standalone
+`b=8` initializes the field to 1. After a 16-bit header and one LSU payload,
+`b=40` initializes it to 5. Following IAU, `b` can be four bits into a byte;
+the field is still 16 bits and the upper eight payload bits remain zero.
+
+`encode_packet_with_fixups(packet)` returns `(bytes, tuple[Fixup, ...])`.
+`Fixup(symbol, addend, bit_offset, bit_width, kind)` is immutable and its offset
+is packet-relative, least-significant-bit first. The byte-only `encode_packet`
+continues to reject any packet requiring relocation.
+
+| Field placement | Vendor relocation number | `Fixup.kind` | Width |
+| --- | ---: | --- | ---: |
+| `b % 8 == 0` | 209 | `R_SHAVE_PCREL16` | 16 |
+| `b % 8 == 4` | 210 | `R_SHAVE_PCREL16_AT4` | 16 |
+
+Vendor `.rela` entries place `r_offset` at `floor(b/8)` and have addend zero.
+The initialized field compensates for relocation's byte-relative `P`; object
+writers must retain it rather than replacing it with zero. Both data bytes and
+symbol/addend/field placement/kind are checked by `packet_diff`. Names here match
+the locally named, measured relocation types in `lld-shave.patch`; the vendor
+objects themselves provide numeric types only. Targets are restricted to plain
+symbol names. A probe of `target+2` treated that entire token as a symbol,
+not an arithmetic addend, so expression syntax remains rejected. Calls, resolved
+branch distances, delay compression and VAU classes remain unmeasured.
+
 ### Differential gates and corpus inventory
 
 Cached assembly can be inventoried without Wine or recompilation:
@@ -284,7 +325,10 @@ also fail alone; `rejected_packets` includes supported forms co-issued with an
 unsupported form or header class. Counts overlap across shapes and must not be
 summed as packet totals. Parse failures are reported separately and fail the
 command. The combined baseline is 3291/11912 accepted packets and **98** distinct
-mnemonics (97 in the literal corpus alone).
+mnemonics (97 in the literal corpus alone). With symbolic branches, coverage is
+4017/11912 packets, including 726 requiring symbolic fixups. `accepted_packets`
+counts bytes-plus-fixups support and `relocatable_packets` identifies that subset;
+this does not assert whole-object parity.
 
 ```sh
 python3 -m unittest discover -s tests/integration -p 'test_shaveasm_*.py'
@@ -299,9 +343,10 @@ python3 -m tools.shaveasm.corpus --native-dir build/linux \
   --output /mnt/cache/build-shave/native-asm-corpus
 ```
 
-Offline regressions: 14 passed. Each randomized gate passed **1316/1316**
-packets: 1000 random packets, 56 shapes, 192 register/predicate sweep cases, three
-immediate boundaries, and 65 bare/counted NOP cases. Every generated packet's
+Offline regressions: 17 passed. With symbolic branches, each randomized gate
+passed **1400/1400** packets (seeds 3720 and 9001): 1000 random packets, 108
+shapes, 224 register/predicate/branch sweep cases, three immediate boundaries,
+and 65 bare/counted NOP cases. Every generated packet's
 actual bytes are compared to moviAsm, not merely round-tripped through native
 code. The six instruction forms all occur in the real compiler corpus.
 
@@ -329,9 +374,10 @@ uncaptured and require explicit model/generator inputs.
 
 The parser structurally accepted all 55 captured assemblies. The literal
 corpus contains 97 distinct mnemonics. Only **3291/11912** parsed packets are
-currently accepted by the narrow encoder across the two corpora; this is a
-syntactic coverage count, **not** a full-stream or whole-object parity claim.
-BRU branches/calls and fixups, additional instruction/header classes, data and
+accepted by the original byte-only encoder across the two corpora; the symbolic
+branch extension raises bytes-plus-fixups support to **4017/11912**. These are
+syntactic coverage counts, **not** full-stream or whole-object parity claims.
+Calls, other branch forms, additional instruction/header classes, data and
 alignment directives, ELF symbols and relocations remain the next gate. Hybrid
 worker/config/cache integration and new-mode doctor/NPU acceptance must wait
 for whole-corpus object parity. The existing default and prior linker-only

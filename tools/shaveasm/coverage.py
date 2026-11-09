@@ -8,7 +8,7 @@ import re
 from collections import Counter
 from pathlib import Path
 
-from .encoding import encode_packet
+from .encoding import encode_packet_with_fixups
 from .parser import AssemblyError, Instruction, Packet, parse
 
 
@@ -38,7 +38,7 @@ def report(paths: list[Path]) -> dict[str, object]:
     unsupported: Counter[tuple[str, str]] = Counter()
     mnemonics: set[str] = set()
     accepted_mnemonics: set[str] = set()
-    packets = accepted = 0
+    packets = accepted = relocatable = 0
     errors = []
     for file in files:
         try:
@@ -53,19 +53,20 @@ def report(paths: list[Path]) -> dict[str, object]:
             names = {op.mnemonic for op in packet.operations}
             mnemonics.update(names)
             try:
-                encode_packet(packet)
+                _, fixups = encode_packet_with_fixups(packet)
             except AssemblyError:
                 shapes = {(op.mnemonic, operand_shape(op)) for op in packet.operations}
                 rejected.update(shapes)
                 missing = set()
                 for op in packet.operations:
                     try:
-                        encode_packet(Packet((op,)))
+                        encode_packet_with_fixups(Packet((op,)))
                     except AssemblyError:
                         missing.add((op.mnemonic, operand_shape(op)))
                 unsupported.update(missing)
             else:
                 accepted += 1
+                relocatable += bool(fixups)
                 accepted_mnemonics.update(names)
     rows = [
         {"mnemonic": mnemonic, "operand_shape": shape, "rejected_packets": count,
@@ -73,6 +74,7 @@ def report(paths: list[Path]) -> dict[str, object]:
         for (mnemonic, shape), count in sorted(rejected.items(), key=lambda item: (-item[1], item[0]))
     ]
     return {"files": len(files), "packets": packets, "accepted_packets": accepted,
+            "relocatable_packets": relocatable,
             "mnemonics": len(mnemonics), "accepted_mnemonics": sorted(accepted_mnemonics),
             "rejected_shapes": rows, "parse_errors": errors}
 

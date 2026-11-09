@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import unittest
 
-from tools.shaveasm.encoding import encode_packet
+from tools.shaveasm.encoding import encode_packet, encode_packet_with_fixups
+from tools.shaveasm.fixups import Fixup
 from tools.shaveasm.parser import AssemblyError, Packet, parse
 
 
@@ -32,6 +33,25 @@ class EncodingTests(unittest.TestCase):
         self.assertEqual(encode("NOP 16"), b"\xf0")
         self.assertEqual(encode("NOP 17"), b"\xf0\x00")
         self.assertEqual(encode("NOP 32"), b"\xf0\xf0")
+
+    def test_branch_fixup_tracks_canonical_bit_offset_and_relocation_kind(self) -> None:
+        cases = [
+            ("BRU.BRA target", "c7010000", 8, "R_SHAVE_PCREL16"),
+            ("BRU.BRA target || LSU0.LDIL i4 1", "cec2220100050000", 40, "R_SHAVE_PCREL16"),
+            ("BRU.BRA target || IAU.XOR i5 i6 i7", "ae38d29443000000", 36, "R_SHAVE_PCREL16_AT4"),
+            ("PEU.PC1C EQ || BRU.BRA target", "b50100001b", 8, "R_SHAVE_PCREL16"),
+        ]
+        for source, expected, offset, kind in cases:
+            with self.subTest(source=source):
+                packet = parse(source)[0]
+                data, fixups = encode_packet_with_fixups(packet)
+                self.assertEqual(data, bytes.fromhex(expected))
+                self.assertEqual(fixups, (Fixup("target", 0, offset, 16, kind),))
+
+    def test_branch_unmeasured_targets_fail_closed(self) -> None:
+        for source in ("BRU.BRA 4", "BRU.BRA target+2", "BRU.CALL target"):
+            with self.subTest(source=source), self.assertRaises(AssemblyError):
+                encode_packet_with_fixups(parse(source)[0])
 
     def test_invalid_or_unmeasured_input_fails_closed(self) -> None:
         for source in [
