@@ -9,8 +9,9 @@ NPU graph, and executes the graph through Intel's driver.
 
 ![How npunlock adds custom C kernels to an Intel NPU graph](docs/npunlock-intro.svg)
 
-The project is experimental and currently verified on Windows x64 with Meteor
-Lake / NPU3720. New users should start with the
+The project is experimental, with Windows x64 / Meteor Lake and Linux x64 /
+Arrow Lake NPU3720 execution verified on specific driver/compiler stacks.
+New users should start with the
 [custom-kernel tutorial](wiki/TUTORIAL.md).
 
 ## Real-world demonstrations
@@ -67,14 +68,23 @@ project does not import, load, link, or require OpenVINO.
 
 ### Requirements
 
-- Windows x64
-- Meteor Lake / Intel NPU3720 with an installed Intel NPU driver
+- Windows x64 or Linux x64
+- Intel NPU3720 with an installed Intel NPU driver (Meteor Lake on Windows;
+  Arrow Lake PCI `8086:ad1d` verified on Linux)
 - Python 3.10 or newer
-- CMake 3.24 or newer and MSVC for installation from source
+- CMake 3.24 or newer for installation from source; MSVC on Windows, or a C17
+  compiler and `x86_64-w64-mingw32-gcc` on Linux
+- On Linux: the Intel NPU Level Zero driver/compiler and loader; `wine` on PATH
+  when compiling custom C
 - an extracted MoviTools `MVC_DEPEND` directory to compile new custom kernels
 
-Already-built `.npunlock` program bundles can run without MoviTools, provided
-the machine has a compatible NPU driver and device.
+Linux keeps graph compilation, patching, and inference native. Only the
+MoviTools compiler stage runs under Wine. The tested Linux stack uses
+NPU driver 1.38.0, compiler package 2026.38 (reports compiler 8.3), Level Zero
+loader 1.34.0, and Wine 11.21. See [Linux porting](wiki/PORTING.md) for scope.
+
+Already-built `.npunlock` program bundles can run without MoviTools (and without
+Wine on Linux), provided the machine has a compatible NPU driver and device.
 
 ### Install
 
@@ -84,8 +94,11 @@ Install from a source checkout:
 python -m pip install .
 ```
 
-The installed package contains `npunlock.dll` and `npunlock_worker.exe`; normal
-Python use does not require a separate native-library path.
+The installed package bundles the native library and workers: `npunlock.dll`
+and `npunlock_worker.exe` on Windows, or `libnpunlock.so`, `npunlock-ir-worker`,
+and `npunlock_movi_worker.exe` on Linux. Normal Python use needs no separate
+native-library path. The Linux build cross-compiles the project-owned PE worker;
+no proprietary MoviTools files are bundled.
 
 ### Get MoviTools
 
@@ -167,6 +180,20 @@ reference = 0.5 * input_value * (
 print(f"maximum absolute error: {np.max(np.abs(output - reference)):g}")
 ```
 
+On Linux, configure the extracted directory with a native absolute path:
+
+```bash
+export NPUNLOCK_MOVITOOLS_DIR="/absolute/path/to/MVC_DEPEND"
+python -m npunlock doctor --full
+python examples/example_gelu_f32.py
+python examples/example_global_hybrid_five_input_custom.py
+```
+
+The Wine prefix defaults to `$XDG_DATA_HOME/npunlock/wine`, or
+`~/.local/share/npunlock/wine` when XDG_DATA_HOME is unset. Override it with an
+absolute `WINEPREFIX`; retain Wine's default `Z:` mapping to `/`. First use may
+emit Wine setup/headless-display diagnostics even when the oracle passes.
+
 The complete script is [examples/example_gelu_f32.py](examples/example_gelu_f32.py).
 Other useful starting points include:
 
@@ -192,8 +219,8 @@ I/O supports ordinary copies or reusable NumPy-compatible shared buffers.
 The boundaries are intentionally strict. Shapes are static, every custom node
 must match a validated carrier/tensor layout, and graph compiler 8.3 on NPU3720
 is the established platform. Similar-looking graph operations are not assumed
-compatible. Linux and newer Intel NPUs remain test targets rather than
-supported platforms.
+compatible. Linux NPU3720 has the narrow validated path above; other
+driver/compiler stacks and newer Intel NPUs remain test targets.
 
 See [Current limitations](wiki/LIMITATIONS.md) for the exact hardware, dtype,
 shape, carrier, and graph-operation matrix.

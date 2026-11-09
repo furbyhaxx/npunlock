@@ -14,7 +14,7 @@ typedef struct shavecc_options {
   uint32_t struct_size;
   /* MVC_DEPEND root containing the required bin/ and lib/ directories. */
   npunlock_view movi_dll_directory_utf8;
-  /* Empty selects the installed sibling npunlock_worker executable. */
+  /* Empty selects the installed sibling MoviTools worker. */
   npunlock_view worker_executable_utf8;
   npunlock_view target_cpu;
   npunlock_view entry_symbol;

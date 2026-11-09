@@ -7,7 +7,8 @@ packaging. User-facing Python setup remains in the root [README](../README.md).
 
 ## Native components
 
-Four public C17 component APIs are exported from one `npunlock.dll`:
+Four public C17 component APIs are exported from one `npunlock.dll` on Windows
+or `libnpunlock.so` on Linux:
 
 | Component | Responsibility |
 | --- | --- |
@@ -34,6 +35,14 @@ MoviTools calls and Intel graph compilation can hang, fault, or terminate their
 process. One `npunlock_worker.exe` dispatches those two worker modes, and each
 request runs in its own finite-lived process with a deadline and Windows Job
 Object cleanup.
+
+On Linux the same interfaces use a bounded POSIX launcher and process-group
+deadlines. `npunlock-ir-worker` compiles graphs natively; the bundled
+`npunlock_movi_worker.exe` runs under `wine` found on PATH. Wine carries the
+binary response on stdout after preserving that handle and routing tool stdout
+to stderr, so protocol bytes cannot be mixed with tool logs. Both tool streams
+are retained together as stderr for Wine-hosted calls. `WINEPREFIX` overrides
+the default `$XDG_DATA_HOME/npunlock/wine` or `~/.local/share/npunlock/wine`.
 
 The worker communicates with the libraries through bounded, versioned pipe
 messages. Stage buffers remain in memory; no temporary files connect native
@@ -92,10 +101,30 @@ python -m black --check python examples tests\python tools setup.py
 The default test suite is offline. It does not require MoviTools, an NPU, or
 OpenVINO.
 
-## Linux porting utilities
+## Linux runtime and porting utilities
 
-The Linux preset builds `npunlock-inspect`, the experimental in-process
-`npunlock-linux-probe`, and their offline tests. It requires a C17 compiler and
+Linux x64 source builds require CMake 3.24+, a C17 compiler, and
+`x86_64-w64-mingw32-gcc` to build the project-owned Wine worker. NPU use requires
+the system Level Zero loader and Intel NPU driver/compiler. Compiling custom
+C additionally requires `wine` on PATH and an extracted MoviTools root; saved
+program bundles need neither Wine nor MoviTools.
+
+```bash
+cmake --preset linux
+cmake --build --preset linux
+ctest --preset linux
+python -m pip install .
+export NPUNLOCK_MOVITOOLS_DIR="/absolute/path/to/MVC_DEPEND"
+python -m npunlock doctor --full
+```
+
+The `linux` preset builds the complete native library, native IR worker,
+Wine-hosted MoviTools worker, CLI, and offline tests. Graph execution uses the
+shared in-process session engine with POSIX synchronization and dynamic loader
+bindings; copied and shared-buffer tensor modes are available.
+
+The narrower `linux-inspect` preset builds `npunlock-inspect`, the experimental
+in-process `npunlock-linux-probe`, and their offline tests. It requires a C17 compiler and
 CMake 3.24 or newer. It also builds an experimental `npunlock-ir-worker`
 using the same query, NGRAPH_LITE compilation, native export, and reload path
 as the Windows worker. It does not build MoviTools or the Windows runtime.
@@ -109,9 +138,8 @@ ctest --preset linux-inspect
 ```
 
 The execution probe dynamically loads the system Level Zero loader only when
-explicitly invoked with a verified probe bundle. The public compiler, patch, and
-execution APIs remain Windows-only; the Linux compiler worker currently exposes
-only the private binary worker protocol (`ir --response-fd N`). Read the
+explicitly invoked with a verified probe bundle. The native library uses
+`ir --response-fd N` internally for isolated Linux compilation. Read the
 [staged Linux roadmap](PORTING.md#porting-utilities-and-staged-roadmap) before
 interpreting results as driver, firmware, instruction-set, or invocation-ABI
 compatibility.
@@ -120,7 +148,10 @@ CTest also exercises the private POSIX worker-process transport without an NPU.
 The fixture checks the dedicated response channel, separate stdout/stderr
 capture, and process-group timeout cleanup. A separate IR-worker test checks
 malformed-request rejection through that transport before loader discovery.
-Neither offline test invokes Level Zero.
+An offline Wine-launcher fixture checks PATH lookup, binary response routing,
+paths containing spaces, stderr retention, and missing-Wine errors without
+installing Wine or MoviTools. A delayed-pipe-close regression checks process
+reaping while logs are still draining. None of these tests invokes Level Zero.
 
 ## Opt-in integration tests
 
@@ -233,7 +264,8 @@ execution is exposed by `graphinfer` and Python `Program.run()`.
 ## Build the Python package
 
 The Python build invokes CMake and bundles `npunlock.dll` plus
-`npunlock_worker.exe` inside the package:
+`npunlock_worker.exe` inside the package on Windows. Linux bundles `libnpunlock.so`,
+`npunlock-ir-worker`, and the cross-compiled `npunlock_movi_worker.exe` instead:
 
 ```powershell
 python -m pip install .
