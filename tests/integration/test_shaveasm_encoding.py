@@ -34,6 +34,16 @@ class EncodingTests(unittest.TestCase):
         self.assertEqual(encode("NOP 17"), b"\xf0\x00")
         self.assertEqual(encode("NOP 32"), b"\xf0\xf0")
 
+    def test_signed_load_offset_uses_a_distinct_header_class(self) -> None:
+        self.assertEqual(encode("LSU0.LDO.32 i0 i0 -3"), bytes.fromhex("c20240fbff"))
+        self.assertEqual(encode("LSU0.LDO.32 i31 i31 16383"), bytes.fromhex("c2f27fff7f"))
+        self.assertEqual(encode("LSU0.LDO.32 i4 i5 -3 || IAU.XOR i16 i17 i18"),
+                         bytes.fromhex("ba424afbff324209"))
+        for source in ("LSU0.LDO.32 i0 i0 -16385", "LSU0.LDO.32 i0 i0 16384",
+                       "LSU0.LDO.32 i1 i2 0 || LSU0.LDIL i4 1"):
+            with self.subTest(source=source), self.assertRaises(AssemblyError):
+                encode(source)
+
     def test_branch_fixup_tracks_canonical_bit_offset_and_relocation_kind(self) -> None:
         cases = [
             ("BRU.BRA target", "c7010000", 8, "R_SHAVE_PCREL16"),

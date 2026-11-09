@@ -118,6 +118,48 @@ _PREFIXES = {
     "LSU0,LSU1,IAU,BRU,PEU": (24, 0xB8A00F),
     "LSU0,SAU,IAU,BRU,PEU": (24, 0xBB200F),
     "LSU1,SAU,IAU,BRU,PEU": (24, 0xBB800F),
+    "LSU0.LDO32": (8, 0xC2),
+    "CMU,LSU0.LDO32": (8, 0xE4),
+    "LSU0.LDO32,LSU1": (8, 0xB9),
+    "LSU0.LDO32,SAU": (16, 0xF03E),
+    "LSU0.LDO32,IAU": (8, 0xBA),
+    "LSU0.LDO32,BRU": (16, 0xC3CE),
+    "LSU0.LDO32,PEU": (8, 0xBB),
+    "CMU,LSU0.LDO32,LSU1": (16, 0xB80E),
+    "CMU,LSU0.LDO32,SAU": (16, 0xF83E),
+    "CMU,LSU0.LDO32,IAU": (16, 0xB82E),
+    "CMU,LSU0.LDO32,BRU": (24, 0x30380F),
+    "CMU,LSU0.LDO32,PEU": (16, 0xB81E),
+    "LSU0.LDO32,LSU1,SAU": (16, 0xEC8E),
+    "LSU0.LDO32,LSU1,IAU": (16, 0xAC5E),
+    "LSU0.LDO32,LSU1,BRU": (16, 0xCBCE),
+    "LSU0.LDO32,LSU1,PEU": (16, 0xAC7E),
+    "LSU0.LDO32,SAU,IAU": (16, 0xBC9E),
+    "LSU0.LDO32,SAU,BRU": (24, 0x33300F),
+    "LSU0.LDO32,SAU,PEU": (16, 0x8FEE),
+    "LSU0.LDO32,IAU,BRU": (16, 0xE3CE),
+    "LSU0.LDO32,IAU,PEU": (16, 0xA3DE),
+    "LSU0.LDO32,BRU,PEU": (24, 0xB0300F),
+    "CMU,LSU0.LDO32,LSU1,SAU": (16, 0xEE8E),
+    "CMU,LSU0.LDO32,LSU1,IAU": (16, 0xAE6E),
+    "CMU,LSU0.LDO32,LSU1,BRU": (24, 0x30B80F),
+    "CMU,LSU0.LDO32,LSU1,PEU": (16, 0xAE7E),
+    "CMU,LSU0.LDO32,SAU,IAU": (16, 0xBE9E),
+    "CMU,LSU0.LDO32,SAU,BRU": (24, 0x33380F),
+    "CMU,LSU0.LDO32,SAU,PEU": (24, 0x83380F),
+    "CMU,LSU0.LDO32,IAU,BRU": (24, 0x38380F),
+    "CMU,LSU0.LDO32,IAU,PEU": (24, 0x88380F),
+    "CMU,LSU0.LDO32,BRU,PEU": (24, 0xB0380F),
+    "LSU0.LDO32,LSU1,SAU,IAU": (16, 0xBBBE),
+    "LSU0.LDO32,LSU1,SAU,BRU": (24, 0x33B00F),
+    "LSU0.LDO32,LSU1,SAU,PEU": (24, 0x83B00F),
+    "LSU0.LDO32,LSU1,IAU,BRU": (16, 0xEBCE),
+    "LSU0.LDO32,LSU1,IAU,PEU": (16, 0xABDE),
+    "LSU0.LDO32,LSU1,BRU,PEU": (24, 0xB0B00F),
+    "LSU0.LDO32,SAU,IAU,BRU": (24, 0x3B300F),
+    "LSU0.LDO32,SAU,IAU,PEU": (16, 0xAFEE),
+    "LSU0.LDO32,SAU,BRU,PEU": (24, 0xB3300F),
+    "LSU0.LDO32,IAU,BRU,PEU": (24, 0xB8300F),
 }
 _PREDICATES = {"EQ": 1, "NEQ": 14, "LT": 4, "LTE": 5, "GT": 2, "GTE": 3}
 
@@ -128,6 +170,7 @@ class _Operation:
     value: int
     bits: int
     fixup: Fixup | None = None
+    prefix_class: str | None = None
 
 
 def _register(text: str, line: int) -> int:
@@ -147,11 +190,26 @@ def _immediate(text: str, bits: int, line: int) -> int:
     return value
 
 
+def _signed_immediate(text: str, bits: int, line: int) -> int:
+    try:
+        value = int(text, 0)
+    except ValueError as error:
+        raise AssemblyError(f"line {line}: expected signed {bits}-bit immediate, got {text!r}") from error
+    if not -(1 << (bits - 1)) <= value < 1 << (bits - 1):
+        raise AssemblyError(f"line {line}: {value} exceeds signed {bits}-bit immediate")
+    return value & ((1 << bits) - 1)
+
+
 def _operation(instruction: Instruction) -> _Operation:
     mnemonic, operands, line = instruction.mnemonic, instruction.operands, instruction.line
     unit = mnemonic.split(".")[0]
     if mnemonic == "BRU.BRA" and len(operands) == 1 and re.fullmatch(r"[A-Za-z_.$][A-Za-z_0-9.$]*", operands[0]):
         return _Operation(unit, 0, 24, Fixup(operands[0], 0, 0, 16, "R_SHAVE_PCREL16"))
+    if mnemonic == "LSU0.LDO.32" and len(operands) == 3:
+        destination, source = (_register(op, line) for op in operands[:2])
+        immediate = _signed_immediate(operands[2], 15, line)
+        return _Operation(unit, 0x14002 | destination << 4 | source << 9 | immediate << 17, 32,
+                          prefix_class="LSU0.LDO32")
     if mnemonic in ("LSU0.LDIL", "LSU1.LDIL") and len(operands) == 2:
         destination = _register(operands[0], line)
         immediate = _immediate(operands[1], 16, line)
@@ -192,7 +250,7 @@ def encode_packet_with_fixups(packet: Packet) -> tuple[bytes, tuple[Fixup, ...]]
     if len({op.unit for op in operations}) != len(operations):
         raise AssemblyError(f"line {first.line}: repeated functional unit in packet")
     operations.sort(key=lambda op: _ORDER.index(op.unit))
-    key = ",".join(op.unit for op in operations)
+    key = ",".join(op.prefix_class or op.unit for op in operations)
     if key not in _PREFIXES:
         raise AssemblyError(f"line {first.line}: unmeasured packet class {key}")
     bits, value = _PREFIXES[key]

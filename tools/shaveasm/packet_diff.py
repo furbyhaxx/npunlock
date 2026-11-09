@@ -25,8 +25,10 @@ def generate_packets(seed: int, count: int) -> list[str]:
         if unit == "BRU":
             return "BRU.BRA external_target"
         if registers is None:
-            base = _UNITS.index(unit) * 4
+            base = _UNITS.index(unit.split(".")[0]) * 4
             registers = tuple(f"i{base + rng.randrange(4)}" for _ in range(3))
+        if unit == "LSU0.LDO32":
+            return f"LSU0.LDO.32 {registers[0]} {registers[1]} {rng.randrange(-16384, 16384)}"
         if unit == "CMU":
             return f"CMU.CP.32 {registers[0]} {registers[1]}"
         if unit in ("LSU0", "LSU1"):
@@ -39,9 +41,10 @@ def generate_packets(seed: int, count: int) -> list[str]:
 
     packets = ["NOP", *(f"NOP {n}" for n in range(1, 65))]
     for register in range(32):
-        for unit in _UNITS:
+        for unit in (*_UNITS, "LSU0.LDO32"):
             packets.append(operation(unit, (f"i{register}", f"i{31 - register}", f"i{(register + 11) % 32}")))
     packets.extend(("LSU0.LDIL i31 65535", "LSU1.LDIL i0 0", "SAU.ADD.i32 i0 i31 31"))
+    packets.extend(f"LSU0.LDO.32 i31 i0 {value}" for value in (-16384, -1, 0, 1, 16383))
     shapes = [tuple(key.split(",")) for key in _PREFIXES]
     shapes.extend(rng.choices(shapes, k=count))
     for shape in shapes:
