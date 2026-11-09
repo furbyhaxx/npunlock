@@ -34,6 +34,16 @@ class EncodingTests(unittest.TestCase):
         self.assertEqual(encode("NOP 17"), b"\xf0\x00")
         self.assertEqual(encode("NOP 32"), b"\xf0\xf0")
 
+    def test_compare_zero_uses_a_sixteen_bit_payload(self) -> None:
+        self.assertEqual(encode("CMU.CMZ.I32 i0"), bytes.fromhex("410000"))
+        self.assertEqual(encode("CMU.CMZ.I32 i31"), bytes.fromhex("41f001"))
+        self.assertEqual(encode("CMU.CMZ.I32 i1 || LSU0.LDIL i4 1"),
+                         bytes.fromhex("941000220100"))
+        for source in ("CMU.CMZ.I32 i32", "CMU.CMZ.I32 i1 i2",
+                       "CMU.CMZ.I32 i1 || CMU.CP.32 i2 i3"):
+            with self.subTest(source=source), self.assertRaises(AssemblyError):
+                encode(source)
+
     def test_add_register_and_unsigned_immediate_forms(self) -> None:
         self.assertEqual(encode("IAU.ADD i0 i0 i0"), bytes.fromhex("c6000000"))
         self.assertEqual(encode("IAU.ADD i31 i31 i31"), bytes.fromhex("c6e0ff0f"))

@@ -27,14 +27,14 @@ class CorpusTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             (root / "authored.s").write_text(
-                "NOP\nCMU.CMZ.I32 i1 || IAU.ADD i2 i3 -1\n"
-                "CMU.CMZ.I32 i2 || IAU.ADD i4 i5 -2\n"
+                "NOP\nCMU.UNMEASURED i1 || IAU.ADD i2 i3 -1\n"
+                "CMU.UNMEASURED i2 || IAU.ADD i4 i5 -2\n"
                 "LSU0.LDIL i0 1 || IAU.UNMEASURED i1 i2 i3\n"
             )
             result = report([root, root])
             self.assertEqual((result["packets"], result["accepted_packets"]), (4, 1))
             rows = {(r["mnemonic"], r["operand_shape"]): r for r in result["rejected_shapes"]}
-            self.assertEqual(rows[("CMU.CMZ.I32", "ireg")]["unsupported_packets"], 2)
+            self.assertEqual(rows[("CMU.UNMEASURED", "ireg")]["unsupported_packets"], 2)
             self.assertEqual(rows[("IAU.ADD", "ireg ireg negative")]["rejected_packets"], 2)
             self.assertEqual(rows[("LSU0.LDIL", "ireg immediate")]["unsupported_packets"], 0)
             self.assertEqual(result["parse_errors"], [])

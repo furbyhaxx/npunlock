@@ -270,6 +270,20 @@ reported conflicting writes despite being in different sections. Each generated
 case now has a separate preceding `NOP 16` padding section. This makes cases
 independent without disabling the vendor analyzer or changing tested packets.
 
+### Scalar compare against zero
+
+A complete `i0..i31` source-register sweep establishes:
+
+| Form | Payload bits | Payload expression | Standalone prefix |
+| --- | ---: | --- | --- |
+| `CMU.CMZ.I32 s` | 16 | `s<<4` | `0x41` |
+
+`CMU.CMZ16` is a distinct header class from 24-bit CMU.CP.32. Co-issuing with
+LSU0.LDIL uses prefix `0x94`, with the load starting after 16 CMU bits. Header
+sweeps of 128 combinations of the already measured non-CMU classes each yielded
+one matching layout; the **104** at or below 128 bits are explicitly retained.
+Scalar compare variants other than this signed zero form remain rejected.
+
 ### Scalar integer addition
 
 Separate sweeps of all three register fields and immediate bit/range boundaries
@@ -367,8 +381,9 @@ unsupported form or header class. Counts overlap across shapes and must not be
 summed as packet totals. Parse failures are reported separately and fail the
 command. The combined baseline is 3291/11912 accepted packets and **98** distinct
 mnemonics (97 in the literal corpus alone). With symbolic branches, signed loads
-and integer addition, coverage is 5580/11912 packets, including 740 requiring
-symbolic fixups. `accepted_packets` counts bytes-plus-fixups support and `relocatable_packets` identifies that subset;
+integer addition and zero compare, coverage is 6084/11912 packets, including 740 requiring
+symbolic fixups. `accepted_packets` counts bytes-plus-fixups support and
+`relocatable_packets` identifies that subset;
 this does not assert whole-object parity.
 
 ```sh
@@ -384,8 +399,8 @@ python3 -m tools.shaveasm.corpus --native-dir build/linux \
   --output /mnt/cache/build-shave/native-asm-corpus
 ```
 
-Offline regressions: 19 passed. Each randomized gate passed **1675/1675** packets
-(seeds 3720 and 9001): 1000 random packets, 218 shapes, 288 mixed operand sweep
+Offline regressions: 20 passed. Each randomized gate passed **1811/1811** packets
+(seeds 3720 and 9001): 1000 random packets, 322 shapes, 320 mixed operand sweep
 cases, 96 dedicated ADD register/immediate sweep cases, eight immediate
 boundaries, and 65 bare/counted NOP cases. Every generated packet's
 actual bytes are compared to moviAsm, not merely round-tripped through native
@@ -416,8 +431,8 @@ uncaptured and require explicit model/generator inputs.
 The parser structurally accepted all 55 captured assemblies. The literal
 corpus contains 97 distinct mnemonics. Only **3291/11912** parsed packets are
 accepted by the original byte-only encoder across the two corpora; the symbolic
-branch, signed-load and ADD extensions raise bytes-plus-fixups support to
-**5580/11912**. These are
+branch, signed-load, ADD and compare extensions raise bytes-plus-fixups support
+to **6084/11912**. These are
 syntactic coverage counts, **not** full-stream or whole-object parity claims.
 Calls, other branch forms, additional instruction/header classes, data and
 alignment directives, ELF symbols and relocations remain the next gate. Hybrid
