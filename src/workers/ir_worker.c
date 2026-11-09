@@ -1,5 +1,12 @@
+#ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
+typedef HMODULE ir_library;
+#else
+#include <dlfcn.h>
+#include <unistd.h>
+typedef void *ir_library;
+#endif
 
 #include <stdbool.h>
 #include <stddef.h>
@@ -136,8 +143,12 @@ static void set_driver_error(ir_result *result, uint32_t code, const char *stage
   set_diagnostic(result, message);
 }
 
-static bool load_export(HMODULE library, const char *name, void *destination, size_t size) {
+static bool load_export(ir_library library, const char *name, void *destination, size_t size) {
+#ifdef _WIN32
   FARPROC proc = GetProcAddress(library, name);
+#else
+  void *proc = dlsym(library, name);
+#endif
   if (proc == NULL || size != sizeof(proc)) {
     return false;
   }
@@ -145,7 +156,7 @@ static bool load_export(HMODULE library, const char *name, void *destination, si
   return true;
 }
 
-static bool load_ze_functions(HMODULE library, ze_functions *functions) {
+static bool load_ze_functions(ir_library library, ze_functions *functions) {
   memset(functions, 0, sizeof(*functions));
   return load_export(library, "zeInitDrivers", &functions->init_drivers,
                      sizeof(functions->init_drivers)) &&
@@ -401,7 +412,7 @@ static uint8_t *package_ir(const ir_request *request, const ir_result *result, s
 }
 
 static void compile_ir(const ir_request *request, ir_result *result) {
-  HMODULE loader = NULL;
+  ir_library loader = NULL;
   ze_functions ze = {0};
   npunlock_ze_driver_handle driver = NULL;
   npunlock_ze_device_handle device = NULL;
@@ -422,10 +433,14 @@ static void compile_ir(const ir_request *request, ir_result *result) {
 
   memset(result, 0, sizeof(*result));
   result->status = NPUNLOCK_IR_WORKER_DRIVER_FAILED;
+#ifdef _WIN32
   loader = LoadLibraryExW(L"ze_loader.dll", NULL, LOAD_LIBRARY_SEARCH_SYSTEM32);
+#else
+  loader = dlopen("libze_loader.so.1", RTLD_NOW | RTLD_LOCAL);
+#endif
   if (loader == NULL) {
     result->status = NPUNLOCK_IR_WORKER_LOADER_NOT_FOUND;
-    set_diagnostic(result, "Level Zero loader ze_loader.dll was not found in System32");
+    set_diagnostic(result, "system Level Zero loader was not found");
     goto done;
   }
   if (!load_ze_functions(loader, &ze)) {
@@ -575,11 +590,15 @@ done:
   free(build_flags);
   free(serialized);
   if (loader != NULL) {
+#ifdef _WIN32
     FreeLibrary(loader);
+#else
+    dlclose(loader);
+#endif
   }
 }
 
-static bool send_response(HANDLE handle, const ir_result *result) {
+static bool send_response(npunlock_worker_handle handle, const ir_result *result) {
   uint8_t header[NPUNLOCK_IR_RESPONSE_HEADER_SIZE] = {0};
   size_t diagnostic_size = result->diagnostic == NULL ? 0 : strlen(result->diagnostic);
   store_u32(header, NPUNLOCK_IR_RESPONSE_MAGIC);
@@ -609,21 +628,31 @@ static bool send_response(HANDLE handle, const ir_result *result) {
 }
 
 int npunlock_ir_worker_main(int argc, char **argv) {
-  HANDLE response = NULL;
-  HANDLE input = GetStdHandle(STD_INPUT_HANDLE);
+#ifdef _WIN32
+  npunlock_worker_handle response = NULL;
+  npunlock_worker_handle input = GetStdHandle(STD_INPUT_HANDLE);
+#else
+  npunlock_worker_handle response = -1;
+  npunlock_worker_handle input = STDIN_FILENO;
+#endif
   uint8_t *request_data = NULL;
   size_t request_size = 0;
   ir_request request;
   ir_result result;
   int exit_code = 2;
 
+#ifdef _WIN32
   SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX | SEM_NOOPENFILEERRORBOX);
+#endif
   if (!npunlock_worker_response_handle(argc, argv, &response)) {
     return 2;
   }
   memset(&result, 0, sizeof(result));
   result.status = NPUNLOCK_IR_WORKER_BAD_REQUEST;
-  if (input == NULL || input == INVALID_HANDLE_VALUE ||
+  if (
+#ifdef _WIN32
+      input == NULL || input == INVALID_HANDLE_VALUE ||
+#endif
       !npunlock_worker_read_all(input, NPUNLOCK_IR_MAX_MESSAGE_SIZE, &request_data,
                                 &request_size)) {
     set_diagnostic(&result, "failed to read the IR worker request");
@@ -636,6 +665,10 @@ int npunlock_ir_worker_main(int argc, char **argv) {
   free(result.blob);
   free(result.diagnostic);
   free(request_data);
+#ifdef _WIN32
   CloseHandle(response);
+#else
+  close(response);
+#endif
   return exit_code;
 }

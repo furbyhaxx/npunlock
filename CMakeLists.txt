@@ -269,6 +269,15 @@ if(NOT WIN32)
   set_target_properties(npunlock_linux_probe PROPERTIES OUTPUT_NAME npunlock-linux-probe)
   target_include_directories(npunlock_linux_probe PRIVATE include src/linux_probe src/workers)
   target_link_libraries(npunlock_linux_probe PRIVATE npunlock_warnings ${CMAKE_DL_LIBS})
+  add_executable(npunlock_ir_worker_posix
+    src/workers/main_posix.c
+    src/workers/worker_io_common.c
+    src/workers/ir_worker.c
+    src/workers/worker_io_posix.c
+  )
+  set_target_properties(npunlock_ir_worker_posix PROPERTIES OUTPUT_NAME npunlock-ir-worker)
+  target_include_directories(npunlock_ir_worker_posix PRIVATE src/workers src/common)
+  target_link_libraries(npunlock_ir_worker_posix PRIVATE npunlock_warnings ${CMAKE_DL_LIBS})
   add_library(npunlock_posix_worker_process STATIC
     src/common/buffer.c
     src/common/checked.c
@@ -297,6 +306,17 @@ if(NOT WIN32)
       npunlock_test_worker_process_posix PRIVATE npunlock_posix_worker_process npunlock_warnings
     )
     add_dependencies(npunlock_test_worker_process_posix npunlock_worker_fixture_posix)
+    add_executable(npunlock_test_ir_worker_posix tests/unit/test_ir_worker_posix.c)
+    target_include_directories(npunlock_test_ir_worker_posix PRIVATE src/common src/workers)
+    target_compile_definitions(npunlock_test_ir_worker_posix
+      PRIVATE NPUNLOCK_POSIX_IR_WORKER="$<TARGET_FILE:npunlock_ir_worker_posix>"
+    )
+    target_link_libraries(npunlock_test_ir_worker_posix
+      PRIVATE npunlock_posix_worker_process npunlock_warnings
+    )
+    add_dependencies(npunlock_test_ir_worker_posix npunlock_ir_worker_posix)
+    add_test(NAME porting_posix_ir_worker COMMAND npunlock_test_ir_worker_posix)
+    set_tests_properties(porting_posix_ir_worker PROPERTIES TIMEOUT 5)
     add_test(NAME porting_posix_worker_process COMMAND npunlock_test_worker_process_posix)
     set_tests_properties(porting_posix_worker_process PROPERTIES TIMEOUT 5)
   endif()
@@ -304,6 +324,12 @@ if(NOT WIN32)
     ${NPUNLOCK_INSPECT_SOURCES}
     ${NPUNLOCK_LINUX_PROBE_SOURCES}
     src/linux_probe/infer_engine.h
+    src/workers/main_posix.c
+    src/workers/ir_worker.c
+    src/workers/worker_io.h
+    src/workers/worker_io_common.c
+    src/workers/worker_io_posix.c
+    tests/unit/test_ir_worker_posix.c
     src/workers/level_zero_min.h
     src/common/worker_process_posix.c
     tests/helpers/worker_fixture_posix.c
@@ -352,6 +378,7 @@ target_link_libraries(npunlock_common_objects PRIVATE npunlock_warnings)
 
 add_executable(npunlock_worker
   src/workers/worker.c
+  src/workers/worker_io_common.c
   src/workers/worker_io.c
   src/workers/movi_worker.c
   src/workers/ir_worker.c
@@ -504,6 +531,7 @@ set(NPUNLOCK_FORMAT_SOURCES
   src/workers/worker.c
   src/workers/worker_entry.h
   src/workers/worker_io.c
+  src/workers/worker_io_common.c
   src/workers/worker_io.h
   src/workers/ir_protocol.h
   src/workers/ir_worker.c
