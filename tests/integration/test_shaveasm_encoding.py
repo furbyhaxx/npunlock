@@ -60,9 +60,16 @@ class EncodingTests(unittest.TestCase):
         self.assertEqual(encode("IAU.SHR.U32 i1 i2 i3"), bytes.fromhex("c64e8401"))
         self.assertEqual(encode("IAU.SHR.U32 i31 i31 i31"), bytes.fromhex("c6eeff0f"))
         for source in ("IAU.SHR.U32 i0 i0 i32", "IAU.SHR.U32 i0 i0 v1",
-                       "IAU.SHL i0 i0 i1"):
+                       "IAU.SHL i0 i0 i32"):
             with self.subTest(source=source), self.assertRaises(AssemblyError):
                 encode(source)
+
+    def test_register_left_shift_clears_the_immediate_selector(self) -> None:
+        self.assertEqual(encode("IAU.SHL i0 i0 i0"), bytes.fromhex("c60c0000"))
+        self.assertEqual(encode("IAU.SHL i1 i2 i3"), bytes.fromhex("c64c8401"))
+        self.assertEqual(encode("IAU.SHL i31 i31 i31"), bytes.fromhex("c6ecff0f"))
+        with self.assertRaises(AssemblyError):
+            encode("IAU.SHL i0 i0 v1")
 
     def test_lsu1_indirect_load_uses_the_twenty_four_bit_class(self) -> None:
         self.assertEqual(encode("LSU1.LD.32 i0 i0"), bytes.fromhex("890d0001"))
@@ -284,7 +291,7 @@ class EncodingTests(unittest.TestCase):
     def test_immediate_shift_uses_the_twenty_four_bit_add_class(self) -> None:
         self.assertEqual(encode("IAU.SHL i0 i0 0"), bytes.fromhex("c60c0080"))
         self.assertEqual(encode("IAU.SHL i31 i31 31"), bytes.fromhex("c6ecff8f"))
-        for source in ("IAU.SHL i0 i1 -1", "IAU.SHL i0 i1 32", "IAU.SHL i0 i1 i2"):
+        for source in ("IAU.SHL i0 i1 -1", "IAU.SHL i0 i1 32", "IAU.SHL i0 i1 i32"):
             with self.subTest(source=source), self.assertRaises(AssemblyError):
                 encode(source)
 

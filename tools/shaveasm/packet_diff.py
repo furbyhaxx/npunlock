@@ -66,7 +66,7 @@ def generate_packets(seed: int, count: int) -> list[str]:
                 return f"IAU.INCS {registers[0]} {rng.randrange(-8192, 8192)}"
             if rng.randrange(3) == 0:
                 mnemonic = rng.choice(("IAU.SHL", "IAU.SHR.U32"))
-                right = registers[2] if mnemonic == "IAU.SHR.U32" and rng.randrange(2) else str(rng.randrange(32))
+                right = registers[2] if rng.randrange(2) else str(rng.randrange(32))
                 return f"{mnemonic} {registers[0]} {registers[1]} {right}"
             right = registers[2] if rng.randrange(2) else str(rng.randrange(256))
             mnemonic = rng.choice(("IAU.ADD", "IAU.SUB"))
@@ -123,8 +123,9 @@ def generate_packets(seed: int, count: int) -> list[str]:
                 packets.append("\n || ".join(f"{mnemonic} i16 i17 i18" if unit == "IAU"
                                               else operation(unit, store_packet=store_packet) for unit in shape))
         if "IAU.ADD24" in shape:
-            packets.append("\n || ".join("IAU.SHR.U32 i16 i17 i18" if unit == "IAU.ADD24"
-                                          else operation(unit, store_packet=store_packet) for unit in shape))
+            for mnemonic in ("IAU.SHL", "IAU.SHR.U32"):
+                packets.append("\n || ".join(f"{mnemonic} i16 i17 i18" if unit == "IAU.ADD24"
+                                              else operation(unit, store_packet=store_packet) for unit in shape))
             for mnemonic in ("IAU.SHL", "IAU.SHR.U32"):
                 packets.append("\n || ".join(f"{mnemonic} i16 i17 {rng.randrange(32)}" if unit == "IAU.ADD24"
                                               else operation(unit, store_packet=store_packet) for unit in shape))
@@ -159,7 +160,7 @@ def generate_packets(seed: int, count: int) -> list[str]:
             for mnemonic in ("LSU1.STI.32", "LSU1.LD.32", "LSU1.ST.32"):
                 packets.append(mnemonic + " " + " ".join(operands))
     for mnemonic in ("IAU.AND", "IAU.OR", "IAU.LMULL", "IAU.LMULH", "IAU.ADDCI",
-                     "SAU.ADD.F32", "SAU.MUL.I32", "SAU.MUL.F32", "SAU.AND", "IAU.SHR.U32", "SAU.SHR.U32"):
+                     "SAU.ADD.F32", "SAU.MUL.I32", "SAU.MUL.F32", "SAU.AND", "IAU.SHL", "IAU.SHR.U32", "SAU.SHR.U32"):
         for position in range(3):
             for register in range(32):
                 operands = ["i0"] * 3

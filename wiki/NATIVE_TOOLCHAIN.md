@@ -865,6 +865,17 @@ confirmed by vendor diagnostics, and are rejected. Both seeds pass
 **10659/11912** packets, with **7/55 exact objects**, zero different
 objects, and 1430 diagnostic instruction rejections.
 
+### Scalar IAU register left shift
+
+`IAU.SHL dst src amount` accepts a scalar register amount in the existing
+24-bit IAU class: `0x0c | dst<<10 | src<<5 | amount<<15`. Immediate amounts
+retain selector bit 23. All 376 current IAU.ADD24 header shapes and 96
+independent register sweeps match moviAsm. Both seeds pass **26383/26383**
+cases and 71 offline tests pass. Coverage is **10679/11912** packets, with
+**7/55 exact objects**, zero different objects, and 1410 diagnostic instruction
+rejections. Register SHL removes eight files' previous first rejection;
+those files still contain other unsupported forms.
+
 ### Differential gates and corpus inventory
 
 Cached assembly can be inventoried without Wine or recompilation:
@@ -883,7 +894,7 @@ command. The combined baseline is 3291/11912 accepted packets and **98** distinc
 mnemonics (97 in the literal corpus alone). With symbolic branches, signed
 loads/stores, indirect loads, integer addition, comparisons, PCCX, AND/OR,
 LMULL, INCS, scalar floating-point addition and immediate SHL, coverage is
-**10659/11912** packets, including 979 requiring symbolic fixups, after the
+**10679/11912** packets, including 979 requiring symbolic fixups, after the
 additional measured forms documented above.
 Forty-one distinct mnemonics occur in accepted packets (six at baseline); the
 corpus still has 98 mnemonics.
@@ -904,8 +915,8 @@ python3 -m tools.shaveasm.corpus --native-dir build/linux \
   --output /mnt/cache/build-shave/native-asm-corpus
 ```
 
-Offline regressions: 70 passed, including the merged object-writer/corpus tests.
-Each current randomized gate passes **25911/25911 cases**. Before the eight
+Offline regressions: 71 passed, including the merged object-writer/corpus tests.
+Each current randomized gate passes **26383/26383 cases**. Before the eight
 additional forms documented above, the gate passed **12156/12156 cases**
 (seeds 3720 and 9001): the original 2362 isolated-packet cases (1000 random
 packets, 457 shapes, 352 mixed operand sweeps, 96 ADD sweeps, 384 PCCX pairs,
@@ -959,7 +970,7 @@ The parser structurally accepted all 55 captured assemblies. The literal
 corpus contains 97 distinct mnemonics. Only **3291/11912** parsed packets are
 accepted by the original byte-only encoder across the two corpora; the symbolic
 branch, scalar-load/store, ADD, compare, PCCX, AND/OR, LMULL, INCS and SHL extensions raise
-bytes-plus-fixups support to **10659/11912** with the additional measured forms
+bytes-plus-fixups support to **10679/11912** with the additional measured forms
 above. These are
 syntactic coverage counts, **not** full-stream or whole-object parity claims.
 Calls, other branch forms, additional instruction/header classes, data and

@@ -1596,7 +1596,7 @@ def _operation(instruction: Instruction) -> _Operation:
                           prefix_class="IAU.ADD24")
     if mnemonic in ("IAU.SHL", "IAU.SHR.U32") and len(operands) == 3:
         destination, source = (_register(op, line) for op in operands[:2])
-        if mnemonic == "IAU.SHR.U32" and re.fullmatch(r"[iI][0-9]+", operands[2]):
+        if re.fullmatch(r"[iI][0-9]+", operands[2]):
             right = _register(operands[2], line)
             selector = 0
         else:
