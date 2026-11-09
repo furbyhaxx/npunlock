@@ -1,0 +1,387 @@
+diff -r /home/user/projects/llvm-14/lld/ELF/Arch/SPARC32.cpp /tmp/patchgen/lld/ELF/Arch/SPARC32.cpp
+--- a/lld/ELF/Arch/SPARC32.cpp	1969-12-31 19:00:00.000000000 -0500
++++ b/lld/ELF/Arch/SPARC32.cpp	2026-09-27 14:37:49.477684205 -0500
+@@ -0,0 +1,310 @@
++//===- SPARC32.cpp --------------------------------------------------------===//
++//
++// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
++// See https://llvm.org/LICENSE.txt for license information.
++// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
++//
++//===----------------------------------------------------------------------===//
++//
++// ELF32 little-endian SPARC target (e_machine == EM_SPARC, emulation name
++// "elf32-sparc") used for Movidius/Intel SHAVE cores.
++//
++// The SHAVE relocation semantics implemented here were reverse-engineered
++// from the proprietary MoviTools linker moviLLD64.dll (an LLVM 14/lld 14
++// fork, rev 97ebc3a512d681dcfc6b2b626e09e2f2711ed54b).  See
++// npunlock-work/lld-sparc/RELOC_NOTES.md for the evidence (decompiled
++// getRelExpr FUN_1802c61e0 / relocate FUN_1802c6780, dispatch table at DLL
++// VA 0x1802c7324) and for the numeric validation against prelinked MoviTools
++// SHAVE ELFs.
++//
++// Processor-specific relocation types 200-210 are not part of llvm's
++// BinaryFormat/Sparc.def and are therefore embedded locally.
++//
++// All SHAVE instruction fields are little-endian; every write below is a
++// byte-order-preserving read-modify-write at r_offset.  moviLLD does not
++// decode instructions: r_offset may point at an arbitrary byte inside a
++// variable-length instruction.
++//
++//===----------------------------------------------------------------------===//
++
++#include "InputFiles.h"
++#include "Symbols.h"
++#include "SyntheticSections.h"
++#include "Target.h"
++#include "lld/Common/ErrorHandler.h"
++#include "llvm/Support/Endian.h"
++
++using namespace llvm;
++using namespace llvm::support::endian;
++using namespace llvm::ELF;
++using namespace lld;
++using namespace lld::elf;
++
++namespace {
++// Processor-specific relocation types emitted by the MoviTools SHAVE
++// assembler (moviAsm64).  Numbering verified against the .rela sections of
++// the MoviTools SHAVE archives (mlibm.a: 828x200, 828x202, 18953x208,
++// 1131x209, 17x210; all archives together also contain 201/203).
++// Names are local to this file; the vendor linker has no name table for them.
++enum SHAVERelType : RelType {
++  R_SHAVE_LO16 = 200,         // S+A low 16, LE16 at r_offset (OR into zeroed field)
++  R_SHAVE_LO16_AT4 = 201,     // S+A low 16 in LE32 bits [19:4] at r_offset
++  R_SHAVE_HI16 = 202,         // S+A bits 31:16, LE16 at r_offset (OR into zeroed field)
++  R_SHAVE_HI16_AT4 = 203,     // S+A bits 31:16 in LE32 bits [19:4] at r_offset
++  R_SHAVE_PCREL14_AT2 = 204,  // S+A-P, signed 14-bit field at LE32 bits [15:2]
++  R_SHAVE_PCREL14_AT6 = 205,  // S+A-P, signed 14-bit field at LE32 bits [19:6]
++  R_SHAVE_WINDOW_AT3 = 206,   // S+A, window-encoded 16-bit field at LE32 bits [18:3]
++  R_SHAVE_WINDOW_AT7 = 207,   // S+A, window-encoded 16-bit field at LE32 bits [22:7]
++  R_SHAVE_ABS32 = 208,        // S+A, plain LE32 write (used in .debug_* sections)
++  R_SHAVE_PCREL16 = 209,      // S+A-P, LE16 at r_offset, += (branches)
++  R_SHAVE_PCREL16_AT4 = 210,  // S+A-P, 16-bit field at LE32 bits [19:4], +=
++  // 211..214 are accepted by the vendor's getRelExpr (mapped to R_ABS) but
++  // never emitted by moviAsm64 and rejected by its relocate() dispatch.
++  R_SHAVE_UNK211 = 211,
++  R_SHAVE_UNK212 = 212,
++  R_SHAVE_UNK213 = 213,
++  R_SHAVE_UNK214 = 214,
++};
++
++class SPARC32 final : public TargetInfo {
++public:
++  SPARC32();
++  RelExpr getRelExpr(RelType type, const Symbol &s,
++                     const uint8_t *loc) const override;
++  void relocate(uint8_t *loc, const Relocation &rel,
++                uint64_t val) const override;
++};
++} // namespace
++
++SPARC32::SPARC32() {
++  copyRel = R_SPARC_COPY;
++  gotRel = R_SPARC_GLOB_DAT;
++  pltRel = R_SPARC_JMP_SLOT;
++  relativeRel = R_SPARC_RELATIVE;
++  symbolicRel = R_SPARC_32;
++  // No dynamic linking for SHAVE kernels; PLT sizes only matter if a PLT is
++  // ever created (the vendor linker used 16-byte SHAVE PLT entries).
++  pltEntrySize = 16;
++  pltHeaderSize = 32;
++
++  defaultCommonPageSize = 8192;
++  defaultMaxPageSize = 0x100000;
++  defaultImageBase = 0x100000;
++}
++
++// Grouping below is the vendor's getRelExpr (moviLLD64 FUN_1802c61e0,
++// decompiled_all.c lines 540520-540770) reproduced case-for-case.
++RelExpr SPARC32::getRelExpr(RelType type, const Symbol &s,
++                            const uint8_t *loc) const {
++  switch (type) {
++  case R_SPARC_NONE:
++    return R_NONE;
++  case R_SPARC_DISP32:
++  case R_SPARC_WDISP30:
++  case R_SPARC_PC10:
++  case R_SPARC_PC22:
++  case R_SHAVE_PCREL14_AT2:
++  case R_SHAVE_PCREL14_AT6:
++  case R_SHAVE_PCREL16:
++  case R_SHAVE_PCREL16_AT4:
++    return R_PC;
++  case R_SPARC_GOT10:
++  case R_SPARC_GOT22:
++    return R_GOT_OFF;
++  case R_SPARC_WPLT30:
++    return R_PLT_PC;
++  case R_SPARC_TLS_LE_HIX22:
++  case R_SPARC_TLS_LE_LOX10:
++    return R_TPREL;
++  case R_SPARC_32:
++  case R_SPARC_HI22:
++  case R_SPARC_LO10:
++  case R_SPARC_UA32:
++  case R_SPARC_64:
++  case R_SPARC_HH22:   // 34
++  case R_SPARC_HM10:   // 35
++  case R_SPARC_LM22:   // 36
++  case R_SPARC_H44:    // 50
++  case R_SPARC_M44:    // 51
++  case R_SPARC_L44:    // 52
++  case R_SPARC_UA64:   // 54
++  case R_SHAVE_LO16:
++  case R_SHAVE_LO16_AT4:
++  case R_SHAVE_HI16:
++  case R_SHAVE_HI16_AT4:
++  case R_SHAVE_WINDOW_AT3:
++  case R_SHAVE_WINDOW_AT7:
++  case R_SHAVE_ABS32:
++  case R_SHAVE_UNK211:
++  case R_SHAVE_UNK212:
++  case R_SHAVE_UNK213:
++  case R_SHAVE_UNK214:
++    return R_ABS;
++  default:
++    error(getErrorLocation(loc) + "unknown relocation (" + Twine(type) +
++          ") against symbol " + toString(s));
++    return R_NONE;
++  }
++}
++
++void SPARC32::relocate(uint8_t *loc, const Relocation &rel,
++                       uint64_t val) const {
++  switch (rel.type) {
++  // ---- SHAVE processor-specific relocations (validated, see RELOC_NOTES) ----
++  case R_SHAVE_LO16:
++    // LE16 at r_offset |= (S+A) & 0xffff; moviAsm zeroes the field.
++    write16le(loc, read16le(loc) | uint16_t(val));
++    return;
++  case R_SHAVE_HI16:
++    // LE16 at r_offset |= (S+A) >> 16.
++    write16le(loc, read16le(loc) | uint16_t(val >> 16));
++    return;
++  case R_SHAVE_LO16_AT4:
++    write32le(loc, read32le(loc) | ((val << 4) & 0xffff0));
++    return;
++  case R_SHAVE_HI16_AT4:
++    write32le(loc, read32le(loc) | ((val >> 12) & 0xffff0));
++    return;
++  case R_SHAVE_ABS32:
++    // Plain little-endian 32-bit write; no range check in the vendor linker.
++    write32le(loc, val);
++    return;
++  case R_SHAVE_PCREL16: {
++    // 16-bit LE field at r_offset += (int16_t)(S+A-P); moviAsm pre-encodes
++    // (r_offset - instruction_start) into the field so that after the fixup
++    // the field equals (target - instruction_start).  Range: +/- 32 KiB.
++    if (!isInt<16>(val))
++      error(getErrorLocation(loc) +
++            "target symbol outside of the +/- 32K bytes range ");
++    write16le(loc, read16le(loc) + int16_t(val));
++    return;
++  }
++  case R_SHAVE_PCREL16_AT4: {
++    // 16-bit field at LE32 bits [19:4] += (S+A-P); range +/- 32 KiB.
++    if (!isInt<16>(val))
++      error(getErrorLocation(loc) +
++            "target symbol outside of the +/- 32K bytes range ");
++    uint32_t w = read32le(loc);
++    write32le(loc, (((w >> 4) + uint32_t(val)) * 16 & 0xffff0) |
++              (w & 0xfff0000f));
++    return;
++  }
++  case R_SHAVE_PCREL14_AT2: {
++    // 14-bit field at LE32 bits [15:2] += (S+A-P); range +/- 8 KiB.
++    if (!isInt<14>(val))
++      error(getErrorLocation(loc) +
++            "target symbol outside of the +/- 8K bytes range ");
++    uint32_t w = read32le(loc);
++    write32le(loc, (((w >> 2) + uint32_t(val)) * 4 & 0xfffc) |
++              (w & 0xffff0003));
++    return;
++  }
++  case R_SHAVE_PCREL14_AT6: {
++    // 14-bit field at LE32 bits [19:6] += (S+A-P); range +/- 8 KiB.
++    if (!isInt<14>(val))
++      error(getErrorLocation(loc) +
++            "target symbol outside of the +/- 8K bytes range ");
++    uint32_t w = read32le(loc);
++    write32le(loc, (((w >> 6) + uint32_t(val)) * 64 & 0xfffc0) |
++              (w & 0xfff0003f));
++    return;
++  }
++  case R_SHAVE_WINDOW_AT3: {
++    // Absolute address that must live in a SHAVE "window": bits 31:17 of the
++    // target restricted to a small set of segment bases.
++    uint64_t base = val & 0xfffffffffffe0000;
++    if (base != 0 && base != 0x00ff0000 && base != 0x1c000000 &&
++        base != 0x1d000000 && base != 0x1e000000 && base != 0x1f000000) {
++      error(getErrorLocation(loc) + "Invalid WINDOW target for 0x" +
++            Twine::utohexstr(val));
++      return;
++    }
++    uint32_t w = read32le(loc);
++    write32le(loc, (w & 0xfff00007) | ((uint32_t(val) << 3) & 0xffff8));
++    return;
++  }
++  case R_SHAVE_WINDOW_AT7: {
++    uint64_t base = val & 0xfffffffffffe0000;
++    if (base != 0 && base != 0x00ff0000 && base != 0x1c000000 &&
++        base != 0x1d000000 && base != 0x1e000000 && base != 0x1f000000) {
++      error(getErrorLocation(loc) + " relocation does overflow 0x" +
++            Twine::utohexstr(val));
++      return;
++    }
++    uint32_t w = read32le(loc);
++    write32le(loc, (w & 0xff00007f) | ((uint32_t(val) << 7) & 0xffff80));
++    return;
++  }
++
++  // ---- Standard SPARC relocations (SPARCV9 formulas; these are never
++  // ---- emitted by the MoviTools SHAVE toolchain, kept for robustness) ----
++  case R_SPARC_32:
++  case R_SPARC_UA32:
++    checkUInt(loc, val, 32, rel);
++    write32be(loc, val);
++    return;
++  case R_SPARC_DISP32:
++    checkInt(loc, val, 32, rel);
++    write32be(loc, val);
++    return;
++  case R_SPARC_WDISP30:
++  case R_SPARC_WPLT30:
++    checkInt(loc, val, 32, rel);
++    write32be(loc, (read32be(loc) & ~0x3fffffff) | ((val >> 2) & 0x3fffffff));
++    return;
++  case R_SPARC_22:
++    checkUInt(loc, val, 22, rel);
++    write32be(loc, (read32be(loc) & ~0x003fffff) | (val & 0x003fffff));
++    return;
++  case R_SPARC_GOT22:
++  case R_SPARC_PC22:
++  case R_SPARC_LM22:
++    write32be(loc, (read32be(loc) & ~0x003fffff) | ((val >> 10) & 0x003fffff));
++    return;
++  case R_SPARC_HI22:
++    checkUInt(loc, val >> 10, 22, rel);
++    write32be(loc, (read32be(loc) & ~0x003fffff) | ((val >> 10) & 0x003fffff));
++    return;
++  case R_SPARC_GOT10:
++  case R_SPARC_PC10:
++    write32be(loc, (read32be(loc) & ~0x000003ff) | (val & 0x000003ff));
++    return;
++  case R_SPARC_LO10:
++    write32be(loc, (read32be(loc) & ~0x00001fff) | (val & 0x000003ff));
++    return;
++  case R_SPARC_64:
++  case R_SPARC_UA64:
++    write64be(loc, val);
++    return;
++  case R_SPARC_HH22:
++    checkUInt(loc, val >> 42, 22, rel);
++    write32be(loc, (read32be(loc) & ~0x003fffff) | ((val >> 42) & 0x003fffff));
++    return;
++  case R_SPARC_HM10:
++    write32be(loc, (read32be(loc) & ~0x00001fff) | ((val >> 32) & 0x000003ff));
++    return;
++  case R_SPARC_H44:
++    checkUInt(loc, val >> 22, 22, rel);
++    write32be(loc, (read32be(loc) & ~0x003fffff) | ((val >> 22) & 0x003fffff));
++    return;
++  case R_SPARC_M44:
++    write32be(loc, (read32be(loc) & ~0x000003ff) | ((val >> 12) & 0x000003ff));
++    return;
++  case R_SPARC_L44:
++    write32be(loc, (read32be(loc) & ~0x00001fff) | (val & 0x00000fff));
++    return;
++  case R_SPARC_TLS_LE_HIX22:
++    write32be(loc, (read32be(loc) & ~0x003fffff) | ((~val >> 10) & 0x003fffff));
++    return;
++  case R_SPARC_TLS_LE_LOX10:
++    write32be(loc, (read32be(loc) & ~0x00001fff) | (val & 0x000003ff) | 0x1C00);
++    return;
++  default:
++    llvm_unreachable("unknown relocation");
++  }
++}
++
++TargetInfo *elf::getSPARC32TargetInfo() {
++  static SPARC32 target;
++  return &target;
++}
+diff -r /home/user/projects/llvm-14/lld/ELF/CMakeLists.txt /tmp/patchgen/lld/ELF/CMakeLists.txt
+--- a/lld/ELF/CMakeLists.txt	2026-09-27 12:42:45.233157126 -0500
++++ b/lld/ELF/CMakeLists.txt	2026-09-27 14:29:36.482837873 -0500
+@@ -19,6 +19,7 @@
+   Arch/PPC.cpp
+   Arch/PPC64.cpp
+   Arch/RISCV.cpp
++  Arch/SPARC32.cpp
+   Arch/SPARCV9.cpp
+   Arch/X86.cpp
+   Arch/X86_64.cpp
+diff -r /home/user/projects/llvm-14/lld/ELF/Driver.cpp /tmp/patchgen/lld/ELF/Driver.cpp
+--- a/lld/ELF/Driver.cpp	2026-09-27 12:42:45.234157143 -0500
++++ b/lld/ELF/Driver.cpp	2026-09-27 14:29:36.483778586 -0500
+@@ -160,6 +160,7 @@
+           .Cases("elf_amd64", "elf_x86_64", {ELF64LEKind, EM_X86_64})
+           .Case("elf_i386", {ELF32LEKind, EM_386})
+           .Case("elf_iamcu", {ELF32LEKind, EM_IAMCU})
++          .Case("elf32-sparc", {ELF32LEKind, EM_SPARC})
+           .Case("elf64_sparc", {ELF64BEKind, EM_SPARCV9})
+           .Case("msp430elf", {ELF32LEKind, EM_MSP430})
+           .Default({ELFNoneKind, EM_NONE});
+diff -r /home/user/projects/llvm-14/lld/ELF/ScriptParser.cpp /tmp/patchgen/lld/ELF/ScriptParser.cpp
+--- a/lld/ELF/ScriptParser.cpp	2026-09-27 12:42:45.237157193 -0500
++++ b/lld/ELF/ScriptParser.cpp	2026-09-27 14:29:36.484143569 -0500
+@@ -431,6 +431,7 @@
+       .Case("elf64-tradlittlemips", {ELF64LEKind, EM_MIPS})
+       .Case("elf32-littleriscv", {ELF32LEKind, EM_RISCV})
+       .Case("elf64-littleriscv", {ELF64LEKind, EM_RISCV})
++      .Case("elf32-sparc", {ELF32LEKind, EM_SPARC})
+       .Case("elf64-sparc", {ELF64BEKind, EM_SPARCV9})
+       .Case("elf32-msp430", {ELF32LEKind, EM_MSP430})
+       .Default({ELFNoneKind, EM_NONE});
+diff -r /home/user/projects/llvm-14/lld/ELF/SyntheticSections.cpp /tmp/patchgen/lld/ELF/SyntheticSections.cpp
+--- a/lld/ELF/SyntheticSections.cpp	2026-09-27 12:42:45.238157210 -0500
++++ b/lld/ELF/SyntheticSections.cpp	2026-09-27 14:29:36.484588022 -0500
+@@ -72,7 +72,12 @@
+   // This is only for testing.
+   StringRef s = getenv("LLD_VERSION");
+   if (s.empty())
+-    s = saver().save(Twine("Linker: ") + getLLDVersion());
++    // npunlock: emit a truthful banner.  This replaces the vendor
++    // moviLLD64 string "Linker: Movidius Linker (moviLLD) v3.0.9\n"
++    // "based on LLD 14.0.0" observed in the .comment section of
++    // MoviTools-linked SHAVE ELFs (see npunlock-work/lld-sparc/LAYOUT_SPEC.md).
++    s = saver().save(Twine("Linker: npunlock shave-lld v0.1.0\nbased on ") +
++                     getLLDVersion());
+ 
+   // +1 to include the terminating '\0'.
+   return {(const uint8_t *)s.data(), s.size() + 1};
+diff -r /home/user/projects/llvm-14/lld/ELF/Target.cpp /tmp/patchgen/lld/ELF/Target.cpp
+--- a/lld/ELF/Target.cpp	2026-09-27 12:42:45.239157226 -0500
++++ b/lld/ELF/Target.cpp	2026-09-27 14:29:36.483409117 -0500
+@@ -83,6 +83,8 @@
+     return getPPC64TargetInfo();
+   case EM_RISCV:
+     return getRISCVTargetInfo();
++  case EM_SPARC:
++    return getSPARC32TargetInfo();
+   case EM_SPARCV9:
+     return getSPARCV9TargetInfo();
+   case EM_X86_64:
+diff -r /home/user/projects/llvm-14/lld/ELF/Target.h /tmp/patchgen/lld/ELF/Target.h
+--- a/lld/ELF/Target.h	2026-09-27 12:42:45.239157226 -0500
++++ b/lld/ELF/Target.h	2026-09-27 14:29:36.483178214 -0500
+@@ -180,6 +180,7 @@
+ TargetInfo *getPPC64TargetInfo();
+ TargetInfo *getPPCTargetInfo();
+ TargetInfo *getRISCVTargetInfo();
++TargetInfo *getSPARC32TargetInfo();
+ TargetInfo *getSPARCV9TargetInfo();
+ TargetInfo *getX86TargetInfo();
+ TargetInfo *getX86_64TargetInfo();

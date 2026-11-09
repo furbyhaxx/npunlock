@@ -1,0 +1,35 @@
+Source: https://github.com/lallolapalooza/npunlock-work
+Commit: 8e58dd384847b6df613fea97112c44aed4bb6dfb (main snapshot)
+Imported: 2026-11-09 (Europe/Zurich)
+
+Imported files:
+- lld-sparc/lld-shave.patch -> lld-shave.patch, unchanged.
+  SHA-256: b70f3f4fecfdef6839f46de31346cbcfd9390d3243b8f41eba4e4a1ff80677f1
+- LICENSE -> LICENSE, unchanged (MIT, copyright lallolapalooza).
+- llvm/LICENSE.TXT from https://github.com/llvm/llvm-project at
+  329fda39c507e8740978d10458451dcdb21563be -> LICENSE-LLVM.
+  The patch's SPARC32.cpp carries Apache-2.0 WITH LLVM-exception notices.
+
+Trimming: only the linker patch and license notices are imported. No assembler,
+encoding tables, disassembler, legalizer, Ghidra extraction tools, pickle files,
+third-party npunlock fork, vendor payload, archives, objects or ELF fixtures are
+imported. The authored offline fixture in tests/fixtures/npu3720 is independent
+source, not a vendor output.
+
+Patch target: upstream llvmorg-14.0.0, peeled commit
+329fda39c507e8740978d10458451dcdb21563be. All seven patch hunks apply without
+fuzz. No third-party LLVM backend is required or imported.
+
+Audit boundaries:
+- The patch registers ELF32 little-endian EM_SPARC and relocations 200-210.
+- Static kernel links only. Dynamic SHAVE PLT emission is not implemented.
+- Processor-specific relocation names are local recovered names, not an official
+  ISA specification. Types 211-214 are accepted by getRelExpr but lack relocate
+  handlers; do not use them. Standard SPARC paths are not SHAVE validation.
+- Native assembler source inspected externally at the same pin uses only Python
+  stdlib imports; it does not accept moviCompile assembly unchanged. Its default
+  legalizer rewrites scheduling; --exact disables it. See wiki/NATIVE_TOOLCHAIN.md.
+- Encoding tables are reconstructed from proprietary binaries per upstream notes.
+  Their redistribution/legal status is not established by this engineering audit.
+
+Build and verification commands: wiki/NATIVE_TOOLCHAIN.md.
