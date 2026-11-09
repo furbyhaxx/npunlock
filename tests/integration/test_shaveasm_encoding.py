@@ -51,7 +51,7 @@ class EncodingTests(unittest.TestCase):
         self.assertEqual(encode("SAU.SHR.U32 i1 i2 i3"), bytes.fromhex("3c528401"))
         self.assertEqual(encode("SAU.SHR.U32 i31 i31 i31"), bytes.fromhex("3cf2ff0f"))
         for source in ("SAU.SHR.U32 i0 i0 i32", "SAU.SHR.U32 i0 i0 v1",
-                       "SAU.SHL.X32 i0 i0 i1"):
+                       "SAU.SHL.X32 i0 i0 i32"):
             with self.subTest(source=source), self.assertRaises(AssemblyError):
                 encode(source)
 
@@ -63,6 +63,13 @@ class EncodingTests(unittest.TestCase):
                        "IAU.SHL i0 i0 i32"):
             with self.subTest(source=source), self.assertRaises(AssemblyError):
                 encode(source)
+
+    def test_sau_register_left_shift_clears_the_immediate_selector(self) -> None:
+        self.assertEqual(encode("SAU.SHL.X32 i0 i0 i0"), bytes.fromhex("3c110000"))
+        self.assertEqual(encode("SAU.SHL.X32 i1 i2 i3"), bytes.fromhex("3c518401"))
+        self.assertEqual(encode("SAU.SHL.X32 i31 i31 i31"), bytes.fromhex("3cf1ff0f"))
+        with self.assertRaises(AssemblyError):
+            encode("SAU.SHL.X32 i0 i0 v1")
 
     def test_sau_integer_add_accepts_a_register_right_operand(self) -> None:
         self.assertEqual(encode("SAU.ADD.I32 i0 i0 i0"), bytes.fromhex("3c000000"))
