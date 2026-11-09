@@ -96,8 +96,10 @@ OpenVINO.
 
 The Linux preset builds `npunlock-inspect`, the experimental in-process
 `npunlock-linux-probe`, and their offline tests. It requires a C17 compiler and
-CMake 3.24 or newer. It does not build or invoke MoviTools, graph compilation,
-or the Windows worker. Ordinary CTest does not attempt NPU execution:
+CMake 3.24 or newer. It also builds an experimental `npunlock-ir-worker`
+using the same query, NGRAPH_LITE compilation, native export, and reload path
+as the Windows worker. It does not build MoviTools or the Windows runtime.
+Ordinary CTest does not attempt NPU execution:
 
 ```bash
 cmake --preset linux-inspect
@@ -107,15 +109,18 @@ ctest --preset linux-inspect
 ```
 
 The execution probe dynamically loads the system Level Zero loader only when
-explicitly invoked with a verified probe bundle. The full compiler, patch, and
-public execution runtime remains Windows-only. Read the
+explicitly invoked with a verified probe bundle. The public compiler, patch, and
+execution APIs remain Windows-only; the Linux compiler worker currently exposes
+only the private binary worker protocol (`ir --response-fd N`). Read the
 [staged Linux roadmap](PORTING.md#porting-utilities-and-staged-roadmap) before
 interpreting results as driver, firmware, instruction-set, or invocation-ABI
 compatibility.
 
 CTest also exercises the private POSIX worker-process transport without an NPU.
 The fixture checks the dedicated response channel, separate stdout/stderr
-capture, and process-group timeout cleanup. It does not invoke Level Zero.
+capture, and process-group timeout cleanup. A separate IR-worker test checks
+malformed-request rejection through that transport before loader discovery.
+Neither offline test invokes Level Zero.
 
 ## Opt-in integration tests
 

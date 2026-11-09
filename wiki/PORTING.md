@@ -451,9 +451,8 @@ python3 tools/porting_probe.py verify build/add1-probe
 This first bring-up path runs in-process and uses a finite fence wait. A driver
 call that never returns cannot be terminated independently. WSL testing has
 confirmed loader discovery and a clean `npu-not-found` result at device
-selection, but WSL has no NPU passthrough. Graph creation, execution, and the
-oracle therefore still require a real Linux NPU system before this milestone
-can be considered hardware-validated.
+selection, but WSL has no NPU passthrough. The 2026-11-09 Arrow Lake/Linux spike subsequently passed all stages,
+including the exact oracle, with the retained `add1-shared-1x16.blob` fixture.
 
 ### Milestone 4: POSIX compiler-worker isolation
 
@@ -470,17 +469,33 @@ shared allocations.
 
 ### Milestone 5: Linux graph compilation
 
-Port the Level Zero `NGRAPH_LITE` graph-compilation path and record the compiler
-extension/version, device identity, build flags, and native-blob hash. Compare
-Linux- and Windows-produced blobs structurally, but do not require them to be
-byte-identical.
+The experimental `npunlock-ir-worker` now reuses the Windows worker's Level
+Zero query, `NGRAPH_LITE` packaging, compilation, native export, and reload
+path with a POSIX loader and descriptor-based I/O. Its private protocol uses
+`ir --response-fd N` and can be launched through the bounded POSIX transport.
+There is no Linux public `ir2blob` API yet.
+
+A Linux Arrow Lake spike on 2026-11-09 (PCI `8086:ad1d`, driver 1.38.0,
+compiler package 2026.38, graph extension 1.18) compiled FP16 and FP32 Abs
+carriers. The driver reported compiler 8.3; the produced blobs passed the
+existing NPU3720/loader-ELF 1.2.0/mapped-inference 7.0.4 checks without relaxing
+validation. ACT discovery found one group with four invocations in each
+carrier. This is evidence for that stack and those static graphs only.
 
 ### Deferred: MoviTools invocation on Linux
 
 MoviTools remains a Windows PE/DLL toolchain and is not part of the native
 Linux port. Initially compile SHAVE ELF files on Windows and transfer them. A
-future Wine-hosted worker is a separate experiment and must not be presented as
-native Linux support until validated.
+Wine-hosted worker is a separate experiment rather than native MoviTools
+support. The 2026-11-09 Arrow Lake spike cross-built the existing Windows
+runtime and worker with MinGW and ran `shavecc` and `patchblob` under Wine
+11.21 using the hash-verified Lenovo payload. Native Linux compilation and
+execution around those Wine-hosted stages passed FP32 GELU (1x2048, maximum
+absolute error 2.3841858e-07 against NumPy) and FP16 add-one (1x16, exact).
+The GELU carrier used both `EXECUTION_MODE_HINT="ACCURACY"` and the serializer's
+`DisablePrecisionConversion` runtime metadata; graph FP32 I/O alone does not
+prove an FP32 ACT contract. This remains a manual spike, not an integrated
+Linux Python runtime.
 
 ## Linux with NPU3720
 
@@ -490,19 +505,25 @@ and the final graph binary is consumed by the device firmware rather than by
 the Windows CPU. The custom kernel itself therefore has no Windows API or host
 CRT dependency.
 
-This has not been tested. Native graph blobs may still be sensitive to the
+The 2026-11-09 Arrow Lake spike also executed the retained Windows-generated
+`add1-shared-1x16.blob` with the exact probe-bundle oracle on Linux; all stages
+passed. Native graph blobs may still be sensitive to the
 driver, graph-compiler, or firmware version, and a Linux driver may reject a
 blob produced by a different software stack. Successful loading is also not a
 correctness result; output must be checked against a host oracle.
 
-The current host tooling is Windows-only. There are two separable Linux tasks:
+The public runtime is Windows-only; Linux inspection, execution probes, and
+the experimental compiler worker are available. There are two separable Linux
+tasks:
 
 - **Run an existing patched blob.** Use the Linux Level Zero graph loader and
   in-process execution probe, then test a blob produced and patched on Windows.
 - **Build the kernel on Linux.** The available MoviTools components are Windows
   DLLs. A Linux port would need a reliable way to load those PE DLLs, such as a
   suitable compatibility environment, or compile the SHAVE ELF on a Windows
-  machine and transfer that artifact. Neither route has been validated here.
+  machine and transfer that artifact. The narrow Wine-hosted route above has
+  been validated; native Linux MoviTools and an integrated Linux build API have
+  not.
 
 An initial Linux/NPU3720 experiment should keep every other variable fixed:
 
