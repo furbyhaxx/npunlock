@@ -47,6 +47,8 @@ def generate_packets(seed: int, count: int) -> list[str]:
             return f"{mnemonic} {registers[0]} {registers[1]}"
         if unit in ("LSU0", "LSU1"):
             return f"{unit}.LDIL {registers[0]} {rng.randrange(65536)}"
+        if unit == "SAU.AND20":
+            return f"SAU.AND {registers[0]} {registers[1]} {registers[2]}"
         if unit == "SAU":
             if rng.randrange(2):
                 return f"SAU.ADD.F32 {registers[0]} {registers[1]} {registers[2]}"
@@ -117,7 +119,7 @@ def generate_packets(seed: int, count: int) -> list[str]:
             for mnemonic in ("CMU.CMII.I32", "CMU.CMII.U32"):
                 packets.append("\n || ".join(f"{mnemonic} i0 i1" if unit == "CMU"
                                               else operation(unit) for unit in shape))
-    for mnemonic in ("IAU.AND", "IAU.OR", "IAU.LMULL", "IAU.LMULH", "SAU.ADD.F32"):
+    for mnemonic in ("IAU.AND", "IAU.OR", "IAU.LMULL", "IAU.LMULH", "SAU.ADD.F32", "SAU.AND"):
         for position in range(3):
             for register in range(32):
                 operands = ["i0"] * 3

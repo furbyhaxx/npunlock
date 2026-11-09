@@ -683,6 +683,16 @@ sweeps and 259 existing IAU header shapes match moviAsm. Both seeds pass
 objects remain **0/55**. Diagnostic instruction rejections fall to 2662;
 first rejections are SAU.AND (40 files), CMPI (8), and STO.64 (7).
 
+### Scalar SAU bitwise AND
+
+`SAU.AND dst left right` has a 20-bit payload `0x18 | dst<<10 | left<<5 |
+right<<15` and a distinct `SAU.AND20` header class. All 323 measured header
+combinations and 96 independent register sweeps match moviAsm. Both seeds
+pass **14502/14502** packet cases and 56 offline tests pass. Coverage is
+**9626/11912** packets (30 accepted mnemonics, 1210 prefix shapes); exact
+objects remain **0/55**. Diagnostic instruction rejections fall to 2544;
+first rejections are SAU.MUL.I32 (40 files), CMPI (8), and STO.64 (7).
+
 ### Differential gates and corpus inventory
 
 Cached assembly can be inventoried without Wine or recompilation:
