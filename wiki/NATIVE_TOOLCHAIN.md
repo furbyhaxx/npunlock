@@ -876,6 +876,15 @@ cases and 71 offline tests pass. Coverage is **10679/11912** packets, with
 rejections. Register SHL removes eight files' previous first rejection;
 those files still contain other unsupported forms.
 
+### Scalar floating-point subtraction
+
+`SAU.SUB.F32 dst left right` uses the existing 24-bit SAU class and payload
+`0x200002 | dst<<10 | left<<5 | right<<15`. All 379 SAU header shapes and
+96 independent register sweeps match moviAsm. Both seeds pass **26858/26858**
+cases and 72 offline tests pass. Coverage is **10700/11912** packets, with
+**8/55 exact objects**, zero different objects, and 1386 diagnostic instruction
+rejections. Float immediates remain unsupported.
+
 ### Differential gates and corpus inventory
 
 Cached assembly can be inventoried without Wine or recompilation:
@@ -894,9 +903,9 @@ command. The combined baseline is 3291/11912 accepted packets and **98** distinc
 mnemonics (97 in the literal corpus alone). With symbolic branches, signed
 loads/stores, indirect loads, integer addition, comparisons, PCCX, AND/OR,
 LMULL, INCS, scalar floating-point addition and immediate SHL, coverage is
-**10679/11912** packets, including 979 requiring symbolic fixups, after the
+**10700/11912** packets, including 979 requiring symbolic fixups, after the
 additional measured forms documented above.
-Forty-one distinct mnemonics occur in accepted packets (six at baseline); the
+Forty-two distinct mnemonics occur in accepted packets (six at baseline); the
 corpus still has 98 mnemonics.
 `accepted_packets` counts bytes-plus-fixups support and `relocatable_packets`
 identifies that subset. Coverage tests isolated packet forms; it does not
@@ -915,8 +924,8 @@ python3 -m tools.shaveasm.corpus --native-dir build/linux \
   --output /mnt/cache/build-shave/native-asm-corpus
 ```
 
-Offline regressions: 71 passed, including the merged object-writer/corpus tests.
-Each current randomized gate passes **26383/26383 cases**. Before the eight
+Offline regressions: 72 passed, including the merged object-writer/corpus tests.
+Each current randomized gate passes **26858/26858 cases**. Before the eight
 additional forms documented above, the gate passed **12156/12156 cases**
 (seeds 3720 and 9001): the original 2362 isolated-packet cases (1000 random
 packets, 457 shapes, 352 mixed operand sweeps, 96 ADD sweeps, 384 PCCX pairs,
@@ -947,8 +956,8 @@ in the real compiler corpus.
 Original C, compiler `.s`, vendor `.o` and JSON manifests stay under the cache
 paths above. `elf.py` provides bounded ELF32 section inspection and a comparator
 which reports every section-attribute or byte difference while ignoring only
-file offsets. Whole-object native parity now reaches **7/55** exact cached
-objects; 48 still reject unmeasured instructions. See the object-writer
+file offsets. Whole-object native parity now reaches **8/55** exact cached
+objects; 47 still reject unmeasured instructions. See the object-writer
 section below.
 
 The captured corpus has **55 distinct complete kernel sources**: 39 literal
@@ -970,7 +979,7 @@ The parser structurally accepted all 55 captured assemblies. The literal
 corpus contains 97 distinct mnemonics. Only **3291/11912** parsed packets are
 accepted by the original byte-only encoder across the two corpora; the symbolic
 branch, scalar-load/store, ADD, compare, PCCX, AND/OR, LMULL, INCS and SHL extensions raise
-bytes-plus-fixups support to **10679/11912** with the additional measured forms
+bytes-plus-fixups support to **10700/11912** with the additional measured forms
 above. These are
 syntactic coverage counts, **not** full-stream or whole-object parity claims.
 Calls, other branch forms, additional instruction/header classes, data and

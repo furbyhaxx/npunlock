@@ -64,6 +64,14 @@ class EncodingTests(unittest.TestCase):
             with self.subTest(source=source), self.assertRaises(AssemblyError):
                 encode(source)
 
+    def test_scalar_float_subtraction_uses_the_sau_class(self) -> None:
+        self.assertEqual(encode("SAU.SUB.F32 i0 i0 i0"), bytes.fromhex("3c020020"))
+        self.assertEqual(encode("SAU.SUB.F32 i1 i2 i3"), bytes.fromhex("3c428421"))
+        self.assertEqual(encode("SAU.SUB.F32 i31 i31 i31"), bytes.fromhex("3ce2ff2f"))
+        for source in ("SAU.SUB.F32 i0 i0 1.0", "SAU.SUB.F32 i32 i0 i0"):
+            with self.subTest(source=source), self.assertRaises(AssemblyError):
+                encode(source)
+
     def test_register_left_shift_clears_the_immediate_selector(self) -> None:
         self.assertEqual(encode("IAU.SHL i0 i0 i0"), bytes.fromhex("c60c0000"))
         self.assertEqual(encode("IAU.SHL i1 i2 i3"), bytes.fromhex("c64c8401"))
