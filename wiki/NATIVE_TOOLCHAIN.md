@@ -271,6 +271,30 @@ reported conflicting writes despite being in different sections. Each generated
 case now has a separate preceding `NOP 16` padding section. This makes cases
 independent without disabling the vendor analyzer or changing tested packets.
 
+### Scalar integer subtraction
+
+Separate `i0..i31` sweeps of all three registers, eight immediate bits and
+unsigned boundaries establish:
+
+| Form | Payload bits | Payload expression | Standalone prefix |
+| --- | ---: | --- | --- |
+| `IAU.SUB d l r` | 24 | `1 + (d<<10) + (l<<5) + (r<<15)` | `0xc6` |
+| `IAU.SUB d l imm8` | 24 | `0x800001 + (d<<10) + (l<<5) + (imm8<<15)` | `0xc6` |
+
+Immediate values are unsigned **0..255**; moviAsm rejects -1 and 256. Both
+forms matched every one of the **241** current `IAU.ADD24` header shapes,
+including register jumps and symbolic branches. The gate selects SUB among
+24-bit IAU forms and adds 482 explicit header cases, 96 register-field cases
+and ten immediate-bit/boundary cases.
+
+The diagnostic whole-corpus gate after SUB remains **0/55 exact**, with all
+55 files rejecting instruction forms. Report:
+`/mnt/cache/build-shave/corpus-parity-sub/summary.md`. Updated unsupported-form
+ranking starts CMU.CP.32 symbol (148), SAU.MUL.F32 (145), IAU.SHR.U32 immediate
+(139), SAU.AND (118), SAU.SHR.U32 immediate (113), LSU1.ST.32 (98) and
+CMU.CMII.F32 (96). Whole-file blockers should be checked in that report before
+choosing the next form; packet counts alone do not establish object parity.
+
 ### Scalar register jump
 
 An independent `i0..i31` sweep establishes:
@@ -655,8 +679,8 @@ command. The combined baseline is 3291/11912 accepted packets and **98** distinc
 mnemonics (97 in the literal corpus alone). With symbolic branches, signed
 loads/stores, indirect loads, integer addition, comparisons, PCCX, AND/OR,
 LMULL, INCS, scalar floating-point addition and immediate SHL, coverage is
-**9257/11912** packets, including 872 requiring symbolic fixups.
-Twenty-six distinct mnemonics occur in accepted packets (six at baseline); the
+**9325/11912** packets, including 878 requiring symbolic fixups.
+Twenty-seven distinct mnemonics occur in accepted packets (six at baseline); the
 corpus still has 98 mnemonics.
 `accepted_packets` counts bytes-plus-fixups support and `relocatable_packets`
 identifies that subset. Coverage tests isolated packet forms; it does not
@@ -675,8 +699,8 @@ python3 -m tools.shaveasm.corpus --native-dir build/linux \
   --output /mnt/cache/build-shave/native-asm-corpus
 ```
 
-Offline regressions: 55 passed, including the merged object-writer/corpus tests.
-Each randomized gate passed **11568/11568 cases**
+Offline regressions: 56 passed, including the merged object-writer/corpus tests.
+Each randomized gate passed **12156/12156 cases**
 (seeds 3720 and 9001): the original 2362 isolated-packet cases (1000 random
 packets, 457 shapes, 352 mixed operand sweeps, 96 ADD sweeps, 384 PCCX pairs,
 eight immediate boundaries and 65 NOP cases), plus 64 counted-NOP branch
@@ -696,7 +720,8 @@ LSU1.LDO.32 adds 150 header cases, 64 register cases and 33 signed immediate cas
 LSU0.LDIH adds 362 immediate/symbol header cases, 64 register cases and 18 immediate cases.
 JMP adds 280 header shapes, 32 register cases and the same 2232 delay-window
 sequences as BRA; the expanded headers also repeat existing alternative forms.
-The current total is 887 prefix shapes.
+SUB adds 482 register/immediate header cases, 96 register-field cases and ten
+immediate-bit/boundary cases. The current total is 887 prefix shapes.
 Every case's full instruction bytes and fixups are compared to moviAsm, not
 merely round-tripped through native code. All measured instruction forms occur
 in the real compiler corpus.
@@ -727,7 +752,7 @@ The parser structurally accepted all 55 captured assemblies. The literal
 corpus contains 97 distinct mnemonics. Only **3291/11912** parsed packets are
 accepted by the original byte-only encoder across the two corpora; the symbolic
 branch, scalar-load/store, ADD, compare, PCCX, AND/OR, LMULL, INCS and SHL extensions raise
-bytes-plus-fixups support to **9257/11912**. These are
+bytes-plus-fixups support to **9325/11912**. These are
 syntactic coverage counts, **not** full-stream or whole-object parity claims.
 Calls, other branch forms, additional instruction/header classes, data and
 alignment directives, ELF symbols and relocations remain the next gate. Hybrid

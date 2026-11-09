@@ -57,7 +57,8 @@ def generate_packets(seed: int, count: int) -> list[str]:
             if rng.randrange(3) == 0:
                 return f"IAU.SHL {registers[0]} {registers[1]} {rng.randrange(32)}"
             right = registers[2] if rng.randrange(2) else str(rng.randrange(256))
-            return f"IAU.ADD {registers[0]} {registers[1]} {right}"
+            mnemonic = rng.choice(("IAU.ADD", "IAU.SUB"))
+            return f"{mnemonic} {registers[0]} {registers[1]} {right}"
         if unit == "IAU":
             mnemonic = rng.choice(("IAU.XOR", "IAU.AND", "IAU.OR", "IAU.LMULL"))
             return f"{mnemonic} {registers[0]} {registers[1]} {registers[2]}"
@@ -107,6 +108,9 @@ def generate_packets(seed: int, count: int) -> list[str]:
                                           else operation(unit, store_packet=store_packet) for unit in shape))
             packets.append("\n || ".join("IAU.INCS i16 -2345" if unit == "IAU.ADD24"
                                           else operation(unit, store_packet=store_packet) for unit in shape))
+            for right in ("i18", "255"):
+                packets.append("\n || ".join(f"IAU.SUB i16 i17 {right}" if unit == "IAU.ADD24"
+                                              else operation(unit, store_packet=store_packet) for unit in shape))
         if "CMU" in shape and not store_packet:
             for mnemonic in ("CMU.CMII.I32", "CMU.CMII.U32"):
                 packets.append("\n || ".join(f"{mnemonic} i0 i1" if unit == "CMU"
@@ -152,6 +156,12 @@ def generate_packets(seed: int, count: int) -> list[str]:
     packets.extend(f"LSU0.LDIH i{r} {immediate}" for r in range(32)
                    for immediate in ("0", "external_target"))
     packets.extend(f"LSU0.LDIH i0 {value}" for value in (0, 65535, *(1 << bit for bit in range(16))))
+    for position in range(3):
+        for register in range(32):
+            operands = ["i0"] * 3
+            operands[position] = f"i{register}"
+            packets.append("IAU.SUB " + " ".join(operands))
+    packets.extend(f"IAU.SUB i0 i0 {value}" for value in (0, 255, *(1 << bit for bit in range(8))))
     packets.extend(f"IAU.INCS i{r} 0" for r in range(32))
     packets.extend(f"IAU.INCS i0 {value}" for value in
                    (0, -1, 8191, -8192, *(1 << bit for bit in range(13)),

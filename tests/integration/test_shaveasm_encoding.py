@@ -40,6 +40,15 @@ class EncodingTests(unittest.TestCase):
         with self.assertRaisesRegex(AssemblyError, "read port 6"):
             encode("CMU.CMII.U32 i1 i2 || LSU1.STO.32 i8 i9 0")
 
+    def test_subtraction_has_register_and_unsigned_immediate_forms(self) -> None:
+        self.assertEqual(encode("IAU.SUB i0 i0 i0"), bytes.fromhex("c6010000"))
+        self.assertEqual(encode("IAU.SUB i31 i31 i31"), bytes.fromhex("c6e1ff0f"))
+        self.assertEqual(encode("IAU.SUB i0 i0 1"), bytes.fromhex("c6018080"))
+        self.assertEqual(encode("IAU.SUB i31 i31 255"), bytes.fromhex("c6e1ffff"))
+        for source in ("IAU.SUB i0 i0 -1", "IAU.SUB i0 i0 256", "IAU.SUB i32 i0 i0"):
+            with self.subTest(source=source), self.assertRaises(AssemblyError):
+                encode(source)
+
     def test_register_jump_has_a_sixteen_bit_payload_and_delay_span(self) -> None:
         self.assertEqual(encode("BRU.JMP i0"), bytes.fromhex("470100"))
         self.assertEqual(encode("BRU.JMP i31"), bytes.fromhex("47f900"))

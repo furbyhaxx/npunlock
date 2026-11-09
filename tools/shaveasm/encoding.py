@@ -992,7 +992,7 @@ def _operation(instruction: Instruction) -> _Operation:
         immediate = _immediate(operands[2], 5, line)
         return _Operation(unit, 0x80000C | destination << 10 | source << 5 | immediate << 15, 24,
                           prefix_class="IAU.ADD24")
-    if mnemonic == "IAU.ADD" and len(operands) == 3:
+    if mnemonic in ("IAU.ADD", "IAU.SUB") and len(operands) == 3:
         destination, left = (_register(op, line) for op in operands[:2])
         if re.fullmatch(r"[iI][0-9]+", operands[2]):
             right = _register(operands[2], line)
@@ -1000,7 +1000,8 @@ def _operation(instruction: Instruction) -> _Operation:
         else:
             right = _immediate(operands[2], 8, line)
             selector = 1 << 23
-        return _Operation(unit, selector | destination << 10 | left << 5 | right << 15, 24,
+        opcode = 1 if mnemonic == "IAU.SUB" else 0
+        return _Operation(unit, opcode | selector | destination << 10 | left << 5 | right << 15, 24,
                           prefix_class="IAU.ADD24")
     if mnemonic in ("IAU.XOR", "IAU.AND", "IAU.OR", "IAU.LMULL") and len(operands) == 3:
         destination, left, right = (_register(op, line) for op in operands)
