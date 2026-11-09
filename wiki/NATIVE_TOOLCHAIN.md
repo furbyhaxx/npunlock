@@ -727,6 +727,16 @@ rejections are SAU.SHR.U32 (40 files), CMPI (8), and STO.64 (7).
 **0/55** exact objects and 2279 diagnostic instruction rejections. First
 rejections are IAU.ADDCI (40 files), CMPI (8), and STO.64 (7).
 
+### Scalar addition with carry
+
+`IAU.ADDCI dst left right` uses the 20-bit IAU class and payload
+`0x06 | dst<<10 | left<<5 | right<<15`. All 343 current IAU header shapes
+and 96 independent register sweeps match moviAsm; immediate operands remain
+unsupported. Both seeds pass **16198/16198** packet cases and 59 offline
+tests pass. Coverage is **9943/11912** packets (34 accepted mnemonics,
+1210 prefix shapes), with **0/55** exact objects and 2223 diagnostic
+instruction rejections. CMPI is now the most common first rejection (9 files).
+
 ### Differential gates and corpus inventory
 
 Cached assembly can be inventoried without Wine or recompilation:

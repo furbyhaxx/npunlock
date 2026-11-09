@@ -65,7 +65,7 @@ def generate_packets(seed: int, count: int) -> list[str]:
             mnemonic = rng.choice(("IAU.ADD", "IAU.SUB"))
             return f"{mnemonic} {registers[0]} {registers[1]} {right}"
         if unit == "IAU":
-            mnemonic = rng.choice(("IAU.XOR", "IAU.AND", "IAU.OR", "IAU.LMULL", "IAU.LMULH"))
+            mnemonic = rng.choice(("IAU.XOR", "IAU.AND", "IAU.OR", "IAU.LMULL", "IAU.LMULH", "IAU.ADDCI"))
             return f"{mnemonic} {registers[0]} {registers[1]} {registers[2]}"
         condition = rng.choice(("EQ", "NEQ", "LT", "LTE", "GT", "GTE"))
         if unit == "PEU.PCCX12":
@@ -107,7 +107,7 @@ def generate_packets(seed: int, count: int) -> list[str]:
                 packets.append("\n || ".join(f"{mnemonic} i4 i5" if unit == "LSU0"
                                               else operation(unit, store_packet=store_packet) for unit in shape))
         if "IAU" in shape:
-            for mnemonic in ("IAU.AND", "IAU.OR", "IAU.LMULL", "IAU.LMULH"):
+            for mnemonic in ("IAU.AND", "IAU.OR", "IAU.LMULL", "IAU.LMULH", "IAU.ADDCI"):
                 packets.append("\n || ".join(f"{mnemonic} i16 i17 i18" if unit == "IAU"
                                               else operation(unit, store_packet=store_packet) for unit in shape))
         if "IAU.ADD24" in shape:
@@ -123,7 +123,8 @@ def generate_packets(seed: int, count: int) -> list[str]:
             for mnemonic in ("CMU.CMII.I32", "CMU.CMII.U32"):
                 packets.append("\n || ".join(f"{mnemonic} i0 i1" if unit == "CMU"
                                               else operation(unit) for unit in shape))
-    for mnemonic in ("IAU.AND", "IAU.OR", "IAU.LMULL", "IAU.LMULH", "SAU.ADD.F32", "SAU.MUL.I32", "SAU.AND"):
+    for mnemonic in ("IAU.AND", "IAU.OR", "IAU.LMULL", "IAU.LMULH", "IAU.ADDCI",
+                     "SAU.ADD.F32", "SAU.MUL.I32", "SAU.AND"):
         for position in range(3):
             for register in range(32):
                 operands = ["i0"] * 3
