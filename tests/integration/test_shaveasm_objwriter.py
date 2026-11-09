@@ -6,13 +6,10 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import patch
 
-from tools.shaveasm import encoding
 from tools.shaveasm.elf import Elf32
-from tools.shaveasm.fixups import Fixup
 from tools.shaveasm.objwriter import assemble
-from tools.shaveasm.parser import AssemblyError, Packet
+from tools.shaveasm.parser import AssemblyError
 
 ROOT = Path(__file__).resolve().parents[2]
 FIXTURES = ROOT / "tests/fixtures/npu3720"
@@ -72,18 +69,34 @@ class ObjectWriterTests(unittest.TestCase):
         relas = list(struct.iter_unpack("<IIi", image.section(".rela.rodata4.ptrs").data))
         self.assertEqual(relas, [(0, 3 << 8 | 208, 4), (4, 5 << 8 | 208, 0), (8, 7 << 8 | 208, 0)])
 
-    def test_packet_fixups_and_unmeasured_branch_follow_on(self) -> None:
-        def encode(packet: Packet) -> tuple[bytes, tuple[Fixup, ...]]:
-            if packet.operations[0].mnemonic == "BRU.BRA":
-                return b"\xc7\x01\x00\x00", (Fixup(".Ltarget", 0, 8, 16, "R_SHAVE_PCREL16"),)
-            return encoding.encode_packet(packet), ()
+    def test_branch_fixups_include_the_following_issue_slots(self) -> None:
+        image = Elf32.parse(assemble((FIXTURES / "shaveasm-object-branch.s").read_text()))
+        self.assertEqual(image.section(".text.branch").data[:4], b"\xc7\x01\x00\x06")
+        self.assertEqual(image.section(".text.mixed").data[:8], bytes.fromhex("ae38d29443001000"))
+        branch_relas = list(struct.iter_unpack("<IIi", image.section(".rela.text.branch").data))
+        mixed_relas = list(struct.iter_unpack("<IIi", image.section(".rela.text.mixed").data))
+        self.assertEqual(branch_relas, [(1, 1 << 8 | 209, 10)])
+        self.assertEqual(mixed_relas, [(4, 2 << 8 | 210, 9)])
 
-        with patch.object(encoding, "encode_packet_with_fixups", encode, create=True):
-            image = Elf32.parse(assemble(".code .text.x\nBRU.BRA .Ltarget\n.Ltarget:\n"))
-            relas = list(struct.iter_unpack("<IIi", image.section(".rela.text.x").data))
-            self.assertEqual(relas, [(1, 1 << 8 | 209, 4)])
-            with self.assertRaisesRegex(AssemblyError, r"line 3.*branch at line 2"):
-                assemble(".code .text.x\nBRU.BRA .Ltarget\nNOP 6\n.Ltarget:\n")
+    def test_data_and_alignment_in_branch_delay_window_fail_closed(self) -> None:
+        for directive in (".align 1", ".byte 0", ".fill 0"):
+            source = f".code .text.x\nBRU.BRA .Ltarget\nNOP 4\n{directive}\nNOP 2\n.Ltarget:\n"
+            with self.subTest(directive=directive), self.assertRaisesRegex(AssemblyError, r"line 4.*branch.*line 2"):
+                assemble(source)
+        image = Elf32.parse(assemble(".code .text.x\nBRU.BRA .Ltarget\nNOP 6\n.align 4\n.Ltarget:\n"))
+        self.assertEqual(image.section(".text.x").data[:4], b"\xc7\x01\x00\x01")
+
+    def test_branch_suffix_stops_at_section_switch(self) -> None:
+        image = Elf32.parse(assemble((FIXTURES / "shaveasm-object-switch.s").read_text()))
+        self.assertEqual(image.section(".text.x").data[:4], b"\xc7\x01\x00\x00")
+        self.assertEqual(image.section(".text.z").data[:4], b"\xc7\x01\x00\x01")
+        repeated = ".code x\nBRU.BRA target\n.code x\nNOP 6\n"
+        self.assertEqual(Elf32.parse(assemble(repeated)).section("x").data[:4], b"\xc7\x01\x00\x00")
+
+    def test_branch_in_delay_window_reports_source_line(self) -> None:
+        source = ".code x\nBRU.BRA first\nBRU.BRA second\nNOP 6\n"
+        with self.assertRaisesRegex(AssemblyError, r"line 2.*control transfer"):
+            assemble(source)
 
     def test_fill_defaults_truncation_and_width_limit(self) -> None:
         source = ".data d\n.fill 3\n.fill 2,2\n.fill 2,3,0x123456\n.fill 1,9,0x12345678\n"
@@ -104,6 +117,8 @@ class ObjectWriterTests(unittest.TestCase):
             ".data stuff\n.byte 256\n",
             ".data stuff\n.unknown 1\n",
             ".data stuff\n.long left-right\n",
+            '.data stuff\n.ascii "unterminated',
+            ".data stuff\n/* unterminated",
         ]:
             with self.subTest(source=source), self.assertRaisesRegex(AssemblyError, r"line 2"):
                 assemble(source)
@@ -119,6 +134,11 @@ class ObjectWriterTests(unittest.TestCase):
             self.assertEqual(Elf32.parse(output.read_bytes()).section(".text.test").data, b"\x07")
             output.write_bytes(b"unchanged")
             source.write_text(".code .text.test\nINVALID\n")
+            result = subprocess.run(command, cwd=ROOT, capture_output=True, text=True, check=False)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("line 2", result.stderr)
+            self.assertEqual(output.read_bytes(), b"unchanged")
+            source.write_text('.code .text.test\n.ascii "unfinished')
             result = subprocess.run(command, cwd=ROOT, capture_output=True, text=True, check=False)
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("line 2", result.stderr)

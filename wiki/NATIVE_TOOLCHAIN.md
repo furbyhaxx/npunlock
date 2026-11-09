@@ -511,3 +511,61 @@ alignment directives, ELF symbols and relocations remain the next gate. Hybrid
 worker/config/cache integration and new-mode doctor/NPU acceptance must wait
 for whole-corpus object parity. The existing default and prior linker-only
 hardware evidence are unchanged; no branch push is justified yet.
+
+## Native object writer
+
+`tools/shaveasm/asm.py` assembles the measured packet subset and supported
+vendor directives into relocatable objects. This section supersedes the earlier
+pre-writer statement that no object writer or fixture parity exists; it does not
+claim complete compiler-corpus compatibility or a selectable native mode.
+
+```sh
+python3 -m tools.shaveasm.asm input.s -o output.o
+PYTHONPATH=. python3 tests/integration/shaveasm_object_parity.py \
+  --native-dir build/linux --movitools-dir "$NPUNLOCK_MOVITOOLS_DIR"
+```
+
+The writer emits little-endian ELF32, `ET_REL`, `EM_SPARC`, with zero entry and
+flags. Content sections appear in first-use order, followed by `.symtab`,
+`.strtab`, one `.rela<target-name>` for each relocated section, and `.shstrtab`.
+Observed file bodies and section headers are contiguous: section alignment is
+recorded in headers without inserting file-offset padding. The symbol and string
+tables have alignment 8; relocation sections use alignment 4 and 12-byte RELA
+entries. Their link and info fields identify the symbol table and target section.
+The measured objects use explicit-addend RELA; the writer does not emit REL.
+
+Named `.code` sections start executable and aligned to 1; named `.data`
+sections are writable/allocated and initially aligned to 0. Explicit
+`.section` flags and progbits/nobits are supported with initial alignment 0.
+`.align` inserts zero fill and raises the section alignment; moviAsm instead
+resets the section alignment to 1 on `.ascii`. `.byte`, `.short`, `.word`,
+`.long`, `.float`, `.ascii`, and `.fill` use the observed little-endian layout.
+`.fill` defaults to size 1 and value 0; its width is capped at 8, with at most
+four value bytes and zero extension. Negative `.fill` operands are rejected.
+The writer limits alignment to 1 MiB and each section to 64 MiB.
+
+In `.strtab`, explicit `.local`/`.global` names precede implicit names in
+reverse lexical order. Section symbols and local `.I` symbols precede globals;
+`.I` is removed from emitted local symbol names. Temporary `.L` references use
+the defining section symbol and include the label offset in the relocation
+addend. Other references use their named symbol. Integer data references use `R_SHAVE_ABS32`
+(208); instruction fixups retain the packet encoder's relocation type, field
+byte offset and addend. No instruction fixup type beyond the exercised
+`R_SHAVE_PCREL16`/`R_SHAVE_PCREL16_AT4` (209/210) is claimed as verified here.
+
+Branch encoding receives the following packets in its current code-section run.
+A `.code` switch ends that run, including a repeated `.code` of the same name;
+repeating `.section` for the current section does not. Data and alignment
+inside the next six branch issue slots, or another control transfer there, fail
+closed because their delay encoding is unmeasured. Unsupported directives,
+expressions, packet classes and instructions also fail rather than being
+silently skipped.
+
+The seven independently authored `shaveasm-object-*.s` fixtures cover the six
+original scalar forms, NOP, named and temporary local labels, global and
+undefined symbols, data and fill, section flags and alignment, absolute data
+relocations, branch relocations at byte and half-byte offsets, counted delay
+slots and section switches. On 2026-11-09 the command above compared every
+fixture to moviAsm: `compare_sections` reported zero differences and the complete
+objects were byte-identical. The test writes no vendor object to the repository.
+This is fixture parity, not evidence of full-corpus object parity.

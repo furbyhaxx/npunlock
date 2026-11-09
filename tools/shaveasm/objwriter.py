@@ -29,6 +29,14 @@ _RELOCATIONS = {
 }
 
 
+@dataclass(frozen=True)
+class _PendingPacket:
+    packet: Packet
+    offset: int
+    size: int
+    fixups: tuple[Fixup, ...]
+
+
 @dataclass
 class _Section:
     name: str
@@ -38,7 +46,7 @@ class _Section:
     data_section: bool = False
     data: bytearray = field(default_factory=bytearray)
     relocations: list[tuple[int, Fixup, int]] = field(default_factory=list)
-    pending_branch_line: int | None = None
+    events: list[_PendingPacket | Directive | None] = field(default_factory=list)
 
 
 @dataclass
@@ -131,9 +139,6 @@ class _Assembler:
 
     def append(self, data: bytes, line: int) -> None:
         section = self.section(line)
-        # Counted NOPs can change the encoding of a preceding branch.
-        if data and section.pending_branch_line is not None:
-            raise AssemblyError(f"line {line}: unmeasured data after branch at line {section.pending_branch_line}")
         if len(section.data) + len(data) > _MAX_SECTION_SIZE:
             raise AssemblyError(f"line {line}: section size limit exceeded")
         if section.kind == 8 and any(data):
@@ -156,14 +161,45 @@ class _Assembler:
         section = self.section(line)
         if not section.flags & 4 or section.kind != 1:
             raise AssemblyError(f"line {line}: instruction outside executable section")
-        encoder = getattr(encoding, "encode_packet_with_fixups", None)
-        data, fixups = encoder(packet) if encoder is not None else (encoding.encode_packet(packet), ())
+        data, fixups = encoding.encode_packet_with_fixups(packet)
         offset = len(section.data)
         self.append(data, line)
         for fixup in fixups:
             self.fixup(section, offset, fixup, line)
-        if any(fixup.kind.startswith("R_SHAVE_PCREL") for fixup in fixups):
-            section.pending_branch_line = line
+        section.events.append(_PendingPacket(packet, offset, len(data), fixups))
+
+    def resolve_packets(self) -> None:
+        for section in self.sections:
+            for index, event in enumerate(section.events):
+                if not isinstance(event, _PendingPacket):
+                    continue
+                is_branch = any(fixup.kind.startswith("R_SHAVE_PCREL") for fixup in event.fixups)
+                following = []
+                slots = 0
+                packet_line = event.packet.operations[0].line
+                for later in section.events[index + 1 :]:
+                    if later is None:
+                        break
+                    if isinstance(later, Directive):
+                        if is_branch and slots < 6:
+                            raise AssemblyError(
+                                f"line {later.line}: data or alignment inside delay window "
+                                f"of branch at line {packet_line}"
+                            )
+                        continue
+                    following.append(later.packet)
+                    if is_branch:
+                        first = later.packet.operations[0]
+                        slots += int(first.operands[0], 0) if first.mnemonic == "NOP" and first.operands else 1
+                try:
+                    data, fixups = encoding.encode_packet_with_fixups(event.packet, following=following)
+                except AssemblyError as error:
+                    if str(error).startswith("line "):
+                        raise
+                    raise AssemblyError(f"line {packet_line}: {error}") from error
+                if len(data) != event.size or fixups != event.fixups:
+                    raise AssemblyError(f"line {packet_line}: packet fixups changed with the delay window")
+                section.data[event.offset : event.offset + event.size] = data
 
     def values(self, directive: Directive, width: int) -> None:
         section = self.section(directive.line)
@@ -187,7 +223,12 @@ class _Assembler:
 
     def directive(self, directive: Directive) -> None:
         name, arguments, line = directive.name, directive.arguments.strip(), directive.line
+        if name in (".align", ".byte", ".short", ".long", ".word", ".fill", ".float", ".ascii"):
+            self.section(line).events.append(directive)
         if name in (".code", ".data"):
+            if self.current:
+                # A .code switch resets moviAsm's branch-delay window.
+                self.section(line).events.append(None)
             self.select_section(arguments, 1, 6 if name == ".code" else 3, 1 if name == ".code" else 0,
                                 name == ".data", line)
         elif name == ".section":
@@ -195,6 +236,8 @@ class _Assembler:
             if match is None or len(set(match[2].lower())) != len(match[2]):
                 raise AssemblyError(f"line {line}: unsupported .section declaration")
             flags = sum({"w": 1, "a": 2, "x": 4}[flag] for flag in match[2].lower())
+            if self.current and self.section(line).name != match[1]:
+                self.section(line).events.append(None)
             self.select_section(match[1], 1 if match[3].lower() == "progbits" else 8, flags, 0, False, line)
         elif name in (".global", ".globl", ".local"):
             for item in arguments.split(","):
@@ -282,6 +325,7 @@ class _Assembler:
             symbol.size = size
 
     def build(self) -> bytes:
+        self.resolve_packets()
         self.resolve_sizes()
         if not self.sections:
             self.sections.extend((_Section(".text", 1, 6, 1), _Section(".data", 1, 3, 1), _Section(".bss", 8, 3, 1)))
@@ -370,7 +414,14 @@ class _Assembler:
 def assemble(source: str) -> bytes:
     """Assemble supported vendor syntax, raising AssemblyError for unmeasured forms."""
     assembler = _Assembler()
-    for statement in parse(source):
+    try:
+        statements = parse(source)
+    except AssemblyError as error:
+        if str(error) in ("unterminated block comment", "unterminated quoted string"):
+            line = max(1, len(source.splitlines()) + int(source.endswith(("\n", "\r"))))
+            raise AssemblyError(f"line {line}: {error}") from error
+        raise
+    for statement in statements:
         if assembler.ended:
             line = statement.operations[0].line if isinstance(statement, Packet) else statement.line
             raise AssemblyError(f"line {line}: content after .end")
