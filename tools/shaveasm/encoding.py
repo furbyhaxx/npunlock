@@ -160,6 +160,74 @@ _PREFIXES = {
     "LSU0.LDO32,SAU,IAU,PEU": (16, 0xAFEE),
     "LSU0.LDO32,SAU,BRU,PEU": (24, 0xB3300F),
     "LSU0.LDO32,IAU,BRU,PEU": (24, 0xB8300F),
+    "IAU.ADD24": (8, 0xC6),
+    "CMU,IAU.ADD24": (8, 0xE6),
+    "LSU0,IAU.ADD24": (8, 0xEA),
+    "LSU0.LDO32,IAU.ADD24": (8, 0xFA),
+    "LSU1,IAU.ADD24": (16, 0xE05E),
+    "SAU,IAU.ADD24": (8, 0xFC),
+    "IAU.ADD24,BRU": (16, 0x3CAE),
+    "IAU.ADD24,PEU": (8, 0xBD),
+    "CMU,LSU0,IAU.ADD24": (16, 0xE82E),
+    "CMU,LSU0.LDO32,IAU.ADD24": (16, 0xF82E),
+    "CMU,LSU1,IAU.ADD24": (16, 0xE26E),
+    "CMU,SAU,IAU.ADD24": (16, 0xF84E),
+    "CMU,IAU.ADD24,BRU": (16, 0x3EAE),
+    "CMU,IAU.ADD24,PEU": (16, 0x8EAE),
+    "LSU0,LSU1,IAU.ADD24": (16, 0xE85E),
+    "LSU0,SAU,IAU.ADD24": (16, 0xF89E),
+    "LSU0,IAU.ADD24,BRU": (16, 0xF2CE),
+    "LSU0,IAU.ADD24,PEU": (16, 0xB2DE),
+    "LSU0.LDO32,LSU1,IAU.ADD24": (16, 0xEC5E),
+    "LSU0.LDO32,SAU,IAU.ADD24": (16, 0xFC9E),
+    "LSU0.LDO32,IAU.ADD24,BRU": (16, 0xF3CE),
+    "LSU0.LDO32,IAU.ADD24,PEU": (16, 0xB3DE),
+    "LSU1,SAU,IAU.ADD24": (16, 0xF8BE),
+    "LSU1,IAU.ADD24,BRU": (16, 0xF8CE),
+    "LSU1,IAU.ADD24,PEU": (16, 0xB8DE),
+    "SAU,IAU.ADD24,BRU": (24, 0x3F000F),
+    "SAU,IAU.ADD24,PEU": (16, 0xBCEE),
+    "IAU.ADD24,BRU,PEU": (16, 0xBCAE),
+    "CMU,LSU0,LSU1,IAU.ADD24": (16, 0xEA6E),
+    "CMU,LSU0,SAU,IAU.ADD24": (16, 0xFA9E),
+    "CMU,LSU0,IAU.ADD24,BRU": (24, 0x3C280F),
+    "CMU,LSU0,IAU.ADD24,PEU": (24, 0x8C280F),
+    "CMU,LSU0.LDO32,LSU1,IAU.ADD24": (16, 0xEE6E),
+    "CMU,LSU0.LDO32,SAU,IAU.ADD24": (16, 0xFE9E),
+    "CMU,LSU0.LDO32,IAU.ADD24,BRU": (24, 0x3C380F),
+    "CMU,LSU0.LDO32,IAU.ADD24,PEU": (24, 0x8C380F),
+    "CMU,LSU1,SAU,IAU.ADD24": (24, 0xF880F),
+    "CMU,LSU1,IAU.ADD24,BRU": (24, 0x3C880F),
+    "CMU,LSU1,IAU.ADD24,PEU": (24, 0x8C880F),
+    "CMU,SAU,IAU.ADD24,BRU": (24, 0x3F080F),
+    "CMU,SAU,IAU.ADD24,PEU": (24, 0x8F080F),
+    "CMU,IAU.ADD24,BRU,PEU": (16, 0xBEAE),
+    "LSU0,LSU1,SAU,IAU.ADD24": (16, 0xFABE),
+    "LSU0,LSU1,IAU.ADD24,BRU": (16, 0xFACE),
+    "LSU0,LSU1,IAU.ADD24,PEU": (16, 0xBADE),
+    "LSU0,SAU,IAU.ADD24,BRU": (24, 0x3F200F),
+    "LSU0,SAU,IAU.ADD24,PEU": (16, 0xBEEE),
+    "LSU0,IAU.ADD24,BRU,PEU": (24, 0xBC200F),
+    "LSU0.LDO32,LSU1,SAU,IAU.ADD24": (16, 0xFBBE),
+    "LSU0.LDO32,LSU1,IAU.ADD24,BRU": (16, 0xFBCE),
+    "LSU0.LDO32,LSU1,IAU.ADD24,PEU": (16, 0xBBDE),
+    "LSU0.LDO32,SAU,IAU.ADD24,BRU": (24, 0x3F300F),
+    "LSU0.LDO32,SAU,IAU.ADD24,PEU": (16, 0xBFEE),
+    "LSU0.LDO32,IAU.ADD24,BRU,PEU": (24, 0xBC300F),
+    "LSU1,SAU,IAU.ADD24,BRU": (24, 0x3F800F),
+    "LSU1,SAU,IAU.ADD24,PEU": (24, 0x8F800F),
+    "LSU1,IAU.ADD24,BRU,PEU": (24, 0xBC800F),
+    "SAU,IAU.ADD24,BRU,PEU": (24, 0xBF000F),
+    "CMU,LSU0,LSU1,IAU.ADD24,PEU": (24, 0x8CA80F),
+    "CMU,LSU0,SAU,IAU.ADD24,PEU": (24, 0x8F280F),
+    "CMU,LSU0,IAU.ADD24,BRU,PEU": (24, 0xBC280F),
+    "CMU,LSU1,SAU,IAU.ADD24,PEU": (24, 0x8F880F),
+    "CMU,LSU1,IAU.ADD24,BRU,PEU": (24, 0xBC880F),
+    "CMU,SAU,IAU.ADD24,BRU,PEU": (24, 0xBF080F),
+    "LSU0,LSU1,SAU,IAU.ADD24,PEU": (24, 0x8FA00F),
+    "LSU0,LSU1,IAU.ADD24,BRU,PEU": (24, 0xBCA00F),
+    "LSU0,SAU,IAU.ADD24,BRU,PEU": (24, 0xBF200F),
+    "LSU1,SAU,IAU.ADD24,BRU,PEU": (24, 0xBF800F),
 }
 _PREDICATES = {"EQ": 1, "NEQ": 14, "LT": 4, "LTE": 5, "GT": 2, "GTE": 3}
 
@@ -217,6 +285,16 @@ def _operation(instruction: Instruction) -> _Operation:
     if mnemonic == "CMU.CP.32" and len(operands) == 2:
         destination, source = (_register(op, line) for op in operands)
         return _Operation(unit, 0x08000C | destination << 9 | source << 4, 24)
+    if mnemonic == "IAU.ADD" and len(operands) == 3:
+        destination, left = (_register(op, line) for op in operands[:2])
+        if re.fullmatch(r"[iI][0-9]+", operands[2]):
+            right = _register(operands[2], line)
+            selector = 0
+        else:
+            right = _immediate(operands[2], 8, line)
+            selector = 1 << 23
+        return _Operation(unit, selector | destination << 10 | left << 5 | right << 15, 24,
+                          prefix_class="IAU.ADD24")
     if mnemonic == "IAU.XOR" and len(operands) == 3:
         destination, left, right = (_register(op, line) for op in operands)
         return _Operation(unit, 0x12 | destination << 10 | left << 5 | right << 15, 20)

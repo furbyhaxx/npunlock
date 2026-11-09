@@ -34,6 +34,17 @@ class EncodingTests(unittest.TestCase):
         self.assertEqual(encode("NOP 17"), b"\xf0\x00")
         self.assertEqual(encode("NOP 32"), b"\xf0\xf0")
 
+    def test_add_register_and_unsigned_immediate_forms(self) -> None:
+        self.assertEqual(encode("IAU.ADD i0 i0 i0"), bytes.fromhex("c6000000"))
+        self.assertEqual(encode("IAU.ADD i31 i31 i31"), bytes.fromhex("c6e0ff0f"))
+        self.assertEqual(encode("IAU.ADD i31 i31 255"), bytes.fromhex("c6e0ffff"))
+        self.assertEqual(encode("LSU0.LDO.32 i4 i5 -3 || IAU.ADD i0 i0 0"),
+                         bytes.fromhex("fa424afbff000080"))
+        for source in ("IAU.ADD i0 i0 -1", "IAU.ADD i0 i0 256", "IAU.ADD i0 i0 i32",
+                       "IAU.ADD i1 i2 i3 || IAU.XOR i4 i5 i6"):
+            with self.subTest(source=source), self.assertRaises(AssemblyError):
+                encode(source)
+
     def test_signed_load_offset_uses_a_distinct_header_class(self) -> None:
         self.assertEqual(encode("LSU0.LDO.32 i0 i0 -3"), bytes.fromhex("c20240fbff"))
         self.assertEqual(encode("LSU0.LDO.32 i31 i31 16383"), bytes.fromhex("c2f27fff7f"))

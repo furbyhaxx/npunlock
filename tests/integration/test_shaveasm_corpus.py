@@ -29,7 +29,7 @@ class CorpusTests(unittest.TestCase):
             (root / "authored.s").write_text(
                 "NOP\nCMU.CMZ.I32 i1 || IAU.ADD i2 i3 -1\n"
                 "CMU.CMZ.I32 i2 || IAU.ADD i4 i5 -2\n"
-                "LSU0.LDIL i0 1 || IAU.ADD i1 i2 i3\n"
+                "LSU0.LDIL i0 1 || IAU.UNMEASURED i1 i2 i3\n"
             )
             result = report([root, root])
             self.assertEqual((result["packets"], result["accepted_packets"]), (4, 1))

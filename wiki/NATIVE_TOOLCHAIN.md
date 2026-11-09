@@ -270,6 +270,26 @@ reported conflicting writes despite being in different sections. Each generated
 case now has a separate preceding `NOP 16` padding section. This makes cases
 independent without disabling the vendor analyzer or changing tested packets.
 
+### Scalar integer addition
+
+Separate sweeps of all three register fields and immediate bit/range boundaries
+establish these forms, with a common 24-bit payload/header class:
+
+| Form | Payload bits | Payload expression | Standalone prefix |
+| --- | ---: | --- | --- |
+| `IAU.ADD d l r` | 24 | `(d<<10) + (l<<5) + (r<<15)` | `0xc6` |
+| `IAU.ADD d l imm8` | 24 | `0x800000 + (d<<10) + (l<<5) + (imm8<<15)` | `0xc6` |
+
+Immediate values are unsigned 0..255; negative operands were rejected by moviAsm.
+Unlike IAU.XOR's 20-bit class, both ADD forms use `_Operation.prefix_class`
+`IAU.ADD24`. Both were measured independently against each of **83** combinations
+of zero through four other slots, including either LSU0.LDIL or LSU0.LDO.32.
+Each pair had the same unique header; **68** shapes at or below 128 bits are
+retained in `_PREFIXES`. Payload order is unchanged, but subsequent branch and
+PEU fields move by four bits relative to XOR, changing branch relocation kind
+where necessary. No arithmetic mnemonic other than the explicitly measured ADD
+forms is accepted by inference from these fields.
+
 ### Signed scalar load offsets
 
 Register sweeps `i0..i31` for each operand, positive/negative immediate bit sweeps,
@@ -346,10 +366,9 @@ also fail alone; `rejected_packets` includes supported forms co-issued with an
 unsupported form or header class. Counts overlap across shapes and must not be
 summed as packet totals. Parse failures are reported separately and fail the
 command. The combined baseline is 3291/11912 accepted packets and **98** distinct
-mnemonics (97 in the literal corpus alone). With symbolic branches, coverage is
-4674/11912 packets after signed loads, including 739 requiring symbolic fixups.
-`accepted_packets`
-counts bytes-plus-fixups support and `relocatable_packets` identifies that subset;
+mnemonics (97 in the literal corpus alone). With symbolic branches, signed loads
+and integer addition, coverage is 5580/11912 packets, including 740 requiring
+symbolic fixups. `accepted_packets` counts bytes-plus-fixups support and `relocatable_packets` identifies that subset;
 this does not assert whole-object parity.
 
 ```sh
@@ -365,10 +384,10 @@ python3 -m tools.shaveasm.corpus --native-dir build/linux \
   --output /mnt/cache/build-shave/native-asm-corpus
 ```
 
-Offline regressions: 18 passed. With symbolic branches and signed loads, each
-randomized gate passed **1479/1479** packets (seeds 3720 and 9001): 1000 random
-packets, 150 shapes, 256 register/predicate/branch/load sweep cases, eight
-immediate boundaries, and 65 bare/counted NOP cases. Every generated packet's
+Offline regressions: 19 passed. Each randomized gate passed **1675/1675** packets
+(seeds 3720 and 9001): 1000 random packets, 218 shapes, 288 mixed operand sweep
+cases, 96 dedicated ADD register/immediate sweep cases, eight immediate
+boundaries, and 65 bare/counted NOP cases. Every generated packet's
 actual bytes are compared to moviAsm, not merely round-tripped through native
 code. The six instruction forms all occur in the real compiler corpus.
 
@@ -397,7 +416,8 @@ uncaptured and require explicit model/generator inputs.
 The parser structurally accepted all 55 captured assemblies. The literal
 corpus contains 97 distinct mnemonics. Only **3291/11912** parsed packets are
 accepted by the original byte-only encoder across the two corpora; the symbolic
-branch and signed-load extensions raise bytes-plus-fixups support to **4674/11912**. These are
+branch, signed-load and ADD extensions raise bytes-plus-fixups support to
+**5580/11912**. These are
 syntactic coverage counts, **not** full-stream or whole-object parity claims.
 Calls, other branch forms, additional instruction/header classes, data and
 alignment directives, ELF symbols and relocations remain the next gate. Hybrid
