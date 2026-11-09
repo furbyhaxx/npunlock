@@ -40,6 +40,15 @@ class EncodingTests(unittest.TestCase):
         with self.assertRaisesRegex(AssemblyError, "read port 6"):
             encode("CMU.CMII.U32 i1 i2 || LSU1.STO.32 i8 i9 0")
 
+    def test_float_add_uses_scalar_registers_in_the_sau_class(self) -> None:
+        self.assertEqual(encode("SAU.ADD.F32 i0 i0 i0"), bytes.fromhex("3c000020"))
+        self.assertEqual(encode("SAU.ADD.f32 i31 i31 i31"), bytes.fromhex("3ce0ff2f"))
+        self.assertEqual(encode("SAU.ADD.F32 i1 i2 i3"), bytes.fromhex("3c408421"))
+        for source in ("SAU.ADD.F32 i0 i1 3", "SAU.ADD.F32 i32 i0 i0",
+                       "SAU.ADD.F16 i0 i1 i2"):
+            with self.subTest(source=source), self.assertRaises(AssemblyError):
+                encode(source)
+
     def test_indirect_scalar_load_shares_the_twenty_four_bit_lsu0_class(self) -> None:
         self.assertEqual(encode("LSU0.LD.32 i0 i0"), bytes.fromhex("820d0001"))
         self.assertEqual(encode("LSU0.LD.32 i31 i31"), bytes.fromhex("82fd3f01"))

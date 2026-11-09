@@ -714,6 +714,9 @@ def _operation(instruction: Instruction) -> _Operation:
         destination, left, right = (_register(op, line) for op in operands)
         opcode = {"IAU.XOR": 0x12, "IAU.AND": 0x10, "IAU.OR": 0x11, "IAU.LMULL": 0x04}[mnemonic]
         return _Operation(unit, opcode | destination << 10 | left << 5 | right << 15, 20)
+    if mnemonic == "SAU.ADD.F32" and len(operands) == 3:
+        destination, left, right = (_register(op, line) for op in operands)
+        return _Operation(unit, 0x200000 | destination << 10 | left << 5 | right << 15, 24)
     if mnemonic == "SAU.ADD.I32" and len(operands) == 3:
         destination, source = (_register(op, line) for op in operands[:2])
         immediate = _immediate(operands[2], 5, line)
