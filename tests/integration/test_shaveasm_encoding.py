@@ -34,6 +34,12 @@ class EncodingTests(unittest.TestCase):
         self.assertEqual(encode("NOP 17"), b"\xf0\x00")
         self.assertEqual(encode("NOP 32"), b"\xf0\xf0")
 
+    def test_or_uses_the_twenty_bit_logical_class(self) -> None:
+        self.assertEqual(encode("IAU.OR i5 i5 i5"), bytes.fromhex("86b19402"))
+        self.assertEqual(encode("IAU.OR i16 i17 i18 || PEU.PCCX NEQ 63"), bytes.fromhex("ed314299fd"))
+        with self.assertRaises(AssemblyError):
+            encode("IAU.OR i0 i1 3")
+
     def test_signed_store_offset_has_its_own_lsu1_header_class(self) -> None:
         self.assertEqual(encode("LSU1.STO.32 i0 i0 -16384"), bytes.fromhex("c906400180"))
         self.assertEqual(encode("LSU1.STO.32 i31 i31 16383"), bytes.fromhex("c9f67fff7f"))

@@ -45,7 +45,7 @@ def generate_packets(seed: int, count: int) -> list[str]:
             right = registers[2] if rng.randrange(2) else str(rng.randrange(256))
             return f"IAU.ADD {registers[0]} {registers[1]} {right}"
         if unit == "IAU":
-            mnemonic = rng.choice(("IAU.XOR", "IAU.AND"))
+            mnemonic = rng.choice(("IAU.XOR", "IAU.AND", "IAU.OR"))
             return f"{mnemonic} {registers[0]} {registers[1]} {registers[2]}"
         condition = rng.choice(("EQ", "NEQ", "LT", "LTE", "GT", "GTE"))
         if unit == "PEU.PCCX12":
@@ -72,17 +72,20 @@ def generate_packets(seed: int, count: int) -> list[str]:
         shape = key.split(",")
         store_packet = "LSU1.STO32" in shape
         if "IAU" in shape:
-            packets.append("\n || ".join(operation(unit, store_packet=store_packet) for unit in shape).replace("IAU.XOR", "IAU.AND"))
+            for mnemonic in ("IAU.AND", "IAU.OR"):
+                packets.append("\n || ".join(f"{mnemonic} i16 i17 i18" if unit == "IAU"
+                                              else operation(unit, store_packet=store_packet) for unit in shape))
         if "IAU.ADD24" in shape:
             packets.append("\n || ".join(f"IAU.SHL i16 i17 {rng.randrange(32)}" if unit == "IAU.ADD24"
                                           else operation(unit, store_packet=store_packet) for unit in shape))
         if "CMU" in shape and not store_packet:
             packets.append("\n || ".join(operation(unit) for unit in shape).replace("CMU.CP.32", "CMU.CMII.I32"))
-    for position in range(3):
-        for register in range(32):
-            operands = ["i0"] * 3
-            operands[position] = f"i{register}"
-            packets.append("IAU.AND " + " ".join(operands))
+    for mnemonic in ("IAU.AND", "IAU.OR"):
+        for position in range(3):
+            for register in range(32):
+                operands = ["i0"] * 3
+                operands[position] = f"i{register}"
+                packets.append(mnemonic + " " + " ".join(operands))
     for position in range(2):
         for register in range(32):
             operands = ["i0", "i0", "0"]

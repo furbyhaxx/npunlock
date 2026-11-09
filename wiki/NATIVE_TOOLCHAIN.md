@@ -324,7 +324,7 @@ measured ADD form, not a restriction to that mnemonic. Random packets now choose
 SHL as well as both ADD forms, with 96 dedicated operand sweeps and all 131 SHL
 header shapes repeated explicitly. Register-controlled shifts remain rejected.
 
-### Scalar bitwise AND
+### Scalar bitwise AND and OR
 
 Sweeping each of the three register operands independently through `i0..i31`
 establishes:
@@ -332,13 +332,17 @@ establishes:
 | Form | Payload bits | Payload expression | Standalone prefix |
 | --- | ---: | --- | --- |
 | `IAU.AND d l r` | 20 | `0x10 + (d<<10) + (l<<5) + (r<<15)` | `0x86` |
+| `IAU.OR d l r` | 20 | `0x11 + (d<<10) + (l<<5) + (r<<15)` | `0x86` |
 
 Every one of the **140** measured header shapes containing the 20-bit IAU class
 was independently checked with AND substituted for XOR. All retained the same
 prefix and bit layout, including branches and twelve-bit PCCX suffixes. The
 random generator selects both mnemonics, and explicitly repeats all 140 shapes
 with AND plus the 96 individual register-field sweeps. Immediate AND forms remain
-unmeasured and rejected.
+unmeasured and rejected. OR was independently swept through all 96 register-field
+cases. With the store extension, every one of the **180** current 20-bit IAU
+header shapes is explicitly tested with each of AND and OR, alongside randomized
+selection among XOR/AND/OR. Immediate OR remains rejected.
 
 ### Predicate cross-condition
 
@@ -501,9 +505,9 @@ unsupported form or header class. Counts overlap across shapes and must not be
 summed as packet totals. Parse failures are reported separately and fail the
 command. The combined baseline is 3291/11912 accepted packets and **98** distinct
 mnemonics (97 in the literal corpus alone). With symbolic branches, signed
-loads/stores, integer addition, comparisons, PCCX, AND and immediate SHL,
-coverage is **7353/11912** packets, including 776 requiring symbolic fixups.
-Sixteen distinct mnemonics occur in accepted packets (six at baseline); the total
+loads/stores, integer addition, comparisons, PCCX, AND/OR and immediate SHL,
+coverage is **7646/11912** packets, including 785 requiring symbolic fixups.
+Seventeen distinct mnemonics occur in accepted packets (six at baseline); the total
 corpus still has 98 mnemonics.
 `accepted_packets` counts bytes-plus-fixups support and `relocatable_packets`
 identifies that subset. Coverage tests isolated packet forms; it does not
@@ -522,7 +526,7 @@ python3 -m tools.shaveasm.corpus --native-dir build/linux \
   --output /mnt/cache/build-shave/native-asm-corpus
 ```
 
-Offline regressions: 27 passed. Each randomized gate passed **5573/5573 cases**
+Offline regressions: 28 passed. Each randomized gate passed **5849/5849 cases**
 (seeds 3720 and 9001): the original 2362 isolated-packet cases (1000 random
 packets, 457 shapes, 352 mixed operand sweeps, 96 ADD sweeps, 384 PCCX pairs,
 eight immediate boundaries and 65 NOP cases), plus 64 counted-NOP branch
@@ -531,7 +535,8 @@ An additional 140 AND header cases and 96 individual register sweeps cover AND;
 131 SHL header cases and 96 operand sweeps cover immediate SHL. CMII.I32 adds
 124 header cases and 64 independent register sweeps. STO.32 adds 150 header
 classes, 32 mixed store sweeps, 64 register-field sweeps, five boundaries and
-77 additional AND/SHL header cases. The current total is 607 prefix shapes.
+77 additional AND/SHL header cases. OR adds 180 header cases and 96 operand
+sweeps. The current total is 607 prefix shapes.
 Every case's full instruction bytes and fixups are compared to moviAsm, not
 merely round-tripped through native code. All measured instruction forms occur
 in the real compiler corpus.
@@ -561,8 +566,8 @@ uncaptured and require explicit model/generator inputs.
 The parser structurally accepted all 55 captured assemblies. The literal
 corpus contains 97 distinct mnemonics. Only **3291/11912** parsed packets are
 accepted by the original byte-only encoder across the two corpora; the symbolic
-branch, signed-load/store, ADD, compare, PCCX, AND and SHL extensions raise
-bytes-plus-fixups support to **7353/11912**. These are
+branch, signed-load/store, ADD, compare, PCCX, AND/OR and SHL extensions raise
+bytes-plus-fixups support to **7646/11912**. These are
 syntactic coverage counts, **not** full-stream or whole-object parity claims.
 Calls, other branch forms, additional instruction/header classes, data and
 alignment directives, ELF symbols and relocations remain the next gate. Hybrid
