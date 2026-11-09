@@ -673,6 +673,16 @@ mnemonics, 887 prefix shapes); exact corpus objects remain **0/55**.
 Diagnostic instruction rejections fall from 2857 to 2718. The new first
 rejections include LMULH, CMPI and STO.64, rather than immediate SHR.
 
+### Scalar high-word multiplication
+
+`IAU.LMULH dst left right` uses the existing 20-bit IAU header class and
+payload `0x05 | dst<<10 | left<<5 | right<<15`. All 96 independent register
+sweeps and 259 existing IAU header shapes match moviAsm. Both seeds pass
+**12848/12848** packet cases and 56 offline tests pass. Coverage rises to
+**9518/11912** packets (29 accepted mnemonics, 887 prefix shapes); exact
+objects remain **0/55**. Diagnostic instruction rejections fall to 2662;
+first rejections are SAU.AND (40 files), CMPI (8), and STO.64 (7).
+
 ### Differential gates and corpus inventory
 
 Cached assembly can be inventoried without Wine or recompilation:
