@@ -55,7 +55,8 @@ def generate_packets(seed: int, count: int) -> list[str]:
             if rng.randrange(4) == 0:
                 return f"IAU.INCS {registers[0]} {rng.randrange(-8192, 8192)}"
             if rng.randrange(3) == 0:
-                return f"IAU.SHL {registers[0]} {registers[1]} {rng.randrange(32)}"
+                mnemonic = rng.choice(("IAU.SHL", "IAU.SHR.U32"))
+                return f"{mnemonic} {registers[0]} {registers[1]} {rng.randrange(32)}"
             right = registers[2] if rng.randrange(2) else str(rng.randrange(256))
             mnemonic = rng.choice(("IAU.ADD", "IAU.SUB"))
             return f"{mnemonic} {registers[0]} {registers[1]} {right}"
@@ -104,8 +105,9 @@ def generate_packets(seed: int, count: int) -> list[str]:
                 packets.append("\n || ".join(f"{mnemonic} i16 i17 i18" if unit == "IAU"
                                               else operation(unit, store_packet=store_packet) for unit in shape))
         if "IAU.ADD24" in shape:
-            packets.append("\n || ".join(f"IAU.SHL i16 i17 {rng.randrange(32)}" if unit == "IAU.ADD24"
-                                          else operation(unit, store_packet=store_packet) for unit in shape))
+            for mnemonic in ("IAU.SHL", "IAU.SHR.U32"):
+                packets.append("\n || ".join(f"{mnemonic} i16 i17 {rng.randrange(32)}" if unit == "IAU.ADD24"
+                                              else operation(unit, store_packet=store_packet) for unit in shape))
             packets.append("\n || ".join("IAU.INCS i16 -2345" if unit == "IAU.ADD24"
                                           else operation(unit, store_packet=store_packet) for unit in shape))
             for right in ("i18", "255"):
@@ -125,8 +127,9 @@ def generate_packets(seed: int, count: int) -> list[str]:
         for register in range(32):
             operands = ["i0", "i0", "0"]
             operands[position] = f"i{register}"
-            packets.append("IAU.SHL " + " ".join(operands))
-    packets.extend(f"IAU.SHL i0 i0 {n}" for n in range(32))
+            for mnemonic in ("IAU.SHL", "IAU.SHR.U32"):
+                packets.append(mnemonic + " " + " ".join(operands))
+    packets.extend(f"{mnemonic} i0 i0 {n}" for mnemonic in ("IAU.SHL", "IAU.SHR.U32") for n in range(32))
     for mnemonic in ("CMU.CMII.I32", "CMU.CMII.U32"):
         for position in range(2):
             for register in range(32):

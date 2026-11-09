@@ -661,6 +661,18 @@ transfers inside the first six delay slots fail closed. Non-packet layout
 changes inside a delay window remain unmeasured; section boundaries must not be
 silently treated as ordinary packet boundaries.
 
+### Unsigned immediate right shift
+
+`IAU.SHR.U32 dst src imm5` has the same 24-bit payload and `IAU.ADD24`
+header class as immediate SHL. Its payload is `0x80000e | dst<<10 |
+src<<5 | imm5<<15`. Independent destination/source register sweeps and all
+32 shift amounts matched moviAsm; all 241 existing ADD24 header shapes also
+match with this operation. Both seeds pass **12493/12493** packet cases and
+56 offline tests pass. Coverage is **9462/11912** packets (28 accepted
+mnemonics, 887 prefix shapes); exact corpus objects remain **0/55**.
+Diagnostic instruction rejections fall from 2857 to 2718. The new first
+rejections include LMULH, CMPI and STO.64, rather than immediate SHR.
+
 ### Differential gates and corpus inventory
 
 Cached assembly can be inventoried without Wine or recompilation:

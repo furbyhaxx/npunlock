@@ -987,10 +987,11 @@ def _operation(instruction: Instruction) -> _Operation:
         immediate = _signed_immediate(operands[1], 14, line)
         return _Operation(unit, 3 | register << 5 | immediate << 10, 24,
                           prefix_class="IAU.ADD24")
-    if mnemonic == "IAU.SHL" and len(operands) == 3:
+    if mnemonic in ("IAU.SHL", "IAU.SHR.U32") and len(operands) == 3:
         destination, source = (_register(op, line) for op in operands[:2])
         immediate = _immediate(operands[2], 5, line)
-        return _Operation(unit, 0x80000C | destination << 10 | source << 5 | immediate << 15, 24,
+        opcode = 0x80000C if mnemonic == "IAU.SHL" else 0x80000E
+        return _Operation(unit, opcode | destination << 10 | source << 5 | immediate << 15, 24,
                           prefix_class="IAU.ADD24")
     if mnemonic in ("IAU.ADD", "IAU.SUB") and len(operands) == 3:
         destination, left = (_register(op, line) for op in operands[:2])
