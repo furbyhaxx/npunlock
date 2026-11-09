@@ -692,6 +692,21 @@ pass **14502/14502** packet cases and 56 offline tests pass. Coverage is
 objects remain **0/55**. Diagnostic instruction rejections fall to 2544;
 first rejections are SAU.MUL.I32 (40 files), CMPI (8), and STO.64 (7).
 
+### Scalar SAU integer multiplication
+
+`SAU.MUL.I32 dst left right` uses the existing 24-bit SAU class and payload
+`0x04 | dst<<10 | left<<5 | right<<15`. All 323 SAU header combinations and
+96 independent register sweeps match moviAsm. Both seeds pass **14921/14921**
+packet cases; after merging the register-jump writer fix, 59 offline tests pass.
+Coverage is **9694/11912** packets (31 accepted mnemonics, 1210 prefix shapes),
+with **0/55** exact objects and 2476 diagnostic instruction rejections.
+First rejections are SAU.SHL.X32 (40 files), CMPI (8), and STO.64 (7).
+
+`encoding.is_control_transfer(packet)` identifies every non-NOP BRU operation,
+including unsupported forms, for conservative delay-window validation. It covers
+both encoded transfers (BRA and register JMP); object writers can use this
+predicate instead of duplicating mnemonic checks.
+
 ### Differential gates and corpus inventory
 
 Cached assembly can be inventoried without Wine or recompilation:

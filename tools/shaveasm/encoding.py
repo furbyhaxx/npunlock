@@ -1336,9 +1336,10 @@ def _operation(instruction: Instruction) -> _Operation:
         destination, left, right = (_register(op, line) for op in operands)
         return _Operation(unit, 0x18 | destination << 10 | left << 5 | right << 15, 20,
                           prefix_class="SAU.AND20")
-    if mnemonic == "SAU.ADD.F32" and len(operands) == 3:
+    if mnemonic in ("SAU.ADD.F32", "SAU.MUL.I32") and len(operands) == 3:
         destination, left, right = (_register(op, line) for op in operands)
-        return _Operation(unit, 0x200000 | destination << 10 | left << 5 | right << 15, 24)
+        opcode = 0x200000 if mnemonic == "SAU.ADD.F32" else 0x04
+        return _Operation(unit, opcode | destination << 10 | left << 5 | right << 15, 24)
     if mnemonic == "SAU.ADD.I32" and len(operands) == 3:
         destination, source = (_register(op, line) for op in operands[:2])
         immediate = _immediate(operands[2], 5, line)
@@ -1352,10 +1353,15 @@ def _operation(instruction: Instruction) -> _Operation:
     raise AssemblyError(f"line {line}: unsupported instruction form {mnemonic} {' '.join(operands)}")
 
 
+def is_control_transfer(packet: Packet) -> bool:
+    """Identify BRU control transfers, including unmeasured forms, for delay-window checks."""
+    return any(op.mnemonic.startswith("BRU.") and op.mnemonic != "BRU.NOP" for op in packet.operations)
+
+
 def _branch_delay_span(following: Sequence[Packet]) -> int:
     slots = size = 0
     for packet in following:
-        if any(op.mnemonic.startswith("BRU.") and op.mnemonic != "BRU.NOP" for op in packet.operations):
+        if is_control_transfer(packet):
             raise AssemblyError("unmeasured control transfer in branch delay slots")
         data, _ = encode_packet_with_fixups(packet)
         first = packet.operations[0]

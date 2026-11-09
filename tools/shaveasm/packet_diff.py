@@ -51,7 +51,8 @@ def generate_packets(seed: int, count: int) -> list[str]:
             return f"SAU.AND {registers[0]} {registers[1]} {registers[2]}"
         if unit == "SAU":
             if rng.randrange(2):
-                return f"SAU.ADD.F32 {registers[0]} {registers[1]} {registers[2]}"
+                mnemonic = rng.choice(("SAU.ADD.F32", "SAU.MUL.I32"))
+                return f"{mnemonic} {registers[0]} {registers[1]} {registers[2]}"
             return f"SAU.ADD.i32 {registers[0]} {registers[1]} {rng.randrange(32)}"
         if unit == "IAU.ADD24":
             if rng.randrange(4) == 0:
@@ -93,8 +94,9 @@ def generate_packets(seed: int, count: int) -> list[str]:
             packets.append("\n || ".join("LSU1.LDO.32 i8 i9 -3" if unit == "LSU1.STO32"
                                           else operation(unit, store_packet=True) for unit in shape))
         if "SAU" in shape:
-            packets.append("\n || ".join("SAU.ADD.F32 i12 i13 i14" if unit == "SAU"
-                                          else operation(unit, store_packet=store_packet) for unit in shape))
+            for mnemonic in ("SAU.ADD.F32", "SAU.MUL.I32"):
+                packets.append("\n || ".join(f"{mnemonic} i12 i13 i14" if unit == "SAU"
+                                              else operation(unit, store_packet=store_packet) for unit in shape))
         if "LSU0" in shape:
             for immediate in ("43210", "external_target"):
                 packets.append("\n || ".join(f"LSU0.LDIH i4 {immediate}" if unit == "LSU0"
@@ -119,7 +121,7 @@ def generate_packets(seed: int, count: int) -> list[str]:
             for mnemonic in ("CMU.CMII.I32", "CMU.CMII.U32"):
                 packets.append("\n || ".join(f"{mnemonic} i0 i1" if unit == "CMU"
                                               else operation(unit) for unit in shape))
-    for mnemonic in ("IAU.AND", "IAU.OR", "IAU.LMULL", "IAU.LMULH", "SAU.ADD.F32", "SAU.AND"):
+    for mnemonic in ("IAU.AND", "IAU.OR", "IAU.LMULL", "IAU.LMULH", "SAU.ADD.F32", "SAU.MUL.I32", "SAU.AND"):
         for position in range(3):
             for register in range(32):
                 operands = ["i0"] * 3
