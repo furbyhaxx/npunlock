@@ -687,6 +687,11 @@ def _operation(instruction: Instruction) -> _Operation:
     if mnemonic == "CMU.CP.32" and len(operands) == 2:
         destination, source = (_register(op, line) for op in operands)
         return _Operation(unit, 0x08000C | destination << 9 | source << 4, 24)
+    if mnemonic == "IAU.INCS" and len(operands) == 2:
+        register = _register(operands[0], line)
+        immediate = _signed_immediate(operands[1], 14, line)
+        return _Operation(unit, 3 | register << 5 | immediate << 10, 24,
+                          prefix_class="IAU.ADD24")
     if mnemonic == "IAU.SHL" and len(operands) == 3:
         destination, source = (_register(op, line) for op in operands[:2])
         immediate = _immediate(operands[2], 5, line)

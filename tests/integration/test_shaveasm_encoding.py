@@ -40,6 +40,15 @@ class EncodingTests(unittest.TestCase):
         with self.assertRaisesRegex(AssemblyError, "read port 6"):
             encode("CMU.CMII.U32 i1 i2 || LSU1.STO.32 i8 i9 0")
 
+    def test_incs_updates_a_register_with_a_signed_fourteen_bit_immediate(self) -> None:
+        self.assertEqual(encode("IAU.INCS i0 -8192"), bytes.fromhex("c6030080"))
+        self.assertEqual(encode("IAU.INCS i31 8191"), bytes.fromhex("c6e3ff7f"))
+        self.assertEqual(encode("IAU.INCS i1 1"), bytes.fromhex("c6230400"))
+        for source in ("IAU.INCS i0 -8193", "IAU.INCS i0 8192", "IAU.INCS i0 i1",
+                       "IAU.INCS i32 0", "IAU.INCS i0 i1 0"):
+            with self.subTest(source=source), self.assertRaises(AssemblyError):
+                encode(source)
+
     def test_lmull_uses_the_twenty_bit_integer_class(self) -> None:
         self.assertEqual(encode("IAU.LMULL i0 i0 i0"), bytes.fromhex("86040000"))
         self.assertEqual(encode("IAU.LMULL i31 i31 i31"), bytes.fromhex("86e4ff0f"))

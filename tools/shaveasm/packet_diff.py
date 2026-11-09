@@ -40,6 +40,8 @@ def generate_packets(seed: int, count: int) -> list[str]:
         if unit == "SAU":
             return f"SAU.ADD.i32 {registers[0]} {registers[1]} {rng.randrange(32)}"
         if unit == "IAU.ADD24":
+            if rng.randrange(4) == 0:
+                return f"IAU.INCS {registers[0]} {rng.randrange(-8192, 8192)}"
             if rng.randrange(3) == 0:
                 return f"IAU.SHL {registers[0]} {registers[1]} {rng.randrange(32)}"
             right = registers[2] if rng.randrange(2) else str(rng.randrange(256))
@@ -78,6 +80,8 @@ def generate_packets(seed: int, count: int) -> list[str]:
         if "IAU.ADD24" in shape:
             packets.append("\n || ".join(f"IAU.SHL i16 i17 {rng.randrange(32)}" if unit == "IAU.ADD24"
                                           else operation(unit, store_packet=store_packet) for unit in shape))
+            packets.append("\n || ".join("IAU.INCS i16 -2345" if unit == "IAU.ADD24"
+                                          else operation(unit, store_packet=store_packet) for unit in shape))
         if "CMU" in shape and not store_packet:
             for mnemonic in ("CMU.CMII.I32", "CMU.CMII.U32"):
                 packets.append("\n || ".join(f"{mnemonic} i0 i1" if unit == "CMU"
@@ -106,6 +110,10 @@ def generate_packets(seed: int, count: int) -> list[str]:
             operands[position] = f"i{register}"
             packets.append("LSU1.STO.32 " + " ".join(operands))
     packets.extend(f"LSU1.STO.32 i31 i0 {value}" for value in (-16384, -1, 0, 1, 16383))
+    packets.extend(f"IAU.INCS i{r} 0" for r in range(32))
+    packets.extend(f"IAU.INCS i0 {value}" for value in
+                   (0, -1, 8191, -8192, *(1 << bit for bit in range(13)),
+                    *(-(1 << bit) for bit in range(14))))
     delay_operations = (
         "NOP", "NOP 1", "NOP 2", "NOP 4", "NOP 6", "NOP 16", "NOP 17", "NOP 32",
         "LSU0.LDIL i4 1", "CMU.CMZ.I32 i0", "IAU.ADD i16 i17 231",

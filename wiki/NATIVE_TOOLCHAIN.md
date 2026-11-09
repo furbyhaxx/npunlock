@@ -271,6 +271,22 @@ reported conflicting writes despite being in different sections. Each generated
 case now has a separate preceding `NOP 16` padding section. This makes cases
 independent without disabling the vendor analyzer or changing tested packets.
 
+### Scalar signed immediate increment
+
+Sweeping `i0..i31`, positive/negative immediate bits and both range boundaries
+establishes the read-modify-write form:
+
+| Form | Payload bits | Payload expression | Standalone prefix |
+| --- | ---: | --- | --- |
+| `IAU.INCS d imm14` | 24 | `3 + (d<<5) + ((imm14 & 0x3fff)<<10)` | `0xc6` |
+
+The immediate is signed **-8192..8191**; moviAsm rejects both adjacent values.
+All **168** current `IAU.ADD24` header shapes were independently compared with
+INCS substituted for SHL. Each preserves its prefix and 24-bit payload boundary,
+including branch and store packets. The randomized gate selects INCS, repeats
+all 168 shapes explicitly, and includes 32 register cases plus 31 signed
+immediate cases. Register increments and three-operand forms remain unsupported.
+
 ### Scalar low-word multiply
 
 Independent sweeps of all three registers through `i0..i31` establish:
@@ -523,9 +539,9 @@ unsupported form or header class. Counts overlap across shapes and must not be
 summed as packet totals. Parse failures are reported separately and fail the
 command. The combined baseline is 3291/11912 accepted packets and **98** distinct
 mnemonics (97 in the literal corpus alone). With symbolic branches, signed
-loads/stores, integer addition, comparisons, PCCX, AND/OR and immediate SHL,
-coverage is **8128/11912** packets, including 786 requiring symbolic fixups.
-Nineteen distinct mnemonics occur in accepted packets (six at baseline); the
+loads/stores, integer addition, comparisons, PCCX, AND/OR, LMULL, INCS and immediate SHL,
+coverage is **8304/11912** packets, including 794 requiring symbolic fixups.
+Twenty distinct mnemonics occur in accepted packets (six at baseline); the
 corpus still has 98 mnemonics.
 `accepted_packets` counts bytes-plus-fixups support and `relocatable_packets`
 identifies that subset. Coverage tests isolated packet forms; it does not
@@ -544,7 +560,7 @@ python3 -m tools.shaveasm.corpus --native-dir build/linux \
   --output /mnt/cache/build-shave/native-asm-corpus
 ```
 
-Offline regressions: 30 passed. Each randomized gate passed **6313/6313 cases**
+Offline regressions: 31 passed. Each randomized gate passed **6544/6544 cases**
 (seeds 3720 and 9001): the original 2362 isolated-packet cases (1000 random
 packets, 457 shapes, 352 mixed operand sweeps, 96 ADD sweeps, 384 PCCX pairs,
 eight immediate boundaries and 65 NOP cases), plus 64 counted-NOP branch
@@ -556,6 +572,7 @@ classes, 32 mixed store sweeps, 64 register-field sweeps, five boundaries and
 77 additional AND/SHL header cases. OR adds 180 header cases and 96 operand
 sweeps. CMII.U32 adds 124 legal header cases and 64 register-field sweeps.
 LMULL adds 180 header cases and 96 independent register-field sweeps.
+INCS adds 168 header cases, 32 register cases and 31 signed immediate cases.
 The current total is 607 prefix shapes.
 Every case's full instruction bytes and fixups are compared to moviAsm, not
 merely round-tripped through native code. All measured instruction forms occur
@@ -586,8 +603,8 @@ uncaptured and require explicit model/generator inputs.
 The parser structurally accepted all 55 captured assemblies. The literal
 corpus contains 97 distinct mnemonics. Only **3291/11912** parsed packets are
 accepted by the original byte-only encoder across the two corpora; the symbolic
-branch, signed-load/store, ADD, compare, PCCX, AND/OR and SHL extensions raise
-bytes-plus-fixups support to **8128/11912**. These are
+branch, signed-load/store, ADD, compare, PCCX, AND/OR, LMULL, INCS and SHL extensions raise
+bytes-plus-fixups support to **8304/11912**. These are
 syntactic coverage counts, **not** full-stream or whole-object parity claims.
 Calls, other branch forms, additional instruction/header classes, data and
 alignment directives, ELF symbols and relocations remain the next gate. Hybrid
