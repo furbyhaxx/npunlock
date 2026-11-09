@@ -1546,9 +1546,9 @@ def _operation(instruction: Instruction) -> _Operation:
         }[mnemonic]
         return _Operation(unit, opcode | register << 4 | base << 9 | immediate << 17, 32,
                           prefix_class=prefix_class)
-    if mnemonic in ("LSU0.LD.32", "LSU1.LD.32", "LSU0.CP.32") and len(operands) == 2:
+    if mnemonic in ("LSU0.LD.32", "LSU1.LD.32", "LSU0.CP.32", "LSU1.CP.32") and len(operands) == 2:
         destination, source = (_register(op, line) for op in operands)
-        opcode = 0x80007 if mnemonic == "LSU0.CP.32" else 0x1000D
+        opcode = 0x80007 if mnemonic.endswith(".CP.32") else 0x1000D
         return _Operation(unit, opcode | destination << 4 | source << 9, 24)
     if mnemonic in ("LSU1.ST.32", "LSU1.STI.32") and len(operands) == 2:
         source, base = (_register(op, line) for op in operands)

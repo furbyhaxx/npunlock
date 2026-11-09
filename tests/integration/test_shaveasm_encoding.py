@@ -64,6 +64,17 @@ class EncodingTests(unittest.TestCase):
             with self.subTest(source=source), self.assertRaises(AssemblyError):
                 encode(source)
 
+    def test_lsu1_scalar_copy_can_share_a_packet_with_comparison(self) -> None:
+        self.assertEqual(encode("LSU1.CP.32 i0 i0"), bytes.fromhex("89070008"))
+        self.assertEqual(encode("LSU1.CP.32 i1 i2"), bytes.fromhex("89170408"))
+        self.assertEqual(encode("LSU1.CP.32 i31 i31"), bytes.fromhex("89f73f08"))
+        self.assertEqual(encode("CMU.CMII.F32 i0 i1 || LSU1.CP.32 i8 i9"),
+                         bytes.fromhex("0e88000208871208"))
+        for source in ("LSU1.CP.32 i32 i0", "LSU1.CP.32 i0 i32",
+                       "LSU1.CP.32 i0 1", "LSU1.CP.32 v0.0 i0"):
+            with self.subTest(source=source), self.assertRaises(AssemblyError):
+                encode(source)
+
     def test_sau_register_left_shift_clears_the_immediate_selector(self) -> None:
         self.assertEqual(encode("SAU.SHL.X32 i0 i0 i0"), bytes.fromhex("3c110000"))
         self.assertEqual(encode("SAU.SHL.X32 i1 i2 i3"), bytes.fromhex("3c518401"))
