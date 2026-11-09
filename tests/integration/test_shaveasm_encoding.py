@@ -40,6 +40,18 @@ class EncodingTests(unittest.TestCase):
         with self.assertRaisesRegex(AssemblyError, "read port 6"):
             encode("CMU.CMII.U32 i1 i2 || LSU1.STO.32 i8 i9 0")
 
+    def test_lsu1_signed_offset_load_uses_the_thirty_two_bit_lsu1_class(self) -> None:
+        self.assertEqual(encode("LSU1.LDO.32 i0 i0 -16384"), bytes.fromhex("c902400180"))
+        self.assertEqual(encode("LSU1.LDO.32 i31 i31 16383"), bytes.fromhex("c9f27fff7f"))
+        self.assertEqual(encode("LSU1.LDO.32 i1 i2 -3"), bytes.fromhex("c91244fbff"))
+        for source in ("LSU1.LDO.32 i0 i0 -16385", "LSU1.LDO.32 i0 i0 16384",
+                       "LSU1.LDO.32 i0 i1 0 || LSU1.LDIL i2 1"):
+            with self.subTest(source=source), self.assertRaises(AssemblyError):
+                encode(source)
+        for comparison in ("CMU.CMII.I32", "CMU.CMII.U32"):
+            with self.subTest(comparison=comparison), self.assertRaisesRegex(AssemblyError, "read port 6"):
+                encode(f"{comparison} i0 i1 || LSU1.LDO.32 i8 i9 0")
+
     def test_lsu0_scalar_copy_shares_the_twenty_four_bit_lsu0_class(self) -> None:
         self.assertEqual(encode("LSU0.CP.32 i0 i0"), bytes.fromhex("82070008"))
         self.assertEqual(encode("LSU0.CP.32 i31 i31"), bytes.fromhex("82f73f08"))

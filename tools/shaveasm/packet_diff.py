@@ -28,7 +28,8 @@ def generate_packets(seed: int, count: int) -> list[str]:
             base = _UNITS.index(unit.split(".")[0]) * 4
             registers = tuple(f"i{base + rng.randrange(4)}" for _ in range(3))
         if unit in ("LSU0.LDO32", "LSU1.STO32"):
-            mnemonic = "LSU0.LDO.32" if unit == "LSU0.LDO32" else "LSU1.STO.32"
+            mnemonic = ("LSU0.LDO.32" if unit == "LSU0.LDO32"
+                        else rng.choice(("LSU1.STO.32", "LSU1.LDO.32")))
             return f"{mnemonic} {registers[0]} {registers[1]} {rng.randrange(-16384, 16384)}"
         if unit == "CMU.CMZ16":
             return f"CMU.CMZ.I32 {registers[0]}"
@@ -78,6 +79,9 @@ def generate_packets(seed: int, count: int) -> list[str]:
     for key in _PREFIXES:
         shape = key.split(",")
         store_packet = "LSU1.STO32" in shape
+        if "LSU1.STO32" in shape:
+            packets.append("\n || ".join("LSU1.LDO.32 i8 i9 -3" if unit == "LSU1.STO32"
+                                          else operation(unit, store_packet=True) for unit in shape))
         if "SAU" in shape:
             packets.append("\n || ".join("SAU.ADD.F32 i12 i13 i14" if unit == "SAU"
                                           else operation(unit, store_packet=store_packet) for unit in shape))
@@ -128,6 +132,14 @@ def generate_packets(seed: int, count: int) -> list[str]:
                 operands = ["i0", "i0"]
                 operands[position] = f"i{register}"
                 packets.append(mnemonic + " " + " ".join(operands))
+    for position in range(2):
+        for register in range(32):
+            operands = ["i0", "i0", "0"]
+            operands[position] = f"i{register}"
+            packets.append("LSU1.LDO.32 " + " ".join(operands))
+    packets.extend(f"LSU1.LDO.32 i0 i0 {value}" for value in
+                   (0, -1, 16383, -16384, *(1 << bit for bit in range(14)),
+                    *(-(1 << bit) for bit in range(15))))
     packets.extend(f"IAU.INCS i{r} 0" for r in range(32))
     packets.extend(f"IAU.INCS i0 {value}" for value in
                    (0, -1, 8191, -8192, *(1 << bit for bit in range(13)),
