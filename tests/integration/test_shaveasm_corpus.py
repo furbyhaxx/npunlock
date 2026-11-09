@@ -136,6 +136,13 @@ class CorpusTests(unittest.TestCase):
         self.assertEqual([e["line"] for e in errors if e["category"] == "expression"], [12, 16, 17])
         self.assertEqual([e["line"] for e in errors if e["category"] == "symbol_relocation"], [13, 14, 15])
 
+    def test_diagnostics_report_directives_in_register_jump_delay_window(self) -> None:
+        source = ".code c\nBRU.JMP i30\nNOP 4\n.byte 0\n.align 1\nNOP 2\n"
+        result = diagnose(source)
+        self.assertTrue(result["complete"])
+        self.assertEqual([(e["line"], e["category"]) for e in result["rejections"]],
+                         [(4, "delay_window_directive"), (5, "delay_window_directive")])
+
     def test_first_rejection_classification_preserves_statement_context(self) -> None:
         cases = {
             "instruction": ".code c\nlabel: IAU.ADD i1 i2 invalid\n",

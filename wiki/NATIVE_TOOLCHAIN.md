@@ -315,9 +315,8 @@ Symbol/immediate jump operands and nested control transfers remain rejected.
 The diagnostic whole-corpus gate after JMP remains **0/55 exact**, with all
 55 files rejecting instruction forms. Report:
 `/mnt/cache/build-shave/corpus-parity-jmp/summary.md`.
-The object writer passes packet suffixes for JMP, but its directive/alignment
-check currently identifies branches only through PC-relative fixups; its owner
-must also classify register jumps before claiming delay-window layout safety.
+The object writer passes packet suffixes for JMP and checks directives inside
+its delay window even though JMP has no PC-relative fixup.
 
 ### LSU0 high-half immediate and symbol load
 
@@ -802,20 +801,24 @@ byte offset and addend. No instruction fixup type beyond the exercised
 `R_SHAVE_PCREL16`/`R_SHAVE_PCREL16_AT4` (209/210) is claimed as verified here.
 
 Branch encoding receives the following packets in its current code-section run.
-A `.code` switch ends that run, including a repeated `.code` of the same name;
-repeating `.section` for the current section does not. Data and alignment
-inside the next six branch issue slots, or another control transfer there, fail
+The writer classifies PC-relative fixups and `BRU.BRA*`, `BRU.JMP`, and
+`BRU.SWP` mnemonics as control transfers; the encoder exposes no shared
+control-transfer predicate, and unmeasured forms remain unsupported. A `.code`
+switch ends that run, including a repeated `.code` of the same name; repeating
+`.section` for the current section does not. Data and alignment inside the
+next six branch issue slots, or another control transfer there, fail
 closed because their delay encoding is unmeasured. Unsupported directives,
 expressions, packet classes and instructions also fail rather than being
 silently skipped.
 
-The seven independently authored `shaveasm-object-*.s` fixtures cover the six
+The eight independently authored `shaveasm-object-*.s` fixtures cover the six
 original scalar forms, NOP, named and temporary local labels, global and
 undefined symbols, data and fill, section flags and alignment, absolute data
-relocations, branch relocations at byte and half-byte offsets, counted delay
-slots and section switches. On 2026-11-09 the command above compared every
-fixture to moviAsm: `compare_sections` reported zero differences and the complete
-objects were byte-identical. The test writes no vendor object to the repository.
+relocations, branch relocations at byte and half-byte offsets, register jumps,
+counted delay slots and section switches. On 2026-11-09 the command above
+compared every fixture to moviAsm: `compare_sections` reported zero differences
+and the complete objects were byte-identical. The test writes no vendor object
+to the repository.
 This is fixture parity, not evidence of full-corpus object parity.
 
 Whole-corpus object comparison uses the cached assembly and vendor objects,
@@ -842,5 +845,8 @@ Diagnostic continuation found 6819 rejected instruction operations or packet
 shapes and no non-instruction rejections. After integrating ISA commit
 `260e5ef`, the same 55 pairs still have **0/55** exact objects and diagnostic
 continuation finds 3535 instruction rejections and no non-instruction
-rejections. This does not establish that non-instruction parity is complete
-once actual instruction lengths and relocations are available.
+rejections. After integrating ISA commit `8b6061c` and checking register-jump
+delay windows, the result remains **0/55** exact; diagnostic continuation
+finds 2662 instruction rejections and no non-instruction rejections. This does
+not establish that non-instruction parity is complete once actual instruction
+lengths and relocations are available.
