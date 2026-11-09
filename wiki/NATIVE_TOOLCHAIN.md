@@ -271,6 +271,21 @@ independent without disabling the vendor analyzer or changing tested packets.
 
 ### Differential gates and corpus inventory
 
+Cached assembly can be inventoried without Wine or recompilation:
+
+```sh
+python3 -m tools.shaveasm.coverage /mnt/cache/build-shave/native-asm-corpus \
+  /mnt/cache/build-shave/native-dynamic-example-corpus
+```
+
+The JSON report groups rejected packets by mnemonic and operand shape, counting
+one occurrence per shape per packet. `unsupported_packets` identifies forms that
+also fail alone; `rejected_packets` includes supported forms co-issued with an
+unsupported form or header class. Counts overlap across shapes and must not be
+summed as packet totals. Parse failures are reported separately and fail the
+command. The combined baseline is 3291/11912 accepted packets and **98** distinct
+mnemonics (97 in the literal corpus alone).
+
 ```sh
 python3 -m unittest discover -s tests/integration -p 'test_shaveasm_*.py'
 python3 -m tools.shaveasm.packet_diff --native-dir build/linux \
