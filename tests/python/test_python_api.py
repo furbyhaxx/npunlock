@@ -20,6 +20,7 @@ from xml.etree import ElementTree as ET
 import numpy as np
 
 ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "python"))
 
 import npunlock as npu
@@ -759,6 +760,111 @@ class NativeLayoutTests(unittest.TestCase):
     def test_patch_target_integer_bounds(self) -> None:
         with self.assertRaises(ValueError):
             npu.PatchTarget(-1, 0, 1, 16, 32)
+
+
+class ShaveToolchainTests(unittest.TestCase):
+    class Compiler:
+        def __init__(self, assembly: bytes = b".code smoke\nNOP\n") -> None:
+            self.assembly = assembly
+            self.calls: list[str] = []
+
+        def compile_shave(self, source: bytes, **kwargs: object) -> bytes:
+            self.calls.append("vendor")
+            return b"vendor-elf"
+
+        def compile_shave_assembly(self, source: bytes, **kwargs: object) -> bytes:
+            self.calls.append("compiler")
+            return self.assembly
+
+        def default_shave_linker_script(self) -> bytes:
+            return b"SECTIONS {}"
+
+    def compile(self, compiler: Compiler, mode: str):
+        from npunlock._shave_toolchain import compile_shave, resolve_toolchain
+
+        return compile_shave(
+            compiler,
+            b"kernel",
+            movi_dll_dir=Path("/tmp/movitools"),
+            linker_script=None,
+            definitions=(),
+            timeout_ms=1000,
+            worker=None,
+            toolchain=resolve_toolchain(mode, None),
+        )
+
+    def test_toolchain_selection_and_environment_precedence(self) -> None:
+        from npunlock._shave_toolchain import resolve_toolchain
+
+        with patch.dict("os.environ", {}, clear=True):
+            self.assertEqual(resolve_toolchain(None, None).mode, "vendor")
+            self.assertEqual(resolve_toolchain(None, None).linker, Path("/opt/shave-lld/bin/ld.lld"))
+        with patch.dict("os.environ", {"NPUNLOCK_SHAVE_TOOLCHAIN": "auto", "NPUNLOCK_SHAVE_LINKER": "/env/lld"}):
+            self.assertEqual(resolve_toolchain(None, None).mode, "auto")
+            self.assertEqual(resolve_toolchain(None, None).linker, Path("/env/lld"))
+            selected = resolve_toolchain("hybrid", "/explicit/lld")
+            self.assertEqual((selected.mode, selected.linker), ("hybrid", Path("/explicit/lld")))
+            with self.assertRaisesRegex(ValueError, "vendor.*hybrid.*auto"):
+                resolve_toolchain("invalid", None)
+
+    def test_vendor_and_native_paths_are_selected_independently(self) -> None:
+        compiler = self.Compiler()
+        result = self.compile(compiler, "vendor")
+        self.assertEqual((result.path, result.elf, compiler.calls), ("vendor", b"vendor-elf", ["vendor"]))
+        compiler = self.Compiler()
+        with patch("npunlock._shave_toolchain._link_native", return_value=b"native-elf") as link:
+            result = self.compile(compiler, "hybrid")
+        self.assertEqual((result.path, result.elf, compiler.calls), ("hybrid", b"native-elf", ["compiler"]))
+        self.assertTrue(link.call_args.args[0].startswith(b"\x7fELF"))
+
+    def test_native_linker_receives_object_script_and_math_archive(self) -> None:
+        from npunlock._shave_toolchain import _link_native
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            linker = root / "ld.lld"
+            linker.write_text(
+                f"#!{sys.executable}\n"
+                "from pathlib import Path\n"
+                "import sys\n"
+                "args = sys.argv[1:]\n"
+                "assert args[:9] == ['-flavor', 'gnu', '-EL', '-e', 'controlled_act', "
+                "'-z', 'max-page-size=0x10', '--gc-sections', '-T']\n"
+                "assert Path(args[9]).read_bytes() == b'SECTIONS {}'\n"
+                "assert Path(args[10]).read_bytes() == b'object'\n"
+                "assert Path(args[11]).read_bytes() == b'math'\n"
+                "assert args[12] == '-o'\n"
+                "Path(args[13]).write_bytes(b'linked-elf')\n",
+                encoding="utf-8",
+            )
+            linker.chmod(0o755)
+            (root / "lib").mkdir()
+            (root / "lib/mlibm.a").write_bytes(b"math")
+            result = _link_native(
+                b"object",
+                native=self.Compiler(),
+                movi_dll_dir=root,
+                linker_script=None,
+                linker=linker,
+                timeout_ms=1000,
+            )
+            self.assertEqual(result, b"linked-elf")
+
+    def test_auto_falls_back_only_on_assembler_rejection(self) -> None:
+        compiler = self.Compiler(b".code smoke\nIAU.UNKNOWN i1 i2\n")
+        with patch("npunlock._shave_toolchain._link_native") as link:
+            result = self.compile(compiler, "auto")
+        self.assertEqual((result.path, result.elf, compiler.calls), ("vendor", b"vendor-elf", ["compiler", "vendor"]))
+        self.assertIn("line 2", result.rejection)
+        self.assertIn("IAU.UNKNOWN i1 i2", result.rejection)
+        link.assert_not_called()
+        with self.assertRaisesRegex(RuntimeError, "line 2.*IAU.UNKNOWN i1 i2"):
+            self.compile(self.Compiler(b".code smoke\nIAU.UNKNOWN i1 i2\n"), "hybrid")
+        compiler = self.Compiler()
+        with patch("npunlock._shave_toolchain._link_native", side_effect=OSError("link failed")):
+            with self.assertRaisesRegex(OSError, "link failed"):
+                self.compile(compiler, "auto")
+        self.assertEqual(compiler.calls, ["compiler"])
 
 
 class DoctorTests(unittest.TestCase):

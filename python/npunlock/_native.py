@@ -1099,6 +1099,8 @@ class NativeLibraries:
         ]
         self.shave.shavecc_compile_assembly.restype = ctypes.c_int
         self.shave.shavecc_assembly_result_release.argtypes = [ctypes.POINTER(_ShaveAssemblyResult)]
+        self.shave.shavecc_default_linker_script.argtypes = []
+        self.shave.shavecc_default_linker_script.restype = _View
         self.ir.ir2blob_compile.argtypes = [
             ctypes.POINTER(_IrOptions),
             _View,
@@ -1354,6 +1356,10 @@ class NativeLibraries:
             )
         finally:
             self.ir.ir2blob_result_release(ctypes.byref(result))
+
+    def default_shave_linker_script(self) -> bytes:
+        view = self.shave.shavecc_default_linker_script()
+        return ctypes.string_at(view.data, view.size) if view.data and view.size else b""
 
     def compile_shave(
         self,
