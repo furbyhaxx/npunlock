@@ -34,6 +34,12 @@ class EncodingTests(unittest.TestCase):
         self.assertEqual(encode("NOP 17"), b"\xf0\x00")
         self.assertEqual(encode("NOP 32"), b"\xf0\xf0")
 
+    def test_signed_compare_register_order_differs_from_copy_destination_order(self) -> None:
+        self.assertEqual(encode("CMU.CMII.I32 i31 i0"), bytes.fromhex("81f00101"))
+        self.assertEqual(encode("CMU.CMII.I32 i0 i31"), bytes.fromhex("81003e01"))
+        with self.assertRaises(AssemblyError):
+            encode("CMU.CMII.I32 i0 1")
+
     def test_immediate_shift_uses_the_twenty_four_bit_add_class(self) -> None:
         self.assertEqual(encode("IAU.SHL i0 i0 0"), bytes.fromhex("c60c0080"))
         self.assertEqual(encode("IAU.SHL i31 i31 31"), bytes.fromhex("c6ecff8f"))

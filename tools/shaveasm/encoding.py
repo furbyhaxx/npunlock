@@ -526,6 +526,9 @@ def _operation(instruction: Instruction) -> _Operation:
     if mnemonic == "CMU.CMZ.I32" and len(operands) == 1:
         source = _register(operands[0], line)
         return _Operation(unit, source << 4, 16, prefix_class="CMU.CMZ16")
+    if mnemonic == "CMU.CMII.I32" and len(operands) == 2:
+        left, right = (_register(op, line) for op in operands)
+        return _Operation(unit, 0x10000 | left << 4 | right << 9, 24)
     if mnemonic == "CMU.CP.32" and len(operands) == 2:
         destination, source = (_register(op, line) for op in operands)
         return _Operation(unit, 0x08000C | destination << 9 | source << 4, 24)
