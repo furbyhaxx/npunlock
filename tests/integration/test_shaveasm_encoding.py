@@ -34,6 +34,20 @@ class EncodingTests(unittest.TestCase):
         self.assertEqual(encode("NOP 17"), b"\xf0\x00")
         self.assertEqual(encode("NOP 32"), b"\xf0\xf0")
 
+    def test_lsu1_postincrement_store_uses_the_twenty_four_bit_class(self) -> None:
+        self.assertEqual(encode("LSU1.STI.32 i0 i0"), bytes.fromhex("89090081"))
+        self.assertEqual(encode("LSU1.STI.32 i31 i31"), bytes.fromhex("89f93f81"))
+        self.assertEqual(encode("LSU1.STI.32 i1 i2"), bytes.fromhex("89190481"))
+        self.assertEqual(encode("CMU.CP.32 i0 i1 || LSU1.STI.32 i8 i9"),
+                         bytes.fromhex("0e881c0008891281"))
+        for source in ("LSU1.STI.32 i32 i0", "LSU1.STI.32 i0 i32",
+                       "LSU1.STI.32 i0 1", "LSU1.STI.32 i0 i1 4"):
+            with self.subTest(source=source), self.assertRaises(AssemblyError):
+                encode(source)
+        for comparison in ("CMU.CMII.I32", "CMU.CMII.U32"):
+            with self.subTest(comparison=comparison), self.assertRaisesRegex(AssemblyError, "read port 6"):
+                encode(f"{comparison} i0 i1 || LSU1.STI.32 i8 i9")
+
     def test_unsigned_compare_has_no_signed_selector_bit(self) -> None:
         self.assertEqual(encode("CMU.CMII.U32 i31 i0"), bytes.fromhex("81f00100"))
         self.assertEqual(encode("CMU.CMII.U32 i0 i31"), bytes.fromhex("81003e00"))

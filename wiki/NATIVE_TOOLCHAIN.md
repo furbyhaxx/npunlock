@@ -751,6 +751,17 @@ rejections. First rejections are LSU0.LD.16 (9 files), LSU1.LDIH (8),
 LSU0.LD.32.F16.F32 and LSU1.STO.64 (7 each), LSU1.STI.32 (5),
 LSU1.LD.32 (4), SAU.MUL.F32 and LSU0.LD.8 (3 each), and IAU.MUL (1).
 
+### Scalar LSU1 postincrement store
+
+`LSU1.STI.32 src base` uses the existing 24-bit LSU1 class and payload
+`0x810009 | src<<4 | base<<9`. All 408 LSU1 header combinations and
+64 independent register sweeps match moviAsm. Both signed and unsigned CMII
+conflict with STI.32 on scalar read port 6; the encoder rejects these packets,
+matching vendor diagnostics. Both seeds pass **18139/18139** packet cases
+and 60 offline tests pass. Coverage is **10040/11912** packets, with the
+first **5/55 exact objects**, zero different objects, and 2102 diagnostic
+instruction rejections. The five exact files previously rejected only STI.32.
+
 ### Differential gates and corpus inventory
 
 Cached assembly can be inventoried without Wine or recompilation:

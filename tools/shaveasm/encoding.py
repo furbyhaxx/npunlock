@@ -1548,6 +1548,9 @@ def _operation(instruction: Instruction) -> _Operation:
         destination, source = (_register(op, line) for op in operands)
         opcode = {"LSU0.LD.32": 0x1000D, "LSU0.CP.32": 0x80007}[mnemonic]
         return _Operation(unit, opcode | destination << 4 | source << 9, 24)
+    if mnemonic == "LSU1.STI.32" and len(operands) == 2:
+        source, base = (_register(op, line) for op in operands)
+        return _Operation(unit, 0x810009 | source << 4 | base << 9, 24)
     if mnemonic == "LSU0.LDIH" and len(operands) == 2:
         destination = _register(operands[0], line)
         if re.fullmatch(r"[A-Za-z_.$][A-Za-z_0-9.$]*", operands[1]):
@@ -1663,8 +1666,8 @@ def encode_packet_with_fixups(
         full, remaining = divmod(count, 16)
         return b"\xf0" * full + (bytes([(remaining - 1) << 4]) if remaining else b""), ()
     mnemonics = {instruction.mnemonic for instruction in packet.operations}
-    if mnemonics & {"LSU1.STO.32", "LSU1.LDO.32"} and mnemonics & {"CMU.CMII.I32", "CMU.CMII.U32"}:
-        raise AssemblyError(f"line {first.line}: CMII and LSU1 offset operation conflict on scalar read port 6")
+    if mnemonics & {"LSU1.STO.32", "LSU1.LDO.32", "LSU1.STI.32"} and mnemonics & {"CMU.CMII.I32", "CMU.CMII.U32"}:
+        raise AssemblyError(f"line {first.line}: CMII and LSU1 memory operation conflict on scalar read port 6")
     operations = [_operation(instruction) for instruction in packet.operations]
     if len({op.unit for op in operations}) != len(operations):
         raise AssemblyError(f"line {first.line}: repeated functional unit in packet")
