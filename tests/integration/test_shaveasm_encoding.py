@@ -34,6 +34,15 @@ class EncodingTests(unittest.TestCase):
         self.assertEqual(encode("NOP 17"), b"\xf0\x00")
         self.assertEqual(encode("NOP 32"), b"\xf0\xf0")
 
+    def test_signed_store_offset_has_its_own_lsu1_header_class(self) -> None:
+        self.assertEqual(encode("LSU1.STO.32 i0 i0 -16384"), bytes.fromhex("c906400180"))
+        self.assertEqual(encode("LSU1.STO.32 i31 i31 16383"), bytes.fromhex("c9f67fff7f"))
+        for source in ("LSU1.STO.32 i0 i1 -16385", "LSU1.STO.32 i0 i1 16384",
+                       "LSU1.STO.32 i0 i1 0 || LSU1.LDIL i2 1",
+                       "LSU1.STO.32 i8 i9 0 || CMU.CMII.I32 i1 i2"):
+            with self.subTest(source=source), self.assertRaises(AssemblyError):
+                encode(source)
+
     def test_signed_compare_register_order_differs_from_copy_destination_order(self) -> None:
         self.assertEqual(encode("CMU.CMII.I32 i31 i0"), bytes.fromhex("81f00101"))
         self.assertEqual(encode("CMU.CMII.I32 i0 i31"), bytes.fromhex("81003e01"))

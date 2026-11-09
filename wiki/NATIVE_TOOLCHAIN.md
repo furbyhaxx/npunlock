@@ -271,6 +271,29 @@ reported conflicting writes despite being in different sections. Each generated
 case now has a separate preceding `NOP 16` padding section. This makes cases
 independent without disabling the vendor analyzer or changing tested packets.
 
+### Scalar signed-offset store
+
+Independent `i0..i31` sweeps of both registers, offset-bit sweeps and signed
+range boundaries establish:
+
+| Form | Payload bits | Payload expression | Standalone prefix |
+| --- | ---: | --- | --- |
+| `LSU1.STO.32 v a offset15` | 32 | `0x14006 + (v<<4) + (a<<9) + ((offset15 & 0x7fff)<<17)` | `0xc9` |
+
+Offsets are signed -16384..16383, without scaling; both out-of-range neighbors
+were rejected by moviAsm. Header derivation across **277** combinations of the
+measured non-LSU1 classes found unique layouts. The **150** shapes at or below
+128 bits are retained explicitly as class `LSU1.STO32`; LSU1 keeps its original
+position before SAU. AND, SHL and CMU comparison variants are additionally
+checked in the randomized gate wherever their resource usage allows co-issue.
+
+moviAsm rejects **CMU.CMII.I32 + LSU1.STO.32** on scalar read port `IRFrp6`, even
+with disjoint registers; CP.32 + STO.32 with those same registers is accepted.
+The native encoder rejects this measured conflict without changing scheduling.
+The generator selects CP.32 for store-containing CMU packets and never silently
+reschedules a conflicting CMII packet. This is a specific measured conflict,
+not a general functional-unit legality model.
+
 ### Scalar signed register comparison
 
 Independent sweeps of both operands through `i0..i31` establish:
@@ -478,9 +501,10 @@ unsupported form or header class. Counts overlap across shapes and must not be
 summed as packet totals. Parse failures are reported separately and fail the
 command. The combined baseline is 3291/11912 accepted packets and **98** distinct
 mnemonics (97 in the literal corpus alone). With symbolic branches, signed
-loads, integer addition, comparisons, PCCX, AND and immediate SHL, coverage is
-**7023/11912** packets, including 769 requiring symbolic fixups. Fifteen distinct
-mnemonics occur in accepted packets (six at baseline); the total corpus still has 98 mnemonics.
+loads/stores, integer addition, comparisons, PCCX, AND and immediate SHL,
+coverage is **7353/11912** packets, including 776 requiring symbolic fixups.
+Sixteen distinct mnemonics occur in accepted packets (six at baseline); the total
+corpus still has 98 mnemonics.
 `accepted_packets` counts bytes-plus-fixups support and `relocatable_packets`
 identifies that subset. Coverage tests isolated packet forms; it does not
 validate whole-stream branch suffixes or assert whole-object parity.
@@ -498,14 +522,16 @@ python3 -m tools.shaveasm.corpus --native-dir build/linux \
   --output /mnt/cache/build-shave/native-asm-corpus
 ```
 
-Offline regressions: 26 passed. Each randomized gate passed **5245/5245 cases**
+Offline regressions: 27 passed. Each randomized gate passed **5573/5573 cases**
 (seeds 3720 and 9001): the original 2362 isolated-packet cases (1000 random
 packets, 457 shapes, 352 mixed operand sweeps, 96 ADD sweeps, 384 PCCX pairs,
 eight immediate boundaries and 65 NOP cases), plus 64 counted-NOP branch
 suffixes, 168 repeated-operation suffixes and 2000 random mixed branch suffixes.
 An additional 140 AND header cases and 96 individual register sweeps cover AND;
 131 SHL header cases and 96 operand sweeps cover immediate SHL. CMII.I32 adds
-124 header cases and 64 independent register sweeps.
+124 header cases and 64 independent register sweeps. STO.32 adds 150 header
+classes, 32 mixed store sweeps, 64 register-field sweeps, five boundaries and
+77 additional AND/SHL header cases. The current total is 607 prefix shapes.
 Every case's full instruction bytes and fixups are compared to moviAsm, not
 merely round-tripped through native code. All measured instruction forms occur
 in the real compiler corpus.
@@ -535,8 +561,8 @@ uncaptured and require explicit model/generator inputs.
 The parser structurally accepted all 55 captured assemblies. The literal
 corpus contains 97 distinct mnemonics. Only **3291/11912** parsed packets are
 accepted by the original byte-only encoder across the two corpora; the symbolic
-branch, signed-load, ADD, compare, PCCX, AND and SHL extensions raise
-bytes-plus-fixups support to **7023/11912**. These are
+branch, signed-load/store, ADD, compare, PCCX, AND and SHL extensions raise
+bytes-plus-fixups support to **7353/11912**. These are
 syntactic coverage counts, **not** full-stream or whole-object parity claims.
 Calls, other branch forms, additional instruction/header classes, data and
 alignment directives, ELF symbols and relocations remain the next gate. Hybrid

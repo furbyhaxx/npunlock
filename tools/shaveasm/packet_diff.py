@@ -21,18 +21,19 @@ def generate_packets(seed: int, count: int) -> list[str]:
     """Generate conflict-free packets from scalar instruction families seen in GELU."""
     rng = random.Random(seed)
 
-    def operation(unit: str, registers: tuple[str, str, str] | None = None) -> str:
+    def operation(unit: str, registers: tuple[str, str, str] | None = None, *, store_packet: bool = False) -> str:
         if unit == "BRU":
             return "BRU.BRA external_target"
         if registers is None:
             base = _UNITS.index(unit.split(".")[0]) * 4
             registers = tuple(f"i{base + rng.randrange(4)}" for _ in range(3))
-        if unit == "LSU0.LDO32":
-            return f"LSU0.LDO.32 {registers[0]} {registers[1]} {rng.randrange(-16384, 16384)}"
+        if unit in ("LSU0.LDO32", "LSU1.STO32"):
+            mnemonic = "LSU0.LDO.32" if unit == "LSU0.LDO32" else "LSU1.STO.32"
+            return f"{mnemonic} {registers[0]} {registers[1]} {rng.randrange(-16384, 16384)}"
         if unit == "CMU.CMZ16":
             return f"CMU.CMZ.I32 {registers[0]}"
         if unit == "CMU":
-            mnemonic = rng.choice(("CMU.CP.32", "CMU.CMII.I32"))
+            mnemonic = "CMU.CP.32" if store_packet else rng.choice(("CMU.CP.32", "CMU.CMII.I32"))
             return f"{mnemonic} {registers[0]} {registers[1]}"
         if unit in ("LSU0", "LSU1"):
             return f"{unit}.LDIL {registers[0]} {rng.randrange(65536)}"
@@ -53,7 +54,7 @@ def generate_packets(seed: int, count: int) -> list[str]:
 
     packets = ["NOP", *(f"NOP {n}" for n in range(1, 65))]
     for register in range(32):
-        for unit in (*_UNITS, "LSU0.LDO32", "IAU.ADD24", "CMU.CMZ16", "PEU.PCCX12"):
+        for unit in (*_UNITS, "LSU0.LDO32", "LSU1.STO32", "IAU.ADD24", "CMU.CMZ16", "PEU.PCCX12"):
             packets.append(operation(unit, (f"i{register}", f"i{31 - register}", f"i{(register + 11) % 32}")))
     packets.extend(("LSU0.LDIL i31 65535", "LSU1.LDIL i0 0", "SAU.ADD.i32 i0 i31 31"))
     packets.extend(f"LSU0.LDO.32 i31 i0 {value}" for value in (-16384, -1, 0, 1, 16383))
@@ -66,15 +67,17 @@ def generate_packets(seed: int, count: int) -> list[str]:
     for shape in shapes:
         order = list(shape)
         rng.shuffle(order)
-        packets.append("\n || ".join(operation(unit) for unit in order))
+        packets.append("\n || ".join(operation(unit, store_packet="LSU1.STO32" in shape) for unit in order))
     for key in _PREFIXES:
-        if "IAU" in key.split(","):
-            packets.append("\n || ".join(operation(unit) for unit in key.split(",")).replace("IAU.XOR", "IAU.AND"))
-        if "IAU.ADD24" in key.split(","):
+        shape = key.split(",")
+        store_packet = "LSU1.STO32" in shape
+        if "IAU" in shape:
+            packets.append("\n || ".join(operation(unit, store_packet=store_packet) for unit in shape).replace("IAU.XOR", "IAU.AND"))
+        if "IAU.ADD24" in shape:
             packets.append("\n || ".join(f"IAU.SHL i16 i17 {rng.randrange(32)}" if unit == "IAU.ADD24"
-                                          else operation(unit) for unit in key.split(",")))
-        if "CMU" in key.split(","):
-            packets.append("\n || ".join(operation(unit) for unit in key.split(",")).replace("CMU.CP.32", "CMU.CMII.I32"))
+                                          else operation(unit, store_packet=store_packet) for unit in shape))
+        if "CMU" in shape and not store_packet:
+            packets.append("\n || ".join(operation(unit) for unit in shape).replace("CMU.CP.32", "CMU.CMII.I32"))
     for position in range(3):
         for register in range(32):
             operands = ["i0"] * 3
@@ -91,6 +94,12 @@ def generate_packets(seed: int, count: int) -> list[str]:
             operands = ["i0", "i0"]
             operands[position] = f"i{register}"
             packets.append("CMU.CMII.I32 " + " ".join(operands))
+    for position in range(2):
+        for register in range(32):
+            operands = ["i0", "i0", "0"]
+            operands[position] = f"i{register}"
+            packets.append("LSU1.STO.32 " + " ".join(operands))
+    packets.extend(f"LSU1.STO.32 i31 i0 {value}" for value in (-16384, -1, 0, 1, 16383))
     delay_operations = (
         "NOP", "NOP 1", "NOP 2", "NOP 4", "NOP 6", "NOP 16", "NOP 17", "NOP 32",
         "LSU0.LDIL i4 1", "CMU.CMZ.I32 i0", "IAU.ADD i16 i17 231",
