@@ -213,10 +213,13 @@ def generate_packets(seed: int, count: int) -> list[str]:
                 for right in values:
                     packets.append("\n || ".join(f"{mnemonic} i16 i17 {right}" if unit == "IAU.ADD24"
                                                   else operation(unit, store_packet=store_packet) for unit in shape))
-        if "LSU0" in shape:
-            for lane in range(4):
-                packets.append("\n || ".join(f"LSU0.LD.8 i4.{lane} i5" if unit == "LSU0"
-                                              else operation(unit, store_packet=store_packet) for unit in shape))
+        for load_unit, mnemonic, destination, base in (("LSU0", "LSU0.LD.8", "i4", "i5"),
+                                                      ("LSU1", "LSU1.LD.16", "i8", "i9")):
+            if load_unit in shape:
+                for lane in range(4):
+                    packets.append("\n || ".join(f"{mnemonic} {destination}.{lane} {base}" if unit == load_unit
+                                                  else operation(unit, store_packet=store_packet or load_unit == "LSU1")
+                                                  for unit in shape))
         for copy_unit, destination, source in (("LSU0", "v4", "v5"), ("LSU1", "v8", "v9")):
             if copy_unit in shape:
                 packets.append("\n || ".join(f"{copy_unit}.CP.128 {destination} {source}" if unit == copy_unit
@@ -396,8 +399,9 @@ def generate_packets(seed: int, count: int) -> list[str]:
             operands[position] = f"v{register}"
             for mnemonic in ("CMU.CP.128", "LSU0.CP.128", "LSU1.CP.128"):
                 packets.append(mnemonic + " " + " ".join(operands))
-    packets.extend(f"LSU0.LD.8 i{r}.{lane} i0" for r in range(32) for lane in range(4))
-    packets.extend(f"LSU0.LD.8 i0.0 i{r}" for r in range(32))
+    for mnemonic in ("LSU0.LD.8", "LSU1.LD.16"):
+        packets.extend(f"{mnemonic} i{r}.{lane} i0" for r in range(32) for lane in range(4))
+        packets.extend(f"{mnemonic} i0.0 i{r}" for r in range(32))
     packets.extend(f"CMU.CP.128.32.R v{r} i0" for r in range(32))
     packets.extend(f"CMU.CP.128.32.R v0 i{r}" for r in range(32))
     packets.extend(f"CMU.CP.32 i{r} v0.0" for r in range(32))
