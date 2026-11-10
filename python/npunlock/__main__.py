@@ -14,7 +14,11 @@ def _parser() -> argparse.ArgumentParser:
     doctor.add_argument("--json", action="store_true", help="write the versioned machine-readable report")
     doctor.add_argument("--native-dir", help="development override containing the native library and workers")
     doctor.add_argument("--movi-dll-dir", help="MVC_DEPEND root; otherwise use NPUNLOCK_MOVITOOLS_DIR")
-    doctor.add_argument("--shave-toolchain", choices=("vendor", "hybrid", "auto"), help="SHAVE assembler/linker mode")
+    doctor.add_argument(
+        "--shave-toolchain",
+        choices=("vendor", "hybrid", "auto"),
+        help="SHAVE assembler/linker mode (default: auto; honors configuration/environment)",
+    )
     doctor.add_argument("--shave-linker", help="patched native SHAVE ld.lld path")
     doctor.add_argument("--timeout-ms", type=int, default=20_000, help="finite graph-compiler timeout")
     checks = doctor.add_mutually_exclusive_group()

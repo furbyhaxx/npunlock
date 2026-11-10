@@ -2,10 +2,12 @@
 
 ## Status and scope
 
-The default `vendor` mode uses the full MoviTools toolchain under Wine.
-Linux `hybrid` mode uses Wine `moviCompile -S`, the bundled native assembler,
-and patched native `ld.lld`; `auto` falls back to the vendor assembler and
-linker separately for each kernel the native assembler rejects. As of
+The default `auto` mode uses Wine `moviCompile -S`, the bundled native assembler,
+and patched native `ld.lld` on Linux when available, falling back to the vendor
+assembler and linker separately for each rejected kernel. Missing native tools
+or non-Linux hosts select vendor for every kernel and log the reason once per
+process. Explicit `vendor` uses the full MoviTools toolchain; explicit `hybrid`
+requires native tools and fails on missing tools or assembler rejections. As of
 2026-11-10 the native assembler is **native-complete for the captured corpus**:
 **55/55 complete objects are byte-identical** to moviAsm, with zero differences
 or rejections. All **11912/11912 packets** and **98 captured mnemonics** are
@@ -25,10 +27,11 @@ patched linker with `NPUNLOCK_SHAVE_LINKER` (default
 `/opt/shave-lld/bin/ld.lld`). Python accepts `shave_toolchain=` and
 `shave_linker=` at compile/build entry points or in `npu.configure()`. Explicit
 arguments override process configuration, environment and defaults. `doctor`
-reports both native tools and the selected mode; `--shave-toolchain` and
-`--shave-linker` override its environment. Hybrid/auto report the path used per
-kernel on stderr. Auto falls back only on assembler rejection, not compiler or
-linker failures. Cache requests include each actual path and native tool
+reports both native tools, the selected/default mode, effective mode and reason;
+`--shave-toolchain` and `--shave-linker` override its environment. Hybrid/auto report the path used per
+kernel on stderr, except unavailable-tool fallback is logged once. With native
+tools available, auto falls back only on assembler rejection, not compiler or
+linker execution failures. Cache requests include each actual path and native tool
 identities; auto compiles kernels before cache lookup to determine their paths.
 
 On 2026-11-09, native linking was validated on NPU3720 (`8086:ad1d`), while the

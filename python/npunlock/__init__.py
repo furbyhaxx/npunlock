@@ -201,6 +201,8 @@ def _resolve_shave_toolchain(mode: str | None, linker: str | os.PathLike[str] | 
 
 
 def _report_shave_compilation(context: str, result: ShaveCompilation) -> None:
+    if result.unavailable_reason:
+        return
     message = f"npunlock: {context} toolchain={result.path}"
     if result.rejection:
         message += f" (native assembler rejected {result.rejection})"
@@ -3600,10 +3602,12 @@ def compile_cached(
     runtime_root = _native_directory(native_dir)
     dependencies = _cache_dependency_json(runtime_root, resolved_movi, ir_worker, movi_worker)
     assembler_identity = (
-        native_shave_assembler_identity() if toolchain is not None and toolchain.mode != "vendor" else None
+        native_shave_assembler_identity() if toolchain is not None and toolchain.effective_mode == "hybrid" else None
     )
     linker_identity = (
-        native_shave_linker_identity(toolchain.linker) if toolchain is not None and toolchain.mode != "vendor" else None
+        native_shave_linker_identity(toolchain.linker)
+        if toolchain is not None and toolchain.effective_mode == "hybrid"
+        else None
     )
     build_kernels = list(resolved_kernels)
     paths: list[str] = []

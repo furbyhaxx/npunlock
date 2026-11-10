@@ -1,8 +1,12 @@
 from __future__ import annotations
 
+import importlib
 import os
+import platform
 import re
+import shutil
 import subprocess
+import sys
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
@@ -15,6 +19,11 @@ from ._native import NativeLibraries
 class ShaveToolchain:
     mode: Literal["vendor", "hybrid", "auto"]
     linker: Path
+    unavailable_reason: str | None = None
+
+    @property
+    def effective_mode(self) -> Literal["vendor", "hybrid"]:
+        return "vendor" if self.mode == "vendor" or self.unavailable_reason else "hybrid"
 
 
 @dataclass(frozen=True, slots=True)
@@ -22,10 +31,11 @@ class ShaveCompilation:
     elf: bytes
     path: Literal["vendor", "hybrid"]
     rejection: str | None = None
+    unavailable_reason: str | None = None
 
 
 def resolve_toolchain(mode: str | None, linker: str | os.PathLike[str] | None) -> ShaveToolchain:
-    selected_mode = mode if mode is not None else os.environ.get("NPUNLOCK_SHAVE_TOOLCHAIN", "vendor")
+    selected_mode = mode if mode is not None else os.environ.get("NPUNLOCK_SHAVE_TOOLCHAIN", "auto")
     modes: dict[str, Literal["vendor", "hybrid", "auto"]] = {
         "vendor": "vendor",
         "hybrid": "hybrid",
@@ -38,7 +48,33 @@ def resolve_toolchain(mode: str | None, linker: str | os.PathLike[str] | None) -
     )
     if not os.fspath(selected_linker):
         raise ValueError("SHAVE linker path must not be empty")
-    return ShaveToolchain(modes[selected_mode], Path(selected_linker).expanduser())
+    toolchain = ShaveToolchain(modes[selected_mode], Path(selected_linker).expanduser())
+    reason = native_unavailability(toolchain) if toolchain.mode == "auto" else None
+    return ShaveToolchain(toolchain.mode, toolchain.linker, reason)
+
+
+def native_unavailability(toolchain: ShaveToolchain) -> str | None:
+    if platform.system() != "Linux":
+        return "native SHAVE tools require Linux"
+    if shutil.which(os.fspath(toolchain.linker)) is None:
+        return f"native SHAVE linker not found or not executable: {toolchain.linker}"
+    try:
+        module = importlib.import_module("tools.shaveasm.objwriter")
+        if not callable(getattr(module, "assemble", None)):
+            raise ImportError("assembler entry point is missing")
+        importlib.import_module("tools.shaveasm.parser")
+    except (ImportError, OSError, SyntaxError) as error:
+        return f"native SHAVE assembler unavailable: {error}"
+    return None
+
+
+_reported_fallbacks: set[str] = set()
+
+
+def _report_unavailable(reason: str) -> None:
+    if reason not in _reported_fallbacks:
+        _reported_fallbacks.add(reason)
+        print(f"npunlock: toolchain=vendor (auto: {reason}; using vendor for every kernel)", file=sys.stderr)
 
 
 def _rejection_detail(error: Exception, source: str) -> str:
@@ -119,6 +155,10 @@ def compile_shave(
         )
         return ShaveCompilation(elf, "vendor", rejection)
 
+    if toolchain.unavailable_reason:
+        _report_unavailable(toolchain.unavailable_reason)
+        result = vendor()
+        return ShaveCompilation(result.elf, "vendor", unavailable_reason=toolchain.unavailable_reason)
     if toolchain.mode == "vendor":
         return vendor()
 
