@@ -839,6 +839,19 @@ class EncodingTests(unittest.TestCase):
             with self.subTest(source=source), self.assertRaises(AssemblyError):
                 encode(source)
 
+    def test_lsu1_postincrement_byte_lane_store(self) -> None:
+        self.assertEqual(encode("LSU1.STI.8 i0.0 i0"), bytes.fromhex("89090084"))
+        self.assertEqual(encode("LSU1.STI.8 i31.3 i31"), bytes.fromhex("89f9ff84"))
+        for source in ("LSU1.STI.8 i32.0 i0", "LSU1.STI.8 i0.4 i0",
+                       "LSU1.STI.8 i0 i1", "LSU1.STI.8 v0.0 i1", "LSU1.STI.8 i0.0 i32"):
+            with self.subTest(source=source), self.assertRaises(AssemblyError):
+                encode(source)
+        for operation, port in (("CMU.CMII.I32 i0 i1", "read port 6"),
+                                ("CMU.CP.32.U32.F32 i0 i1", "write port 3"),
+                                ("LSU0.STO.64 i4 i5 0", "read port 9")):
+            with self.subTest(operation=operation), self.assertRaisesRegex(AssemblyError, port):
+                encode(operation + " || LSU1.STI.8 i8.0 i9")
+
     def test_invalid_or_unmeasured_input_fails_closed(self) -> None:
         for source in [
             "LSU0.LDIL i4 65536",
