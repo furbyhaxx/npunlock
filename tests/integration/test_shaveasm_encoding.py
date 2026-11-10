@@ -1048,6 +1048,18 @@ class EncodingTests(unittest.TestCase):
             with self.subTest(operands=operands), self.assertRaises(AssemblyError):
                 encode("SAU.MUL.I32 " + operands)
 
+    def test_cmu_byte_zero_shuffle(self) -> None:
+        for source, expected in (("CMU.VSZM.BYTE i0 i0 [ZZ00]", "c100000900"),
+                                 ("CMU.VSZM.BYTE i1 i2 [ZZ01]", "c120420900"),
+                                 ("CMU.VSZM.BYTE i31 i31 [ZZ11]", "c1f07f0b00"),
+                                 ("CMU.VSZM.BYTE i0 i1 [ZZ10] || LSU0.LDIL i4 123", "b410000b20b20700")):
+            self.assertEqual(encode(source), bytes.fromhex(expected))
+        for operands in ("i0 i0 [ZZ12]", "i0 i0 [ZZ1]", "i32 i0 [ZZ10]", "i0 v0 [ZZ10]", "i0 i0 label"):
+            with self.subTest(operands=operands), self.assertRaises(AssemblyError):
+                encode("CMU.VSZM.BYTE " + operands)
+        with self.assertRaisesRegex(AssemblyError, "unmeasured packet class"):
+            encode("CMU.VSZM.BYTE i0 i1 [ZZ10] || LSU1.LDIL i8 1")
+
     def test_invalid_or_unmeasured_input_fails_closed(self) -> None:
         for source in [
             "LSU0.LDIL i4 65536",

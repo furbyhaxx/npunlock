@@ -1699,6 +1699,19 @@ parity remains **53/55 exact**, zero different, two rejected. Fixtures:
 `/mnt/cache/build-shave/sau-mulimm-measure`, `sau-mulimm-{3720,9001}` and
 `corpus-parity-sau-mulimm`.
 
+### CMU byte zero shuffle
+
+`CMU.VSZM.BYTE d s [ZZab]` accepts binary selectors a,b and uses the
+28-bit payload `0x90000 | d<<9 | s<<4 | a<<17 | b<<14`. The bracketed
+selector is an immediate mask, not a symbol or relocation. The standalone
+prefix is `0xc1`; co-issue with LSU0 uses `0xb4` (both eight-bit headers).
+Other masks and packet classes remain unmeasured and fail closed. All 32
+registers with all four masks match moviAsm. Both seeds pass
+**120302/120302** cases; **140 offline tests** pass. Corpus parity remains
+**53/55 exact**, zero different, two rejected. Fixtures:
+`/mnt/cache/build-shave/cmu-vszm-measure`, `cmu-vszm-{3720,9001}` and
+`corpus-parity-cmu-vszm`.
+
 ### Differential gates and corpus inventory
 
 Cached assembly can be inventoried without Wine or recompilation:

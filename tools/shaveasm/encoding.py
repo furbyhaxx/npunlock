@@ -12,6 +12,8 @@ from .parser import AssemblyError, Instruction, Packet, is_float_literal
 _ORDER = ("VAU", "CMU", "LSU0", "LSU1", "SAU", "IAU", "BRU", "PEU")
 _PREFIXES = {
     "CMU": (8, 0x81),
+    "CMU.VSZM28": (8, 0xC1),
+    "CMU.VSZM28,LSU0": (8, 0xB4),
     "LSU0": (8, 0x82),
     "LSU1": (8, 0x89),
     "SAU": (8, 0x3C),
@@ -3849,6 +3851,14 @@ def _operation(instruction: Instruction) -> _Operation:
         opcode = 0x400004 if mnemonic == "CMU.MAX.F32" else 0x400005
         return _Operation(unit, opcode | destination << 9 | left << 4 | right << 14,
                           28, prefix_class="CMU.CMPI28")
+    if mnemonic == "CMU.VSZM.BYTE" and len(operands) == 3:
+        destination, source = (_register(op, line) for op in operands[:2])
+        mask = re.fullmatch(r"\[ZZ([01])([01])\]", operands[2].upper())
+        if mask is None:
+            raise AssemblyError(f"line {line}: unmeasured byte shuffle mask {operands[2]!r}")
+        return _Operation(unit, 0x90000 | destination << 9 | source << 4
+                          | int(mask[1]) << 17 | int(mask[2]) << 14, 28,
+                          prefix_class="CMU.VSZM28")
     if mnemonic == "CMU.CMPI" and len(operands) == 2:
         source = _register(operands[0], line)
         immediate = _immediate(operands[1], 16, line)
