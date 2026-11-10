@@ -3860,10 +3860,12 @@ def _operation(instruction: Instruction) -> _Operation:
         selector = {"CMU.CMII.I32": 0x10000, "CMU.CMII.U32": 0,
                     "CMU.CMII.F32": 0x80000, "CMU.CMII.I8": 0x50000}[mnemonic]
         return _Operation(unit, selector | left << 4 | right << 9, 24)
-    if mnemonic == "CMU.CP.32.F16.F32" and len(operands) == 2:
+    if mnemonic in ("CMU.CP.32.F16.F32", "CMU.CP.32.U8.F32") and len(operands) == 2:
         destination = _register(operands[0], line)
-        source = _scalar_lane_register(operands[1], line, 2)
-        return _Operation(unit, 0x680001 | destination << 9 | source, 24)
+        halfword = mnemonic == "CMU.CP.32.F16.F32"
+        source = _scalar_lane_register(operands[1], line, 2 if halfword else 4)
+        opcode = 0x680001 if halfword else 0x6A000E
+        return _Operation(unit, opcode | destination << 9 | source, 24)
     if mnemonic in ("CMU.CP.32.U32.F32", "CMU.CP.32.F32.U32S") and len(operands) == 2:
         destination, source = (_register(op, line) for op in operands)
         opcode = 0x64000E if mnemonic == "CMU.CP.32.U32.F32" else 0x640004
@@ -3999,7 +4001,7 @@ def encode_packet_with_fixups(
         full, remaining = divmod(count, 16)
         return b"\xf0" * full + (bytes([(remaining - 1) << 4]) if remaining else b""), ()
     mnemonics = {instruction.mnemonic for instruction in packet.operations}
-    if mnemonics & {"CMU.CP.32.U32.F32", "CMU.CP.32.F32.U32S", "CMU.MAX.F32", "CMU.MIN.F32"} and mnemonics & {"LSU1.STI.16.F32.F16", "LSU1.STI.16", "LSU1.STI.8", "LSU1.STI.32"}:
+    if mnemonics & {"CMU.CP.32.U8.F32", "CMU.CP.32.U32.F32", "CMU.CP.32.F32.U32S", "CMU.MAX.F32", "CMU.MIN.F32"} and mnemonics & {"LSU1.STI.16.F32.F16", "LSU1.STI.16", "LSU1.STI.8", "LSU1.STI.32"}:
         raise AssemblyError(f"line {first.line}: CMU scalar result and LSU1 postincrement store conflict on scalar write port 3")
     if mnemonics & {"LSU1.STO.16", "LSU1.STO.32", "LSU1.LDO.32", "LSU1.LDO.64", "LSU1.LD.64", "LSU1.STO.64", "LSU1.ST.64", "LSU1.STI.16.F32.F16", "LSU1.STI.16", "LSU1.STI.8", "LSU1.STI.32", "LSU1.LD.32", "LSU1.LD.16", "LSU1.LD.32.F16.F32", "LSU1.ST.32", "LSU1.ST.16"} and mnemonics & {"CMU.CMII.I32", "CMU.CMII.U32", "CMU.CMII.F32", "CMU.CMII.I8", "CMU.MAX.F32", "CMU.MIN.F32"}:
         raise AssemblyError(f"line {first.line}: CMU scalar pair and LSU1 memory operation conflict on scalar read port 6")

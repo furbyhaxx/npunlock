@@ -248,6 +248,9 @@ def generate_packets(seed: int, count: int) -> list[str]:
                                               else "VAU.OR v28 v29 v30" if unit == "VAU.OR20"
                                               else operation(unit, store_packet=store_packet) for unit in shape))
             if "LSU1.STI20" not in shape:
+                for lane in range(4):
+                    packets.append("\n || ".join(f"CMU.CP.32.U8.F32 i0 i1.{lane}" if unit == "CMU"
+                                                  else operation(unit, store_packet=store_packet) for unit in shape))
                 for mnemonic in ("CMU.CP.32.U32.F32", "CMU.CP.32.F32.U32S"):
                     packets.append("\n || ".join(f"{mnemonic} i0 i1" if unit == "CMU"
                                                   else operation(unit, store_packet=store_packet) for unit in shape))
@@ -431,6 +434,8 @@ def generate_packets(seed: int, count: int) -> list[str]:
             operands[position] = f"i{register}"
             for mnemonic in ("CMU.MAX.F32", "CMU.MIN.F32"):
                 packets.append(mnemonic + " " + " ".join(operands))
+    packets.extend(f"CMU.CP.32.U8.F32 i{r} i0.0" for r in range(32))
+    packets.extend(f"CMU.CP.32.U8.F32 i0 i{r}.{lane}" for r in range(32) for lane in range(4))
     packets.extend(f"CMU.CP.32.F16.F32 i{r} i0.0" for r in range(32))
     packets.extend(f"CMU.CP.32.F16.F32 i0 i{r}.{lane}" for r in range(32) for lane in range(2))
     packets.extend(f"CMU.CP.128.32.R v{r} i0" for r in range(32))

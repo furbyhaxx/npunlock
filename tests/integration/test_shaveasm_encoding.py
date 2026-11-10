@@ -942,6 +942,16 @@ class EncodingTests(unittest.TestCase):
             with self.subTest(source=source), self.assertRaises(AssemblyError):
                 encode_packet_with_fixups(parse(source)[0])
 
+    def test_cmu_unsigned_byte_to_float_conversion(self) -> None:
+        self.assertEqual(encode("CMU.CP.32.U8.F32 i0 i0.0"), bytes.fromhex("810e006a"))
+        self.assertEqual(encode("CMU.CP.32.U8.F32 i1 i2.1"), bytes.fromhex("812e426a"))
+        self.assertEqual(encode("CMU.CP.32.U8.F32 i31 i31.3"), bytes.fromhex("81feff6a"))
+        for operands in ("i0 i0.4", "i0 i0", "i0 v0.0", "i32 i0.0", "i0 i32.0"):
+            with self.subTest(operands=operands), self.assertRaises(AssemblyError):
+                encode("CMU.CP.32.U8.F32 " + operands)
+        with self.assertRaisesRegex(AssemblyError, "write port 3"):
+            encode("CMU.CP.32.U8.F32 i0 i1.0 || LSU1.STI.32 i8 i9")
+
     def test_invalid_or_unmeasured_input_fails_closed(self) -> None:
         for source in [
             "LSU0.LDIL i4 65536",

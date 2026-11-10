@@ -1559,6 +1559,20 @@ rejections fall from 45 to 43. The function-table example is now exact.
 Fixtures: `/mnt/cache/build-shave/lsu0-ldil-symbol-{3720,9001}` and
 `corpus-parity-lsu0-ldil-symbol`.
 
+### CMU unsigned byte-to-float conversion
+
+`CMU.CP.32.U8.F32 d iS.lane` uses the 24-bit CMU class with payload
+`0x6a000e | d<<9 | s<<4 | lane<<14`. All four scalar byte lanes are
+accepted; lane 4 is rejected by moviAsm. This form conflicts with LSU1
+postincrement stores on scalar write port 3. All 558 legal headers with
+each lane, 32 destinations and 128 source/lane pairs match moviAsm.
+Both seeds pass **108007/108007** cases; **129 offline tests** pass.
+Corpus parity rises from **50/55 to 51/55 exact**, zero different,
+four rejected; diagnostic instruction rejections fall from 43 to 42.
+The custom u8-to-f32 example is now exact. Fixtures:
+`/mnt/cache/build-shave/cmu-cpu8-{3720,9001}` and
+`corpus-parity-cmu-cpu8`.
+
 ### Differential gates and corpus inventory
 
 Cached assembly can be inventoried without Wine or recompilation:
