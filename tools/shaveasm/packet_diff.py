@@ -30,6 +30,9 @@ def generate_packets(seed: int, count: int) -> list[str]:
         if registers is None:
             base = _UNITS.index(unit.split(".")[0]) * 4
             registers = tuple(f"i{base + rng.randrange(4)}" for _ in range(3))
+        if unit == "LSU0.LDO32" and rng.randrange(2):
+            destination = registers[0] if not store_packet and rng.randrange(2) else f"v{rng.randrange(32)}.{rng.randrange(16)}"
+            return f"LSU0.LDO.64 {destination} {registers[1]} {rng.randrange(-16384, 16384)}"
         if unit in ("LSU0.LDO32", "LSU1.STO32"):
             mnemonic = (rng.choice(("LSU0.LDO.32", "LSU0.STO.32")) if unit == "LSU0.LDO32"
                         else rng.choice(("LSU1.STO.32", "LSU1.LDO.32")))
@@ -106,6 +109,10 @@ def generate_packets(seed: int, count: int) -> list[str]:
         shape = key.split(",")
         store_packet = "LSU1.STO32" in shape
         if "LSU0.LDO32" in shape:
+            for destination in ("i4", "v4.0", "v4.1"):
+                packets.append("\n || ".join(f"LSU0.LDO.64 {destination} i5 -3" if unit == "LSU0.LDO32"
+                                              else "LSU1.STO.32 i8 i9 -3" if unit == "LSU1.STO32"
+                                              else operation(unit, store_packet=store_packet) for unit in shape))
             packets.append("\n || ".join("LSU0.STO.32 i4 i5 -3" if unit == "LSU0.LDO32"
                                           else operation(unit, store_packet=store_packet) for unit in shape))
         if "LSU1.STO32" in shape:
@@ -207,6 +214,13 @@ def generate_packets(seed: int, count: int) -> list[str]:
                    (0, -1, 16383, -16384, *(1 << bit for bit in range(14)),
                     *(-(1 << bit) for bit in range(15))))
     packets.extend(f"LSU1.STO.32 i31 i0 {value}" for value in (-16384, -1, 0, 1, 16383))
+    packets.extend(f"LSU0.LDO.64 i{register} i0 0" for register in range(32))
+    packets.extend(f"LSU0.LDO.64 v{register}.{lane} i0 0"
+                   for register in range(32) for lane in range(16))
+    packets.extend(f"LSU0.LDO.64 i0 i{register} 0" for register in range(32))
+    packets.extend(f"LSU0.LDO.64 i0 i0 {value}" for value in
+                   (0, -1, 16383, -16384, *(1 << bit for bit in range(14)),
+                    *(-(1 << bit) for bit in range(15))))
     packets.extend(f"LSU0.LD.16 i{register}.{lane} i0"
                    for register in range(32) for lane in range(4))
     packets.extend(f"LSU0.LD.16 i0.0 i{register}" for register in range(32))

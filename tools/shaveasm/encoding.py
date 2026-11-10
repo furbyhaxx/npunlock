@@ -1914,6 +1914,16 @@ def _register(text: str, line: int) -> int:
     return int(match[1])
 
 
+def _doubleword_register(text: str, line: int) -> int:
+    match = re.fullmatch(r"[vV]([0-9]+)\.([0-9]+)", text)
+    if match is not None:
+        register, lane = int(match[1]), int(match[2])
+        if not 0 <= register < 32 or not 0 <= lane < 16:
+            raise AssemblyError(f"line {line}: invalid vector doubleword register {text!r}")
+        return register << 4 | (0x4000 if lane == 0 else 0)
+    return _register(text, line) << 4 | 0x10000
+
+
 def _immediate(text: str, bits: int, line: int) -> int:
     try:
         value = int(text, 0)
@@ -1954,6 +1964,12 @@ def _operation(instruction: Instruction) -> _Operation:
         }[mnemonic]
         return _Operation(unit, opcode | register << 4 | base << 9 | immediate << 17, 32,
                           prefix_class=prefix_class)
+    if mnemonic == "LSU0.LDO.64" and len(operands) == 3:
+        register = _doubleword_register(operands[0], line)
+        base = _register(operands[1], line)
+        immediate = _signed_immediate(operands[2], 15, line)
+        return _Operation(unit, 2 | register | base << 9 | immediate << 17, 32,
+                          prefix_class="LSU0.LDO32")
     if mnemonic == "LSU0.LD.16" and len(operands) == 2:
         destination = re.fullmatch(r"[iI]([0-9]+)\.([0-9]+)", operands[0])
         if destination is None or not 0 <= int(destination[1]) < 32 or not 0 <= int(destination[2]) < 4:
@@ -2111,6 +2127,12 @@ def encode_packet_with_fixups(
     mnemonics = {instruction.mnemonic for instruction in packet.operations}
     if mnemonics & {"LSU1.STO.32", "LSU1.LDO.32", "LSU1.STI.32", "LSU1.LD.32", "LSU1.ST.32"} and mnemonics & {"CMU.CMII.I32", "CMU.CMII.U32", "CMU.CMII.F32"}:
         raise AssemblyError(f"line {first.line}: CMII and LSU1 memory operation conflict on scalar read port 6")
+    if mnemonics & {"LSU1.LD.32", "LSU1.LDO.32"} and any(
+        instruction.mnemonic == "LSU0.LDO.64" and instruction.operands
+        and re.fullmatch(r"[iI][0-9]+", instruction.operands[0])
+        for instruction in packet.operations
+    ):
+        raise AssemblyError(f"line {first.line}: LSU0 scalar doubleword load and LSU1 load conflict on scalar write port 5")
     operations = [_operation(instruction) for instruction in packet.operations]
     if len({op.unit for op in operations}) != len(operations):
         raise AssemblyError(f"line {first.line}: repeated functional unit in packet")
