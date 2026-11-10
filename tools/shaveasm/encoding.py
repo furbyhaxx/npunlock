@@ -3944,6 +3944,9 @@ def _operation(instruction: Instruction) -> _Operation:
                 raise AssemblyError(f"line {line}: unmeasured floating point mapping {operands[2]!r}")
             right = constants[operands[2]]
             selector = 0x100000
+        elif mnemonic == "SAU.MUL.I32" and not re.fullmatch(r"[iI][0-9]+", operands[2]):
+            right = _signed_immediate(operands[2], 5, line)
+            selector = 0x100000
         else:
             right = _register(operands[2], line)
         opcode = {"SAU.ADD.F32": 0x200000, "SAU.SUB.F32": 0x200002,

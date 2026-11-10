@@ -1687,6 +1687,17 @@ tests** pass. Corpus parity remains **53/55 exact**, zero different, two
 rejected. Fixtures: `/mnt/cache/build-shave/sau-subi32-measure`,
 `sau-subi32-{3720,9001}` and `corpus-parity-sau-subi32`.
 
+### SAU integer immediate multiplication
+
+`SAU.MUL.I32 d s immediate` accepts signed five-bit values -16..15 and
+uses payload `0x100004 | d<<10 | s<<5 | (immediate & 31)<<15` in the
+24-bit SAU class. All SAU headers, all 32 immediate values and all scalar
+register fields match moviAsm. Values outside the measured range fail closed.
+Both seeds pass **120147/120147** cases; **139 offline tests** pass. Corpus
+parity remains **53/55 exact**, zero different, two rejected. Fixtures:
+`/mnt/cache/build-shave/sau-mulimm-measure`, `sau-mulimm-{3720,9001}` and
+`corpus-parity-sau-mulimm`.
+
 ### Differential gates and corpus inventory
 
 Cached assembly can be inventoried without Wine or recompilation:
