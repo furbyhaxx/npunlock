@@ -740,6 +740,19 @@ class EncodingTests(unittest.TestCase):
             with self.subTest(operation=operation), self.assertRaisesRegex(AssemblyError, "write port 3"):
                 encode("CMU.CP.32.F32.U32S i0 i1 || " + operation)
 
+    def test_cmu_scalar_replication_to_vector(self) -> None:
+        self.assertEqual(encode("CMU.CP.128.32.R v0 i0"), bytes.fromhex("81070000"))
+        self.assertEqual(encode("CMU.CP.128.32.R v31 i31"), bytes.fromhex("81f73f00"))
+        for source in ("CMU.CP.128.32.R v32 i0", "CMU.CP.128.32.R v0 i32",
+                       "CMU.CP.128.32.R i0 i1", "CMU.CP.128.32.R v0.0 i1",
+                       "CMU.CP.128.32.R v0 v1"):
+            with self.subTest(source=source), self.assertRaises(AssemblyError):
+                encode(source)
+
+        for operation in ("VAU.MUL.F32", "VAU.ADD.F32", "VAU.SUB.F32", "VAU.OR"):
+            with self.subTest(operation=operation), self.assertRaisesRegex(AssemblyError, "same vector register"):
+                encode("CMU.CP.128.32.R v0 i1 || " + operation + " v0 v2 v3")
+
     def test_invalid_or_unmeasured_input_fails_closed(self) -> None:
         for source in [
             "LSU0.LDIL i4 65536",
