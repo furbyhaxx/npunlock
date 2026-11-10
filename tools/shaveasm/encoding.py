@@ -11,11 +11,26 @@ from .parser import AssemblyError, Instruction, Packet, is_float_literal
 
 _ORDER = ("VAU", "CMU", "LSU0", "LSU1", "SAU", "IAU", "BRU", "PEU")
 _PREFIXES = {
+    "CMU,LSU0.LDO32,LSU1,SAU.AND20,IAU,PEU.PCCX12": (24, 0xCAB80F),
+    "CMU,LSU0.LDO32,LSU1,IAU.ADD24,PEU.PCCX12": (24, 0xCCB80F),
+    "CMU,LSU0,SAU,IAU.ADD24,PEU.PCCX12": (24, 0xCF280F),
+    "CMU,LSU0,LSU1.STO32,SAU.AND20,IAU.ADD24,PEU.PCCX12": (24, 0xCEE80F),
+    "CMU,LSU0,LSU1.STO32,IAU.ADD24,PEU.PCCX12": (24, 0xCCE80F),
+    "CMU,LSU0,LSU1,SAU.AND20,IAU.ADD24,PEU.PCCX12": (24, 0xCEA80F),
+    "CMU,LSU0,LSU1,SAU.AND20,IAU,PEU.PCCX12": (24, 0xCAA80F),
+    "CMU,LSU0,LSU1,SAU,IAU.ADD24,PEU.PCCX12": (24, 0xCFA80F),
+    "CMU,LSU0.LDO32,LSU1.STO32,SAU.AND20,IAU.ADD24": (24, 0xEF80F),
+    "CMU,LSU0,LSU1,SAU.AND20,IAU.ADD24": (24, 0xEA80F),
+    "CMU,LSU0,LSU1,SAU,IAU.ADD24": (24, 0xFA80F),
     "CMU": (8, 0x81),
+    "CMU.VSZM28": (8, 0xC1),
+    "CMU.VSZM28,LSU0": (8, 0xB4),
     "LSU0": (8, 0x82),
     "LSU1": (8, 0x89),
     "SAU": (8, 0x3C),
     "IAU": (8, 0x86),
+    "IAU.NOT16": (8, 0x46),
+    "SAU,IAU.NOT16": (8, 0x7C),
     "PEU": (8, 0x85),
     "CMU,LSU0": (8, 0xA4),
     "CMU,LSU1": (16, 0x880E),
@@ -3689,6 +3704,9 @@ _PREFIXES = {
     "VAU.OR20,CMU.CMPI28,LSU0.LD20,LSU1.STI20,PEU.PCCX12": (24, 0xC05E0F),
     "VAU.OR20,CMU,LSU0,LSU1,IAU": (24, 0x8AA0F),
     "CMU,LSU0,SAU.AND20,IAU.ADD24,PEU.PCCX12": (24, 0xCE280F),
+    "CMU,LSU0,LSU1,SAU.AND20,IAU": (24, 0xAA80F),
+    "CMU,LSU0,LSU1,SAU,IAU,PEU.PCCX12": (24, 0xCBA80F),
+    "CMU,LSU0,LSU1,IAU.ADD24,PEU.PCCX12": (24, 0xCCA80F),
 }
 _PREDICATES = {"EQ": 1, "NEQ": 14, "LT": 4, "LTE": 5, "GT": 2, "GTE": 3}
 _PCCX_PREDICATES = {**_PREDICATES, "NEQ": 6}
@@ -3710,11 +3728,25 @@ def _register(text: str, line: int) -> int:
     return int(match[1])
 
 
+def _scalar_lane_register(text: str, line: int, lanes: int, *, register_shift: int = 4) -> int:
+    match = re.fullmatch(r"[iI]([0-9]+)\.([0-9]+)", text)
+    if match is None or not 0 <= int(match[1]) < 32 or not 0 <= int(match[2]) < lanes:
+        raise AssemblyError(f"line {line}: invalid scalar lane register {text!r}")
+    return int(match[1]) << register_shift | int(match[2]) << 14
+
+
 def _vector_register(text: str, line: int) -> int:
     match = re.fullmatch(r"[vV]([0-9]+)", text)
     if match is None or not 0 <= int(match[1]) < 32:
         raise AssemblyError(f"line {line}: invalid vector register {text!r}")
     return int(match[1])
+
+
+def _vector_word_register(text: str, line: int, *, register_shift: int = 4) -> int:
+    match = re.fullmatch(r"[vV]([0-9]+)\.([0-9]+)", text)
+    if match is None or not 0 <= int(match[1]) < 32 or not 0 <= int(match[2]) < 4:
+        raise AssemblyError(f"line {line}: invalid vector word register {text!r}")
+    return int(match[1]) << register_shift | int(match[2]) << 14
 
 
 def _doubleword_register(text: str, line: int, *, indirect: bool = False) -> int:
@@ -3776,6 +3808,13 @@ def _operation(instruction: Instruction) -> _Operation:
         }[mnemonic]
         return _Operation(unit, opcode | register << 4 | base << 9 | immediate << 17, 32,
                           prefix_class=prefix_class)
+    if mnemonic in ("LSU0.LDO.16", "LSU0.STO.16", "LSU1.STO.16") and len(operands) == 3:
+        register = _scalar_lane_register(operands[0], line, 1)
+        base = _register(operands[1], line)
+        immediate = _signed_immediate(operands[2], 15, line)
+        opcode = 0x18002 if mnemonic == "LSU0.LDO.16" else 0x18006
+        return _Operation(unit, opcode | register | base << 9 | immediate << 17, 32,
+                          prefix_class="LSU0.LDO32" if unit == "LSU0" else "LSU1.STO32")
     if mnemonic in ("LSU0.LDO.64", "LSU0.STO.64", "LSU1.LDO.64", "LSU1.STO.64") and len(operands) == 3:
         register = _doubleword_register(operands[0], line)
         base = _register(operands[1], line)
@@ -3783,23 +3822,29 @@ def _operation(instruction: Instruction) -> _Operation:
         opcode = 6 if ".STO." in mnemonic else 2
         return _Operation(unit, opcode | register | base << 9 | immediate << 17, 32,
                           prefix_class="LSU0.LDO32" if unit == "LSU0" else "LSU1.STO32")
-    if mnemonic in ("LSU0.LD.64", "LSU1.LD.64", "LSU1.ST.64") and len(operands) == 2:
+    if mnemonic in ("LSU0.LD.64", "LSU1.LD.64", "LSU0.ST.64", "LSU1.ST.64") and len(operands) == 2:
         register = _doubleword_register(operands[0], line, indirect=True)
         base = _register(operands[1], line)
-        opcode = 0x8009 if mnemonic == "LSU1.ST.64" else 0x800D
+        opcode = 0x8009 if ".ST." in mnemonic else 0x800D
         return _Operation(unit, opcode | register | base << 9, 24)
-    if mnemonic in ("LSU0.LD.16", "LSU1.STI.16") and len(operands) == 2:
-        destination = re.fullmatch(r"[iI]([0-9]+)\.([0-9]+)", operands[0])
-        if destination is None or not 0 <= int(destination[1]) < 32 or not 0 <= int(destination[2]) < 4:
-            raise AssemblyError(f"line {line}: invalid scalar halfword register {operands[0]!r}")
-        register, lane = int(destination[1]), int(destination[2])
+    if mnemonic in ("LSU0.LD.16", "LSU1.LD.16", "LSU0.LD.8", "LSU1.STI.16", "LSU1.STI.8", "LSU1.ST.16", "LSU0.ST.16") and len(operands) == 2:
+        register = _scalar_lane_register(operands[0], line, 4)
         base = _register(operands[1], line)
-        opcode = 0x820009 if mnemonic == "LSU1.STI.16" else 0x2000D
-        return _Operation(unit, opcode | register << 4 | base << 9 | lane << 14, 24)
+        opcode = {"LSU1.STI.16": 0x820009, "LSU0.LD.16": 0x2000D,
+                  "LSU1.LD.16": 0x2000D, "LSU0.LD.8": 0x4000D, "LSU1.STI.8": 0x840009,
+                  "LSU1.ST.16": 0x20009, "LSU0.ST.16": 0x20009}[mnemonic]
+        return _Operation(unit, opcode | register | base << 9, 24)
     if mnemonic in ("LSU0.LD.32.F16.F32", "LSU1.LD.32.F16.F32") and len(operands) == 2:
         destination, base = (_register(op, line) for op in operands)
         return _Operation(unit, destination << 4 | base << 9, 20,
                           prefix_class="LSU0.LD20" if unit == "LSU0" else "LSU1.STI20")
+    if mnemonic in ("LSU0.CP.128", "LSU1.CP.128") and len(operands) == 2:
+        destination, source = (_vector_register(op, line) for op in operands)
+        return _Operation(unit, 0x480007 | destination << 4 | source << 9, 24)
+    if mnemonic in ("LSU0.CP.32", "LSU1.CP.32") and len(operands) == 2 and operands[0].lower().startswith("v"):
+        destination = _vector_word_register(operands[0], line)
+        source = _register(operands[1], line)
+        return _Operation(unit, 0x0C0007 | destination | source << 9, 24)
     if mnemonic in ("LSU0.LD.32", "LSU1.LD.32", "LSU0.CP.32", "LSU1.CP.32") and len(operands) == 2:
         destination, source = (_register(op, line) for op in operands)
         opcode = 0x80007 if mnemonic.endswith(".CP.32") else 0x1000D
@@ -3820,11 +3865,24 @@ def _operation(instruction: Instruction) -> _Operation:
         return _Operation(unit, 3 | destination << 3 | immediate << 8, 24)
     if mnemonic in ("LSU0.LDIL", "LSU1.LDIL") and len(operands) == 2:
         destination = _register(operands[0], line)
-        if mnemonic == "LSU1.LDIL" and re.fullmatch(r"[A-Za-z_.$][A-Za-z_0-9.$]*", operands[1]):
+        if re.fullmatch(r"[A-Za-z_.$][A-Za-z_0-9.$]*", operands[1]):
             return _Operation(unit, 2 | destination << 3, 24,
                               Fixup(operands[1], 0, 8, 16, "R_SHAVE_LO16"))
         immediate = _immediate(operands[1], 16, line)
         return _Operation(unit, 2 | destination << 3 | immediate << 8, 24)
+    if mnemonic in ("CMU.MAX.F32", "CMU.MIN.F32") and len(operands) == 3:
+        destination, left, right = (_register(op, line) for op in operands)
+        opcode = 0x400004 if mnemonic == "CMU.MAX.F32" else 0x400005
+        return _Operation(unit, opcode | destination << 9 | left << 4 | right << 14,
+                          28, prefix_class="CMU.CMPI28")
+    if mnemonic == "CMU.VSZM.BYTE" and len(operands) == 3:
+        destination, source = (_register(op, line) for op in operands[:2])
+        mask = re.fullmatch(r"\[ZZ([01])([01])\]", operands[2].upper())
+        if mask is None:
+            raise AssemblyError(f"line {line}: unmeasured byte shuffle mask {operands[2]!r}")
+        return _Operation(unit, 0x90000 | destination << 9 | source << 4
+                          | int(mask[1]) << 17 | int(mask[2]) << 14, 28,
+                          prefix_class="CMU.VSZM28")
     if mnemonic == "CMU.CMPI" and len(operands) == 2:
         source = _register(operands[0], line)
         immediate = _immediate(operands[1], 16, line)
@@ -3833,27 +3891,55 @@ def _operation(instruction: Instruction) -> _Operation:
     if mnemonic == "CMU.CMZ.I32" and len(operands) == 1:
         source = _register(operands[0], line)
         return _Operation(unit, source << 4, 16, prefix_class="CMU.CMZ16")
-    if mnemonic in ("CMU.CMII.I32", "CMU.CMII.U32", "CMU.CMII.F32", "CMU.CMII.I8") and len(operands) == 2:
+    if mnemonic in ("CMU.CMII.I32", "CMU.CMII.U32", "CMU.CMII.F32", "CMU.CMII.I8", "CMU.CMII.U16") and len(operands) == 2:
         left, right = (_register(op, line) for op in operands)
         selector = {"CMU.CMII.I32": 0x10000, "CMU.CMII.U32": 0,
-                    "CMU.CMII.F32": 0x80000, "CMU.CMII.I8": 0x50000}[mnemonic]
+                    "CMU.CMII.F32": 0x80000, "CMU.CMII.I8": 0x50000, "CMU.CMII.U16": 0x20000}[mnemonic]
         return _Operation(unit, selector | left << 4 | right << 9, 24)
-    if mnemonic == "CMU.CP.32" and len(operands) == 2:
+    if mnemonic == "CMU.CP.16.F32.F16" and len(operands) == 2:
+        destination = _scalar_lane_register(operands[0], line, 2, register_shift=9)
+        source = _register(operands[1], line)
+        return _Operation(unit, 0x688001 | destination | source << 4, 24)
+    if mnemonic in ("CMU.CP.32.F16.F32", "CMU.CP.32.U8.F32") and len(operands) == 2:
         destination = _register(operands[0], line)
-        vector = re.fullmatch(r"[vV]([0-9]+)\.([0-9]+)", operands[1])
-        if vector is not None:
-            source, lane = int(vector[1]), int(vector[2])
-            if not 0 <= source < 32 or not 0 <= lane < 4:
-                raise AssemblyError(f"line {line}: invalid vector word register {operands[1]!r}")
-            return _Operation(unit, 0x70000C | destination << 9 | source << 4 | lane << 14, 24)
+        halfword = mnemonic == "CMU.CP.32.F16.F32"
+        source = _scalar_lane_register(operands[1], line, 2 if halfword else 4)
+        opcode = 0x680001 if halfword else 0x6A000E
+        return _Operation(unit, opcode | destination << 9 | source, 24)
+    if mnemonic in ("CMU.CP.32.U32.F32", "CMU.CP.32.F32.U32S") and len(operands) == 2:
+        destination, source = (_register(op, line) for op in operands)
+        opcode = 0x64000E if mnemonic == "CMU.CP.32.U32.F32" else 0x640004
+        return _Operation(unit, opcode | destination << 9 | source << 4, 24)
+    if mnemonic in ("CMU.CP.128.32.R", "CMU.CP.128") and len(operands) == 2:
+        destination = _vector_register(operands[0], line)
+        replicated = mnemonic == "CMU.CP.128.32.R"
+        source = _register(operands[1], line) if replicated else _vector_register(operands[1], line)
+        opcode = 7 if replicated else 0x48000C
+        return _Operation(unit, opcode | destination << 9 | source << 4, 24)
+    if mnemonic == "CMU.CP.64" and len(operands) == 2:
+        destination, source = (_register(op, line) for op in operands)
+        return _Operation(unit, 0x04000C | destination << 9 | source << 4, 24)
+    if mnemonic == "CMU.CP.32" and len(operands) == 2:
+        if operands[0].lower().startswith("v"):
+            destination = _vector_word_register(operands[0], line, register_shift=9)
+            source = _register(operands[1], line)
+            return _Operation(unit, 0x0C000C | destination | source << 4, 24)
+        destination = _register(operands[0], line)
+        if operands[1].lower().startswith("v"):
+            source = _vector_word_register(operands[1], line)
+            return _Operation(unit, 0x70000C | destination << 9 | source, 24)
         source = _register(operands[1], line)
         return _Operation(unit, 0x08000C | destination << 9 | source << 4, 24)
+    if mnemonic == "IAU.NOT" and len(operands) == 2:
+        destination, source = (_register(op, line) for op in operands)
+        return _Operation(unit, 0x10 | destination << 10 | source << 5, 16,
+                          prefix_class="IAU.NOT16")
     if mnemonic == "IAU.INCS" and len(operands) == 2:
         register = _register(operands[0], line)
         immediate = _signed_immediate(operands[1], 14, line)
         return _Operation(unit, 3 | register << 5 | immediate << 10, 24,
                           prefix_class="IAU.ADD24")
-    if mnemonic in ("IAU.SHL", "IAU.SHR.U32") and len(operands) == 3:
+    if mnemonic in ("IAU.SHL", "IAU.SHR.U32", "IAU.ROL") and len(operands) == 3:
         destination, source = (_register(op, line) for op in operands[:2])
         if re.fullmatch(r"[iI][0-9]+", operands[2]):
             right = _register(operands[2], line)
@@ -3861,7 +3947,7 @@ def _operation(instruction: Instruction) -> _Operation:
         else:
             right = _immediate(operands[2], 5, line)
             selector = 0x800000
-        opcode = 0x0C if mnemonic == "IAU.SHL" else 0x0E
+        opcode = {"IAU.SHL": 0x0C, "IAU.SHR.U32": 0x0E, "IAU.ROL": 0x05}[mnemonic]
         return _Operation(unit, opcode | selector | destination << 10 | source << 5 | right << 15, 24,
                           prefix_class="IAU.ADD24")
     if mnemonic in ("IAU.ADD", "IAU.SUB", "IAU.MUL") and len(operands) == 3:
@@ -3876,17 +3962,18 @@ def _operation(instruction: Instruction) -> _Operation:
         opcode = {"IAU.ADD": 0, "IAU.SUB": 1, "IAU.MUL": 2}[mnemonic]
         return _Operation(unit, opcode | selector | destination << 10 | left << 5 | right << 15, 24,
                           prefix_class="IAU.ADD24")
-    if mnemonic in ("IAU.XOR", "IAU.AND", "IAU.OR", "IAU.LMULL", "IAU.LMULH", "IAU.ADDCI", "IAU.SUBCI") and len(operands) == 3:
+    if mnemonic in ("IAU.XOR", "IAU.AND", "IAU.OR", "IAU.LMULL", "IAU.LMULH", "IAU.ADDCI", "IAU.SUBCI", "IAU.MAXU") and len(operands) == 3:
         destination, left, right = (_register(op, line) for op in operands)
         opcode = {"IAU.XOR": 0x12, "IAU.AND": 0x10, "IAU.OR": 0x11,
-                  "IAU.LMULL": 0x04, "IAU.LMULH": 0x05, "IAU.ADDCI": 0x06, "IAU.SUBCI": 0x07}[mnemonic]
+                  "IAU.LMULL": 0x04, "IAU.LMULH": 0x05, "IAU.ADDCI": 0x06, "IAU.SUBCI": 0x07,
+                  "IAU.MAXU": 0}[mnemonic]
         return _Operation(unit, opcode | destination << 10 | left << 5 | right << 15, 20)
     if mnemonic in ("SAU.AND", "SAU.XOR", "SAU.OR") and len(operands) == 3:
         destination, left, right = (_register(op, line) for op in operands)
         opcode = {"SAU.AND": 0x18, "SAU.XOR": 0x1A, "SAU.OR": 0x1B}[mnemonic]
         return _Operation(unit, opcode | destination << 10 | left << 5 | right << 15, 20,
                           prefix_class="SAU.AND20")
-    if mnemonic in ("SAU.ADD.F32", "SAU.SUB.F32", "SAU.MUL.I32", "SAU.MUL.F32", "SAU.DIV.F32") and len(operands) == 3:
+    if mnemonic in ("SAU.ADD.F32", "SAU.SUB.F32", "SAU.MUL.I32", "SAU.MUL.F32", "SAU.DIV.F32", "SAU.DIV.U16", "SAU.DIV.U32") and len(operands) == 3:
         destination, left = (_register(op, line) for op in operands[:2])
         selector = 0
         if mnemonic in ("SAU.ADD.F32", "SAU.MUL.F32") and is_float_literal(operands[2]):
@@ -3896,12 +3983,16 @@ def _operation(instruction: Instruction) -> _Operation:
                 raise AssemblyError(f"line {line}: unmeasured floating point mapping {operands[2]!r}")
             right = constants[operands[2]]
             selector = 0x100000
+        elif mnemonic == "SAU.MUL.I32" and not re.fullmatch(r"[iI][0-9]+", operands[2]):
+            right = _signed_immediate(operands[2], 5, line)
+            selector = 0x100000
         else:
             right = _register(operands[2], line)
         opcode = {"SAU.ADD.F32": 0x200000, "SAU.SUB.F32": 0x200002,
-                  "SAU.MUL.I32": 0x04, "SAU.MUL.F32": 0x200004, "SAU.DIV.F32": 0x200006}[mnemonic]
+                  "SAU.MUL.I32": 0x04, "SAU.MUL.F32": 0x200004, "SAU.DIV.F32": 0x200006,
+                  "SAU.DIV.U16": 0x400006, "SAU.DIV.U32": 0x06}[mnemonic]
         return _Operation(unit, opcode | selector | destination << 10 | left << 5 | right << 15, 24)
-    if mnemonic in ("SAU.ADD.I32", "SAU.SHL.X32", "SAU.SHR.U32", "SAU.SHR.U16") and len(operands) == 3:
+    if mnemonic in ("SAU.ADD.I32", "SAU.SUB.I32", "SAU.SHL.X32", "SAU.SHR.U32", "SAU.SHR.U16") and len(operands) == 3:
         destination, source = (_register(op, line) for op in operands[:2])
         if re.fullmatch(r"[iI][0-9]+", operands[2]):
             right = _register(operands[2], line)
@@ -3909,7 +4000,7 @@ def _operation(instruction: Instruction) -> _Operation:
         else:
             right = _immediate(operands[2], 5, line)
             selector = 0x100000
-        opcode = {"SAU.ADD.I32": 0, "SAU.SHL.X32": 0x11, "SAU.SHR.U32": 0x12,
+        opcode = {"SAU.ADD.I32": 0, "SAU.SUB.I32": 2, "SAU.SHL.X32": 0x11, "SAU.SHR.U32": 0x12,
                   "SAU.SHR.U16": 0x400012}[mnemonic]
         return _Operation(unit, opcode | selector | destination << 10 | source << 5 | right << 15, 24)
     if mnemonic == "PEU.PCCX" and len(operands) == 2 and operands[0].upper() in _PCCX_PREDICATES:
@@ -3961,16 +4052,20 @@ def encode_packet_with_fixups(
         full, remaining = divmod(count, 16)
         return b"\xf0" * full + (bytes([(remaining - 1) << 4]) if remaining else b""), ()
     mnemonics = {instruction.mnemonic for instruction in packet.operations}
-    if mnemonics & {"LSU1.STO.32", "LSU1.LDO.32", "LSU1.LDO.64", "LSU1.LD.64", "LSU1.STO.64", "LSU1.ST.64", "LSU1.STI.16.F32.F16", "LSU1.STI.16", "LSU1.STI.32", "LSU1.LD.32", "LSU1.LD.32.F16.F32", "LSU1.ST.32"} and mnemonics & {"CMU.CMII.I32", "CMU.CMII.U32", "CMU.CMII.F32", "CMU.CMII.I8"}:
-        raise AssemblyError(f"line {first.line}: CMII and LSU1 memory operation conflict on scalar read port 6")
-    if mnemonics & {"LSU1.CP.32", "LSU1.STO.32", "LSU1.ST.32", "LSU1.STI.32", "LSU1.STI.16", "LSU1.STI.16.F32.F16"} and any(
-        instruction.mnemonic == "LSU0.STO.64" and instruction.operands
+    if "CMU.CP.64" in mnemonics and mnemonics & {"SAU.AND", "SAU.OR", "SAU.XOR"}:
+        raise AssemblyError(f"line {first.line}: CMU scalar doubleword copy and SAU logical operation conflict on scalar write port 1")
+    if mnemonics & {"CMU.CP.32.U8.F32", "CMU.CP.32.U32.F32", "CMU.CP.32.F32.U32S", "CMU.MAX.F32", "CMU.MIN.F32"} and mnemonics & {"LSU1.STI.16.F32.F16", "LSU1.STI.16", "LSU1.STI.8", "LSU1.STI.32"}:
+        raise AssemblyError(f"line {first.line}: CMU scalar result and LSU1 postincrement store conflict on scalar write port 3")
+    if mnemonics & {"LSU1.STO.16", "LSU1.STO.32", "LSU1.LDO.32", "LSU1.LDO.64", "LSU1.LD.64", "LSU1.STO.64", "LSU1.ST.64", "LSU1.STI.16.F32.F16", "LSU1.STI.16", "LSU1.STI.8", "LSU1.STI.32", "LSU1.LD.32", "LSU1.LD.16", "LSU1.LD.32.F16.F32", "LSU1.ST.32", "LSU1.ST.16"} and mnemonics & {"CMU.CMII.I32", "CMU.CMII.U32", "CMU.CMII.F32", "CMU.CMII.I8", "CMU.CMII.U16", "CMU.CP.64", "CMU.MAX.F32", "CMU.MIN.F32"}:
+        raise AssemblyError(f"line {first.line}: CMU scalar pair and LSU1 memory operation conflict on scalar read port 6")
+    if mnemonics & {"LSU1.STO.16", "LSU1.CP.32", "LSU1.STO.32", "LSU1.ST.32", "LSU1.STI.32", "LSU1.STI.16", "LSU1.STI.8", "LSU1.STI.16.F32.F16", "LSU1.ST.16"} and any(
+        instruction.mnemonic in ("LSU0.STO.64", "LSU0.ST.64") and instruction.operands
         and re.fullmatch(r"[iI][0-9]+", instruction.operands[0])
         for instruction in packet.operations
     ):
         raise AssemblyError(f"line {first.line}: LSU0 scalar doubleword store and LSU1 scalar read conflict on scalar read port 9")
-    if (mnemonics & {"LSU0.STO.32", "LSU0.ST.32", "LSU0.CP.32"} or any(
-        instruction.mnemonic == "LSU0.STO.64" and instruction.operands
+    if (mnemonics & {"LSU0.STO.32", "LSU0.STO.16", "LSU0.ST.32", "LSU0.ST.16", "LSU0.CP.32"} or any(
+        instruction.mnemonic in ("LSU0.STO.64", "LSU0.ST.64") and instruction.operands
         and re.fullmatch(r"[iI][0-9]+", instruction.operands[0])
         for instruction in packet.operations
     )) and any(
@@ -3982,18 +4077,29 @@ def encode_packet_with_fixups(
     if any(instruction.mnemonic in ("LSU1.LDO.64", "LSU1.LD.64") and instruction.operands
            and re.fullmatch(r"[iI][0-9]+", instruction.operands[0])
            for instruction in packet.operations) and (
-        mnemonics & {"LSU0.LDO.32", "LSU0.LD.32", "LSU0.LD.16", "LSU0.LD.32.F16.F32"}
+        mnemonics & {"LSU0.LDO.32", "LSU0.LDO.16", "LSU0.LD.32", "LSU0.LD.16", "LSU0.LD.8", "LSU0.LD.32.F16.F32"}
         or any(instruction.mnemonic in ("LSU0.LDO.64", "LSU0.LD.64") and instruction.operands
                and re.fullmatch(r"[iI][0-9]+", instruction.operands[0])
                for instruction in packet.operations)
     ):
         raise AssemblyError(f"line {first.line}: LSU1 scalar doubleword load and LSU0 load conflict on scalar write port 4")
-    if mnemonics & {"LSU1.LD.32", "LSU1.LDO.32", "LSU1.LD.32.F16.F32"} and any(
+    if mnemonics & {"LSU1.LD.32", "LSU1.LD.16", "LSU1.LDO.32", "LSU1.LD.32.F16.F32"} and any(
         instruction.mnemonic in ("LSU0.LDO.64", "LSU0.LD.64") and instruction.operands
         and re.fullmatch(r"[iI][0-9]+", instruction.operands[0])
         for instruction in packet.operations
     ):
         raise AssemblyError(f"line {first.line}: LSU0 scalar doubleword load and LSU1 load conflict on scalar write port 5")
+    vector_copies = [instruction for instruction in packet.operations
+                     if len(instruction.operands) == 2 and (
+                         instruction.mnemonic in ("CMU.CP.128.32.R", "CMU.CP.128", "LSU0.CP.128", "LSU1.CP.128")
+                         or instruction.mnemonic in ("CMU.CP.32", "LSU0.CP.32", "LSU1.CP.32") and instruction.operands[0].lower().startswith("v"))]
+    for copy in vector_copies:
+        destination = _vector_register(copy.operands[0].split(".")[0], copy.line)
+        if any(instruction.mnemonic in ("VAU.MUL.F32", "VAU.ADD.F32", "VAU.SUB.F32", "VAU.OR")
+               and len(instruction.operands) == 3
+               and _vector_register(instruction.operands[0], instruction.line) == destination
+               for instruction in packet.operations):
+            raise AssemblyError(f"line {first.line}: vector copy and VAU write the same vector register")
     operations = [_operation(instruction) for instruction in packet.operations]
     if len({op.unit for op in operations}) != len(operations):
         raise AssemblyError(f"line {first.line}: repeated functional unit in packet")

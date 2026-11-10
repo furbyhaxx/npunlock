@@ -215,8 +215,7 @@ class EncodingTests(unittest.TestCase):
         self.assertEqual(encode("CMU.CP.32 i0 v0.1"), bytes.fromhex("810c4070"))
         self.assertEqual(encode("CMU.CP.32 I31 V31.3"), bytes.fromhex("81fcff70"))
         for source in ("CMU.CP.32 i0 v32.0", "CMU.CP.32 i0 v0.4",
-                       "CMU.CP.32 i0 v0", "CMU.CP.32 i32 v0.0",
-                       "CMU.CP.32 v0.0 i0"):
+                       "CMU.CP.32 i0 v0", "CMU.CP.32 i32 v0.0"):
             with self.subTest(source=source), self.assertRaises(AssemblyError):
                 encode(source)
 
@@ -267,7 +266,7 @@ class EncodingTests(unittest.TestCase):
         self.assertEqual(encode("CMU.CMII.F32 i0 i1 || LSU1.CP.32 i8 i9"),
                          bytes.fromhex("0e88000208871208"))
         for source in ("LSU1.CP.32 i32 i0", "LSU1.CP.32 i0 i32",
-                       "LSU1.CP.32 i0 1", "LSU1.CP.32 v0.0 i0"):
+                       "LSU1.CP.32 i0 1"):
             with self.subTest(source=source), self.assertRaises(AssemblyError):
                 encode(source)
 
@@ -715,6 +714,486 @@ class EncodingTests(unittest.TestCase):
                 encode(operation + " || LSU1.LD.64 i8 i9")
         with self.assertRaisesRegex(AssemblyError, "read port 6"):
             encode("CMU.CMII.F32 i0 i1 || LSU1.LD.64 v8.0 i9")
+
+    def test_cmu_unsigned_to_float_conversion(self) -> None:
+        self.assertEqual(encode("CMU.CP.32.U32.F32 i0 i0"), bytes.fromhex("810e0064"))
+        self.assertEqual(encode("CMU.CP.32.U32.F32 i31 i31"), bytes.fromhex("81fe3f64"))
+        for source in ("CMU.CP.32.U32.F32 i32 i0", "CMU.CP.32.U32.F32 i0 i32",
+                       "CMU.CP.32.U32.F32 i0 v0", "CMU.CP.32.U32.F32 i0 i1.0",
+                       "CMU.CP.32.U32.F32 i0 i1 i2"):
+            with self.subTest(source=source), self.assertRaises(AssemblyError):
+                encode(source)
+
+        for operation in ("LSU1.STI.16.F32.F16 i8 i9", "LSU1.STI.16 i8.0 i9", "LSU1.STI.32 i8 i9"):
+            with self.subTest(operation=operation), self.assertRaisesRegex(AssemblyError, "write port 3"):
+                encode("CMU.CP.32.U32.F32 i0 i1 || " + operation)
+
+    def test_cmu_float_to_unsigned_saturating_conversion(self) -> None:
+        self.assertEqual(encode("CMU.CP.32.F32.U32S i0 i0"), bytes.fromhex("81040064"))
+        self.assertEqual(encode("CMU.CP.32.F32.U32S i31 i31"), bytes.fromhex("81f43f64"))
+        for source in ("CMU.CP.32.F32.U32S i32 i0", "CMU.CP.32.F32.U32S i0 i32",
+                       "CMU.CP.32.F32.U32S i0 v0", "CMU.CP.32.F32.U32S i0 i1.0"):
+            with self.subTest(source=source), self.assertRaises(AssemblyError):
+                encode(source)
+        for operation in ("LSU1.STI.16.F32.F16 i8 i9", "LSU1.STI.16 i8.0 i9", "LSU1.STI.32 i8 i9"):
+            with self.subTest(operation=operation), self.assertRaisesRegex(AssemblyError, "write port 3"):
+                encode("CMU.CP.32.F32.U32S i0 i1 || " + operation)
+
+    def test_cmu_scalar_replication_to_vector(self) -> None:
+        self.assertEqual(encode("CMU.CP.128.32.R v0 i0"), bytes.fromhex("81070000"))
+        self.assertEqual(encode("CMU.CP.128.32.R v31 i31"), bytes.fromhex("81f73f00"))
+        for source in ("CMU.CP.128.32.R v32 i0", "CMU.CP.128.32.R v0 i32",
+                       "CMU.CP.128.32.R i0 i1", "CMU.CP.128.32.R v0.0 i1",
+                       "CMU.CP.128.32.R v0 v1"):
+            with self.subTest(source=source), self.assertRaises(AssemblyError):
+                encode(source)
+
+        for operation in ("VAU.MUL.F32", "VAU.ADD.F32", "VAU.SUB.F32", "VAU.OR"):
+            with self.subTest(operation=operation), self.assertRaisesRegex(AssemblyError, "same vector register"):
+                encode("CMU.CP.128.32.R v0 i1 || " + operation + " v0 v2 v3")
+
+    def test_cmu_full_vector_copy(self) -> None:
+        self.assertEqual(encode("CMU.CP.128 v0 v0"), bytes.fromhex("810c0048"))
+        self.assertEqual(encode("CMU.CP.128 v31 v31"), bytes.fromhex("81fc3f48"))
+        for source in ("CMU.CP.128 v32 v0", "CMU.CP.128 v0 v32",
+                       "CMU.CP.128 i0 v1", "CMU.CP.128 v0.0 v1", "CMU.CP.128 v0 i1"):
+            with self.subTest(source=source), self.assertRaises(AssemblyError):
+                encode(source)
+        with self.assertRaisesRegex(AssemblyError, "same vector register"):
+            encode("CMU.CP.128 v0 v1 || VAU.OR v0 v2 v3")
+
+    def test_lsu0_full_vector_copy(self) -> None:
+        self.assertEqual(encode("LSU0.CP.128 v0 v0"), bytes.fromhex("82070048"))
+        self.assertEqual(encode("LSU0.CP.128 v31 v31"), bytes.fromhex("82f73f48"))
+        for source in ("LSU0.CP.128 v32 v0", "LSU0.CP.128 v0 v32",
+                       "LSU0.CP.128 i0 v1", "LSU0.CP.128 v0.0 v1", "LSU0.CP.128 v0 i1"):
+            with self.subTest(source=source), self.assertRaises(AssemblyError):
+                encode(source)
+        with self.assertRaisesRegex(AssemblyError, "same vector register"):
+            encode("LSU0.CP.128 v0 v1 || VAU.OR v0 v2 v3")
+
+    def test_lsu1_full_vector_copy(self) -> None:
+        self.assertEqual(encode("LSU1.CP.128 v0 v0"), bytes.fromhex("89070048"))
+        self.assertEqual(encode("LSU1.CP.128 v31 v31"), bytes.fromhex("89f73f48"))
+        for source in ("LSU1.CP.128 v32 v0", "LSU1.CP.128 v0 v32",
+                       "LSU1.CP.128 i0 v1", "LSU1.CP.128 v0.0 v1", "LSU1.CP.128 v0 i1"):
+            with self.subTest(source=source), self.assertRaises(AssemblyError):
+                encode(source)
+        with self.assertRaisesRegex(AssemblyError, "same vector register"):
+            encode("LSU1.CP.128 v0 v1 || VAU.OR v0 v2 v3")
+
+    def test_lsu0_scalar_byte_lane_load(self) -> None:
+        self.assertEqual(encode("LSU0.LD.8 i0.0 i0"), bytes.fromhex("820d0004"))
+        self.assertEqual(encode("LSU0.LD.8 i31.3 i31"), bytes.fromhex("82fdff04"))
+        for source in ("LSU0.LD.8 i32.0 i0", "LSU0.LD.8 i0.4 i0",
+                       "LSU0.LD.8 i0 i1", "LSU0.LD.8 v0.0 i1", "LSU0.LD.8 i0.0 i32"):
+            with self.subTest(source=source), self.assertRaises(AssemblyError):
+                encode(source)
+        with self.assertRaisesRegex(AssemblyError, "write port 4"):
+            encode("LSU0.LD.8 i4.0 i5 || LSU1.LD.64 i8 i9")
+
+    def test_lsu1_scalar_halfword_lane_load(self) -> None:
+        self.assertEqual(encode("LSU1.LD.16 i0.0 i0"), bytes.fromhex("890d0002"))
+        self.assertEqual(encode("LSU1.LD.16 i31.3 i31"), bytes.fromhex("89fdff02"))
+        for source in ("LSU1.LD.16 i32.0 i0", "LSU1.LD.16 i0.4 i0",
+                       "LSU1.LD.16 i0 i1", "LSU1.LD.16 v0.0 i1", "LSU1.LD.16 i0.0 i32"):
+            with self.subTest(source=source), self.assertRaises(AssemblyError):
+                encode(source)
+        with self.assertRaisesRegex(AssemblyError, "write port 5"):
+            encode("LSU0.LD.64 i4 i5 || LSU1.LD.16 i8.0 i9")
+        with self.assertRaisesRegex(AssemblyError, "read port 6"):
+            encode("CMU.CMII.I32 i0 i1 || LSU1.LD.16 i8.0 i9")
+
+    def test_cmu_scalar_float_maximum(self) -> None:
+        self.assertEqual(encode("CMU.MAX.F32 i0 i0 i0"), bytes.fromhex("c104004000"))
+        self.assertEqual(encode("CMU.MAX.F32 i31 i31 i31"), bytes.fromhex("c1f4ff4700"))
+        for source in ("CMU.MAX.F32 i32 i0 i0", "CMU.MAX.F32 i0 i32 i0",
+                       "CMU.MAX.F32 i0 i0 i32", "CMU.MAX.F32 i0 i1 0", "CMU.MAX.F32 v0 i1 i2"):
+            with self.subTest(source=source), self.assertRaises(AssemblyError):
+                encode(source)
+        for operation in ("LSU1.LDO.32 i8 i9 0", "LSU1.LD.16 i8.0 i9", "LSU1.ST.32 i8 i9"):
+            with self.subTest(operation=operation), self.assertRaisesRegex(AssemblyError, "read port 6"):
+                encode("CMU.MAX.F32 i0 i1 i2 || " + operation)
+        with self.assertRaisesRegex(AssemblyError, "write port 3"):
+            encode("CMU.MAX.F32 i0 i1 i2 || LSU1.STI.32 i8 i9")
+
+    def test_cmu_scalar_float_minimum(self) -> None:
+        self.assertEqual(encode("CMU.MIN.F32 i0 i0 i0"), bytes.fromhex("c105004000"))
+        self.assertEqual(encode("CMU.MIN.F32 i31 i31 i31"), bytes.fromhex("c1f5ff4700"))
+        for source in ("CMU.MIN.F32 i32 i0 i0", "CMU.MIN.F32 i0 i32 i0",
+                       "CMU.MIN.F32 i0 i0 i32", "CMU.MIN.F32 i0 i1 0", "CMU.MIN.F32 v0 i1 i2"):
+            with self.subTest(source=source), self.assertRaises(AssemblyError):
+                encode(source)
+        with self.assertRaisesRegex(AssemblyError, "read port 6"):
+            encode("CMU.MIN.F32 i0 i1 i2 || LSU1.LD.32 i8 i9")
+        with self.assertRaisesRegex(AssemblyError, "write port 3"):
+            encode("CMU.MIN.F32 i0 i1 i2 || LSU1.STI.32 i8 i9")
+
+    def test_cmu_scalar_half_to_float_conversion(self) -> None:
+        self.assertEqual(encode("CMU.CP.32.F16.F32 i0 i0.0"), bytes.fromhex("81010068"))
+        self.assertEqual(encode("CMU.CP.32.F16.F32 i31 i31.1"), bytes.fromhex("81f17f68"))
+        for source in ("CMU.CP.32.F16.F32 i32 i0.0", "CMU.CP.32.F16.F32 i0 i32.0",
+                       "CMU.CP.32.F16.F32 i0 i0.2", "CMU.CP.32.F16.F32 i0 i1",
+                       "CMU.CP.32.F16.F32 i0 v1.0"):
+            with self.subTest(source=source), self.assertRaises(AssemblyError):
+                encode(source)
+
+    def test_lsu1_postincrement_byte_lane_store(self) -> None:
+        self.assertEqual(encode("LSU1.STI.8 i0.0 i0"), bytes.fromhex("89090084"))
+        self.assertEqual(encode("LSU1.STI.8 i31.3 i31"), bytes.fromhex("89f9ff84"))
+        for source in ("LSU1.STI.8 i32.0 i0", "LSU1.STI.8 i0.4 i0",
+                       "LSU1.STI.8 i0 i1", "LSU1.STI.8 v0.0 i1", "LSU1.STI.8 i0.0 i32"):
+            with self.subTest(source=source), self.assertRaises(AssemblyError):
+                encode(source)
+        for operation, port in (("CMU.CMII.I32 i0 i1", "read port 6"),
+                                ("CMU.CP.32.U32.F32 i0 i1", "write port 3"),
+                                ("LSU0.STO.64 i4 i5 0", "read port 9")):
+            with self.subTest(operation=operation), self.assertRaisesRegex(AssemblyError, port):
+                encode(operation + " || LSU1.STI.8 i8.0 i9")
+
+    def test_lsu1_indirect_halfword_lane_store(self) -> None:
+        self.assertEqual(encode("LSU1.ST.16 i0.0 i0"), bytes.fromhex("89090002"))
+        self.assertEqual(encode("LSU1.ST.16 i31.3 i31"), bytes.fromhex("89f9ff02"))
+        for source in ("LSU1.ST.16 i32.0 i0", "LSU1.ST.16 i0.4 i0",
+                       "LSU1.ST.16 i0 i1", "LSU1.ST.16 v0.0 i1", "LSU1.ST.16 i0.0 i32"):
+            with self.subTest(source=source), self.assertRaises(AssemblyError):
+                encode(source)
+        with self.assertRaisesRegex(AssemblyError, "read port 6"):
+            encode("CMU.CMII.I32 i0 i1 || LSU1.ST.16 i8.0 i9")
+        with self.assertRaisesRegex(AssemblyError, "read port 9"):
+            encode("LSU0.STO.64 i4 i5 0 || LSU1.ST.16 i8.0 i9")
+
+    def test_lsu0_offset_halfword_lane_load(self) -> None:
+        self.assertEqual(encode("LSU0.LDO.16 i0.0 i0 0"), bytes.fromhex("c202800100"))
+        self.assertEqual(encode("LSU0.LDO.16 i1.0 i2 1"), bytes.fromhex("c212840300"))
+        self.assertEqual(encode("LSU0.LDO.16 i31.0 i31 -1"), bytes.fromhex("c2f2bfffff"))
+        for operands in ("i0.1 i0 0", "i0 i0 0", "v0.0 i0 0", "i32.0 i0 0",
+                         "i0.0 i32 0", "i0.0 i0 -16385", "i0.0 i0 16384"):
+            with self.subTest(operands=operands), self.assertRaises(AssemblyError):
+                encode("LSU0.LDO.16 " + operands)
+        with self.assertRaisesRegex(AssemblyError, "write port 4"):
+            encode("LSU0.LDO.16 i4.0 i5 0 || LSU1.LD.64 i8 i9")
+
+    def test_lsu0_offset_halfword_lane_store(self) -> None:
+        self.assertEqual(encode("LSU0.STO.16 i0.0 i0 0"), bytes.fromhex("c206800100"))
+        self.assertEqual(encode("LSU0.STO.16 i1.0 i2 1"), bytes.fromhex("c216840300"))
+        self.assertEqual(encode("LSU0.STO.16 i31.0 i31 -1"), bytes.fromhex("c2f6bfffff"))
+        for operands in ("i0.1 i0 0", "i0 i0 0", "v0.0 i0 0", "i32.0 i0 0",
+                         "i0.0 i32 0", "i0.0 i0 -16385", "i0.0 i0 16384"):
+            with self.subTest(operands=operands), self.assertRaises(AssemblyError):
+                encode("LSU0.STO.16 " + operands)
+        with self.assertRaisesRegex(AssemblyError, "read port 8"):
+            encode("LSU0.STO.16 i4.0 i5 0 || LSU1.ST.64 i8 i9")
+
+    def test_lsu1_offset_halfword_lane_store(self) -> None:
+        self.assertEqual(encode("LSU1.STO.16 i0.0 i0 0"), bytes.fromhex("c906800100"))
+        self.assertEqual(encode("LSU1.STO.16 i1.0 i2 1"), bytes.fromhex("c916840300"))
+        self.assertEqual(encode("LSU1.STO.16 i31.0 i31 -1"), bytes.fromhex("c9f6bfffff"))
+        for operands in ("i0.1 i0 0", "i0 i0 0", "v0.0 i0 0", "i32.0 i0 0",
+                         "i0.0 i32 0", "i0.0 i0 -16385", "i0.0 i0 16384"):
+            with self.subTest(operands=operands), self.assertRaises(AssemblyError):
+                encode("LSU1.STO.16 " + operands)
+        for operation, port in (("CMU.CMII.I32 i0 i1", "read port 6"),
+                                ("LSU0.STO.64 i4 i5 0", "read port 9")):
+            with self.subTest(operation=operation), self.assertRaisesRegex(AssemblyError, port):
+                encode(operation + " || LSU1.STO.16 i8.0 i9 0")
+
+    def test_iau_unsigned_maximum(self) -> None:
+        self.assertEqual(encode("IAU.MAXU i0 i0 i0"), bytes.fromhex("86000000"))
+        self.assertEqual(encode("IAU.MAXU i1 i2 i3"), bytes.fromhex("86408401"))
+        self.assertEqual(encode("IAU.MAXU i31 i31 i31"), bytes.fromhex("86e0ff0f"))
+        for operands in ("i0 i0 1", "i32 i0 i0", "i0 i32 i0", "i0 i0 i32", "v0 i0 i0"):
+            with self.subTest(operands=operands), self.assertRaises(AssemblyError):
+                encode("IAU.MAXU " + operands)
+
+    def test_sau_unsigned_halfword_division(self) -> None:
+        self.assertEqual(encode("SAU.DIV.U16 i0 i0 i0"), bytes.fromhex("3c060040"))
+        self.assertEqual(encode("SAU.DIV.U16 i1 i2 i3"), bytes.fromhex("3c468441"))
+        self.assertEqual(encode("SAU.DIV.U16 i31 i31 i31"), bytes.fromhex("3ce6ff4f"))
+        for operands in ("i0 i0 1", "i32 i0 i0", "i0 i32 i0", "i0 i0 i32", "v0 i0 i0"):
+            with self.subTest(operands=operands), self.assertRaises(AssemblyError):
+                encode("SAU.DIV.U16 " + operands)
+
+    def test_sau_unsigned_word_division(self) -> None:
+        self.assertEqual(encode("SAU.DIV.U32 i0 i0 i0"), bytes.fromhex("3c060000"))
+        self.assertEqual(encode("SAU.DIV.U32 i1 i2 i3"), bytes.fromhex("3c468401"))
+        self.assertEqual(encode("SAU.DIV.U32 i31 i31 i31"), bytes.fromhex("3ce6ff0f"))
+        for operands in ("i0 i0 1", "i32 i0 i0", "i0 i32 i0", "i0 i0 i32", "v0 i0 i0"):
+            with self.subTest(operands=operands), self.assertRaises(AssemblyError):
+                encode("SAU.DIV.U32 " + operands)
+
+    def test_five_unit_scalar_logical_header(self) -> None:
+        operations = ("LSU0.CP.32 i4 i5", "LSU1.CP.32 i8 i9", "CMU.CP.32 i0 i1",
+                      "SAU.OR i12 i13 i14", "IAU.OR i16 i17 i18")
+        expected = bytes.fromhex("0fa80a1c0008470a08871208bb31172394")
+        self.assertEqual(encode(" || ".join(operations)), expected)
+        self.assertEqual(encode(" || ".join(reversed(operations))), expected)
+
+    def test_lsu0_symbolic_low_load_emits_byte_and_half_byte_fixups(self) -> None:
+        data, fixups = encode_packet_with_fixups(parse("LSU0.LDIL i0 external_target")[0])
+        self.assertEqual(data, bytes.fromhex("82020000"))
+        self.assertEqual(fixups, (Fixup("external_target", 0, 16, 16, "R_SHAVE_LO16"),))
+        packet = parse("CMU.CMPI i0 0 || LSU0.LDIL i31 external_target")[0]
+        data, fixups = encode_packet_with_fixups(packet)
+        self.assertEqual(data, bytes.fromhex("b40a0000a00f0000"))
+        self.assertEqual(fixups, (Fixup("external_target", 0, 44, 16, "R_SHAVE_LO16_AT4"),))
+        for source in ("LSU0.LDIL i0 target+2", "LSU0.LDIL i0 -1"):
+            with self.subTest(source=source), self.assertRaises(AssemblyError):
+                encode_packet_with_fixups(parse(source)[0])
+
+    def test_cmu_unsigned_byte_to_float_conversion(self) -> None:
+        self.assertEqual(encode("CMU.CP.32.U8.F32 i0 i0.0"), bytes.fromhex("810e006a"))
+        self.assertEqual(encode("CMU.CP.32.U8.F32 i1 i2.1"), bytes.fromhex("812e426a"))
+        self.assertEqual(encode("CMU.CP.32.U8.F32 i31 i31.3"), bytes.fromhex("81feff6a"))
+        for operands in ("i0 i0.4", "i0 i0", "i0 v0.0", "i32 i0.0", "i0 i32.0"):
+            with self.subTest(operands=operands), self.assertRaises(AssemblyError):
+                encode("CMU.CP.32.U8.F32 " + operands)
+        with self.assertRaisesRegex(AssemblyError, "write port 3"):
+            encode("CMU.CP.32.U8.F32 i0 i1.0 || LSU1.STI.32 i8 i9")
+
+    def test_lsu0_indirect_halfword_lane_store(self) -> None:
+        self.assertEqual(encode("LSU0.ST.16 i0.0 i0"), bytes.fromhex("82090002"))
+        self.assertEqual(encode("LSU0.ST.16 i31.3 i31"), bytes.fromhex("82f9ff02"))
+        self.assertEqual(encode("LSU0.ST.16 i8.0 i9"), bytes.fromhex("82891202"))
+        for operands in ("i0 i1", "i0.4 i1", "v0.0 i1", "i32.0 i1", "i0.0 i32"):
+            with self.subTest(operands=operands), self.assertRaises(AssemblyError):
+                encode("LSU0.ST.16 " + operands)
+        with self.assertRaisesRegex(AssemblyError, "read port 8"):
+            encode("LSU0.ST.16 i0.0 i1 || LSU1.ST.64 i8 i9")
+
+    def test_iau_rotate_left(self) -> None:
+        self.assertEqual(encode("IAU.ROL i0 i0 0"), bytes.fromhex("c6050080"))
+        self.assertEqual(encode("IAU.ROL i1 i2 3"), bytes.fromhex("c6458481"))
+        self.assertEqual(encode("IAU.ROL i31 i31 31"), bytes.fromhex("c6e5ff8f"))
+        self.assertEqual(encode("IAU.ROL i1 i2 i3"), bytes.fromhex("c6458401"))
+        self.assertEqual(encode("IAU.ROL i31 i31 i31"), bytes.fromhex("c6e5ff0f"))
+        for operands in ("i0 i0 -1", "i0 i0 32", "i0 i0 v0", "i32 i0 0"):
+            with self.subTest(operands=operands), self.assertRaises(AssemblyError):
+                encode("IAU.ROL " + operands)
+
+    def test_six_unit_scalar_predicated_header(self) -> None:
+        operations = ["CMU.CP.32 i0 i1", "LSU0.CP.32 i4 i5", "LSU1.CP.32 i8 i9",
+                      "SAU.ADD.I32 i12 i13 i14", "IAU.XOR i16 i17 i18", "PEU.PCCX EQ 21"]
+        expected = bytes.fromhex("0fa8cb1c0008470a08871208a0310732425954")
+        self.assertEqual(encode(" || ".join(operations)), expected)
+        self.assertEqual(encode(" || ".join(reversed(operations))), expected)
+
+    def test_cmu_float_to_half_conversion(self) -> None:
+        self.assertEqual(encode("CMU.CP.16.F32.F16 i0.0 i0"), bytes.fromhex("81018068"))
+        self.assertEqual(encode("CMU.CP.16.F32.F16 i1.1 i2"), bytes.fromhex("8121c268"))
+        self.assertEqual(encode("CMU.CP.16.F32.F16 i31.0 i31"), bytes.fromhex("81f1bf68"))
+        for operands in ("i0.2 i1", "i0 i1", "v0.0 i1", "i32.0 i1", "i0.0 i32"):
+            with self.subTest(operands=operands), self.assertRaises(AssemblyError):
+                encode("CMU.CP.16.F32.F16 " + operands)
+
+    def test_lsu0_indirect_doubleword_store(self) -> None:
+        for operands, expected in (("i0 i0", "82098000"), ("i31 i31", "82f9bf00"),
+                                   ("v1.0 i2", "82198408"), ("v31.1 i31", "82f9ff08")):
+            self.assertEqual(encode("LSU0.ST.64 " + operands), bytes.fromhex(expected))
+        for operands in ("v0.2 i1", "v0 i1", "i32 i1", "i0 i32"):
+            with self.subTest(operands=operands), self.assertRaises(AssemblyError):
+                encode("LSU0.ST.64 " + operands)
+        with self.assertRaisesRegex(AssemblyError, "read port 9"):
+            encode("LSU0.ST.64 i0 i1 || LSU1.ST.32 i8 i9")
+        with self.assertRaises(AssemblyError):
+            encode("LSU0.ST.64 i0 i1 || LSU1.ST.64 i8 i9")
+
+    def test_cmu_scalar_doubleword_copy(self) -> None:
+        self.assertEqual(encode("CMU.CP.64 i0 i0"), bytes.fromhex("810c0004"))
+        self.assertEqual(encode("CMU.CP.64 i1 i22"), bytes.fromhex("816c0304"))
+        self.assertEqual(encode("CMU.CP.64 i31 i31"), bytes.fromhex("81fc3f04"))
+        for operands in ("i32 i1", "i0 i32", "v0.0 i1", "i0 v1.0"):
+            with self.subTest(operands=operands), self.assertRaises(AssemblyError):
+                encode("CMU.CP.64 " + operands)
+        with self.assertRaisesRegex(AssemblyError, "read port 6"):
+            encode("CMU.CP.64 i0 i1 || LSU1.LD.32 i8 i9")
+        for mnemonic in ("SAU.AND", "SAU.OR", "SAU.XOR"):
+            with self.subTest(mnemonic=mnemonic), self.assertRaisesRegex(AssemblyError, "write port 1"):
+                encode(f"CMU.CP.64 i0 i1 || {mnemonic} i12 i13 i14")
+
+    def test_five_unit_scalar_add_predicated_header(self) -> None:
+        operations = ["CMU.CP.32 i0 i1", "LSU0.CP.32 i4 i5", "LSU1.CP.32 i8 i9",
+                      "IAU.ADD i16 i17 i18", "PEU.PCCX EQ 21"]
+        expected = bytes.fromhex("0fa8cc1c0008470a088712082042094505")
+        self.assertEqual(encode(" || ".join(operations)), expected)
+        self.assertEqual(encode(" || ".join(reversed(operations))), expected)
+
+    def test_cmu_unsigned_halfword_comparison(self) -> None:
+        self.assertEqual(encode("CMU.CMII.U16 i0 i0"), bytes.fromhex("81000002"))
+        self.assertEqual(encode("CMU.CMII.U16 i1 i2"), bytes.fromhex("81100402"))
+        self.assertEqual(encode("CMU.CMII.U16 i31 i31"), bytes.fromhex("81f03f02"))
+        for operands in ("i32 i0", "i0 i32", "v0 i0", "i0 1"):
+            with self.subTest(operands=operands), self.assertRaises(AssemblyError):
+                encode("CMU.CMII.U16 " + operands)
+        for operation in ("LSU1.LD.32 i8 i9", "LSU1.ST.32 i8 i9"):
+            with self.subTest(operation=operation), self.assertRaisesRegex(AssemblyError, "read port 6"):
+                encode("CMU.CMII.U16 i0 i1 || " + operation)
+
+    def test_sau_integer_subtraction(self) -> None:
+        for operands, expected in (("i0 i0 i0", "3c020000"), ("i1 i2 i3", "3c428401"),
+                                   ("i31 i31 i31", "3ce2ff0f"), ("i1 i2 0", "3c420410"),
+                                   ("i1 i2 31", "3c42841f")):
+            self.assertEqual(encode("SAU.SUB.I32 " + operands), bytes.fromhex(expected))
+        for operands in ("i0 i0 -1", "i0 i0 32", "i32 i0 0", "i0 v0 i1"):
+            with self.subTest(operands=operands), self.assertRaises(AssemblyError):
+                encode("SAU.SUB.I32 " + operands)
+
+    def test_sau_integer_immediate_multiplication(self) -> None:
+        for operands, expected in (("i0 i0 0", "3c040010"), ("i1 i2 3", "3c448411"),
+                                   ("i31 i31 15", "3ce4ff17"), ("i1 i2 -16", "3c440418"),
+                                   ("i1 i2 -1", "3c44841f")):
+            self.assertEqual(encode("SAU.MUL.I32 " + operands), bytes.fromhex(expected))
+        for operands in ("i0 i0 -17", "i0 i0 16", "i32 i0 0", "i0 v0 1"):
+            with self.subTest(operands=operands), self.assertRaises(AssemblyError):
+                encode("SAU.MUL.I32 " + operands)
+
+    def test_cmu_byte_zero_shuffle(self) -> None:
+        for source, expected in (("CMU.VSZM.BYTE i0 i0 [ZZ00]", "c100000900"),
+                                 ("CMU.VSZM.BYTE i1 i2 [ZZ01]", "c120420900"),
+                                 ("CMU.VSZM.BYTE i31 i31 [ZZ11]", "c1f07f0b00"),
+                                 ("CMU.VSZM.BYTE i0 i1 [ZZ10] || LSU0.LDIL i4 123", "b410000b20b20700")):
+            self.assertEqual(encode(source), bytes.fromhex(expected))
+        for operands in ("i0 i0 [ZZ12]", "i0 i0 [ZZ1]", "i32 i0 [ZZ10]", "i0 v0 [ZZ10]", "i0 i0 label"):
+            with self.subTest(operands=operands), self.assertRaises(AssemblyError):
+                encode("CMU.VSZM.BYTE " + operands)
+        with self.assertRaisesRegex(AssemblyError, "unmeasured packet class"):
+            encode("CMU.VSZM.BYTE i0 i1 [ZZ10] || LSU1.LDIL i8 1")
+
+    def test_measured_combined_header_0(self) -> None:
+        source = "CMU.CP.32 i0 i1 || LSU0.CP.32 i4 i5 || LSU1.CP.32 i8 i9 || SAU.ADD.I32 i12 i13 i14 || IAU.ADD i16 i17 i18"
+        expected = bytes.fromhex("0fa80f1c0008470a08871208a03107204209")
+        self.assertEqual(encode(source), expected)
+        self.assertEqual(encode(" || ".join(reversed(source.split(" || ")))), expected)
+        source = "CMU.CP.32 i2 i3 || LSU0.LDIH i6 12345 || LSU1.LDIL i10 54321 || SAU.SUB.I32 i15 i12 23 || IAU.INCS i19 -123"
+        expected = bytes.fromhex("0fa80f3c04083339305231d482bd1b6316fe")
+        self.assertEqual(encode(source), expected)
+        self.assertEqual(encode(" || ".join(reversed(source.split(" || ")))), expected)
+
+    def test_measured_combined_header_3(self) -> None:
+        source = "CMU.CP.32 i0 i1 || LSU0.CP.32 i4 i5 || LSU1.CP.32 i8 i9 || SAU.AND i12 i13 i14 || IAU.ADD i16 i17 i18"
+        expected = bytes.fromhex("0fa80e1c0008470a08871208b83107229400")
+        self.assertEqual(encode(source), expected)
+        self.assertEqual(encode(" || ".join(reversed(source.split(" || ")))), expected)
+        source = "CMU.CP.32 i2 i3 || LSU0.LDIH i6 12345 || LSU1.LDIL i10 54321 || SAU.OR i15 i12 i13 || IAU.INCS i19 -123"
+        expected = bytes.fromhex("0fa80e3c04083339305231d49bbd3666e10f")
+        self.assertEqual(encode(source), expected)
+        self.assertEqual(encode(" || ".join(reversed(source.split(" || ")))), expected)
+
+    def test_measured_combined_header_10(self) -> None:
+        source = "CMU.CP.32 i0 i1 || LSU0.LDO.32 i4 i5 -7 || LSU1.STO.32 i8 i9 11 || SAU.AND i12 i13 i14 || IAU.ADD i16 i17 i18"
+        expected = bytes.fromhex("0ff80e1c0008424af3ff86521700b83107229400")
+        self.assertEqual(encode(source), expected)
+        self.assertEqual(encode(" || ".join(reversed(source.split(" || ")))), expected)
+        source = "CMU.CP.32 i2 i3 || LSU0.LDO.64 v4.1 i6 123 || LSU1.STO.64 v8.1 i10 -123 || SAU.OR i15 i12 i13 || IAU.INCS i19 -123"
+        expected = bytes.fromhex("0ff80e3c0408420cf60086140aff9bbd3666e10f")
+        self.assertEqual(encode(source), expected)
+        self.assertEqual(encode(" || ".join(reversed(source.split(" || ")))), expected)
+
+    def test_cmu_vector_word_destination(self) -> None:
+        for operands, expected in (("v0.0 i0", "810c000c"), ("v1.1 i2", "812c420c"),
+                                   ("v31.3 i31", "81fcff0c")):
+            self.assertEqual(encode("CMU.CP.32 " + operands), bytes.fromhex(expected))
+        for operands in ("v0.4 i0", "v32.0 i0", "v0 i0", "v0.0 v1.0", "v0.0 i32"):
+            with self.subTest(operands=operands), self.assertRaises(AssemblyError):
+                encode("CMU.CP.32 " + operands)
+        with self.assertRaisesRegex(AssemblyError, "same vector register"):
+            encode("CMU.CP.32 v0.0 i1 || VAU.OR v0 v24 v25")
+
+    def test_lsu0_vector_word_destination(self) -> None:
+        for operands, expected in (("v0.0 i0", "8207000c"), ("v1.1 i2", "8217440c"),
+                                   ("v31.3 i31", "82f7ff0c")):
+            self.assertEqual(encode("LSU0.CP.32 " + operands), bytes.fromhex(expected))
+        for operands in ("v0.4 i0", "v32.0 i0", "v0 i0", "v0.0 v1.0", "v0.0 i32"):
+            with self.subTest(operands=operands), self.assertRaises(AssemblyError):
+                encode("LSU0.CP.32 " + operands)
+        with self.assertRaisesRegex(AssemblyError, "same vector register"):
+            encode("LSU0.CP.32 v0.0 i1 || VAU.OR v0 v24 v25")
+
+    def test_lsu1_vector_word_destination(self) -> None:
+        for operands, expected in (("v0.0 i0", "8907000c"), ("v1.1 i2", "8917440c"),
+                                   ("v31.3 i31", "89f7ff0c")):
+            self.assertEqual(encode("LSU1.CP.32 " + operands), bytes.fromhex(expected))
+        for operands in ("v0.4 i0", "v32.0 i0", "v0 i0", "v0.0 v1.0", "v0.0 i32"):
+            with self.subTest(operands=operands), self.assertRaises(AssemblyError):
+                encode("LSU1.CP.32 " + operands)
+        with self.assertRaisesRegex(AssemblyError, "same vector register"):
+            encode("LSU1.CP.32 v0.0 i1 || VAU.OR v0 v24 v25")
+
+    def test_iau_not(self) -> None:
+        self.assertEqual(encode("IAU.NOT i0 i0"), bytes.fromhex("461000"))
+        self.assertEqual(encode("IAU.NOT i1 i2"), bytes.fromhex("465004"))
+        self.assertEqual(encode("IAU.NOT i31 i31"), bytes.fromhex("46f07f"))
+        self.assertEqual(encode("SAU.ADD.I32 i12 i13 i14 || IAU.NOT i16 i17"),
+                         bytes.fromhex("7ca031073042"))
+        for operands in ("i32 i0", "i0 i32", "i0 1", "v0 i1"):
+            with self.subTest(operands=operands), self.assertRaises(AssemblyError):
+                encode("IAU.NOT " + operands)
+        with self.assertRaisesRegex(AssemblyError, "unmeasured packet class"):
+            encode("CMU.CP.32 i0 i1 || IAU.NOT i16 i17")
+
+    def test_six_scalar_add_predicated_header(self) -> None:
+        for source, expected in (
+            ("CMU.CP.32 i0 i1 || LSU0.CP.32 i4 i5 || LSU1.CP.32 i8 i9 || SAU.ADD.I32 i12 i13 i14 || IAU.ADD i16 i17 i18 || PEU.PCCX EQ 21", "0fa8cf1c0008470a08871208a031072042094505"),
+            ("CMU.CP.32 i2 i3 || LSU0.LDIH i6 12345 || LSU1.LDIL i10 54321 || SAU.SUB.I32 i15 i12 23 || IAU.INCS i19 -123 || PEU.PCCX NEQ 47", "0fa8cf3c04083339305231d482bd1b6316fed90b"),
+        ):
+            self.assertEqual(encode(source), bytes.fromhex(expected))
+            self.assertEqual(encode(" || ".join(reversed(source.split(" || ")))), bytes.fromhex(expected))
+
+    def test_six_logical_predicated_header(self) -> None:
+        for source, expected in (
+            ("CMU.CP.32 i0 i1 || LSU0.CP.32 i4 i5 || LSU1.CP.32 i8 i9 || SAU.AND i12 i13 i14 || IAU.XOR i16 i17 i18 || PEU.PCCX EQ 21", "0fa8ca1c0008470a08871208b8312723944505"),
+            ("CMU.CP.32 i2 i3 || LSU0.LDIH i6 12345 || LSU1.LDIL i10 54321 || SAU.OR i15 i12 i13 || IAU.OR i19 i16 i17 || PEU.PCCX NEQ 47", "0fa8ca3c04083339305231d49bbd16e18cd90b"),
+        ):
+            self.assertEqual(encode(source), bytes.fromhex(expected))
+            self.assertEqual(encode(" || ".join(reversed(source.split(" || ")))), bytes.fromhex(expected))
+
+    def test_six_logical_add_predicated_header(self) -> None:
+        for source, expected in (
+            ("CMU.CP.32 i0 i1 || LSU0.CP.32 i4 i5 || LSU1.CP.32 i8 i9 || SAU.AND i12 i13 i14 || IAU.ADD i16 i17 i18 || PEU.PCCX EQ 21", "0fa8ce1c0008470a08871208b8310722945054"),
+            ("CMU.CP.32 i2 i3 || LSU0.LDIH i6 12345 || LSU1.LDIL i10 54321 || SAU.OR i15 i12 i13 || IAU.INCS i19 -123 || PEU.PCCX NEQ 47", "0fa8ce3c04083339305231d49bbd3666e19fbd"),
+        ):
+            self.assertEqual(encode(source), bytes.fromhex(expected))
+            self.assertEqual(encode(" || ".join(reversed(source.split(" || ")))), bytes.fromhex(expected))
+
+    def test_five_offset_store_add_predicated_header(self) -> None:
+        for source, expected in (
+            ("CMU.CP.32 i0 i1 || LSU0.CP.32 i4 i5 || LSU1.STO.32 i8 i9 11 || IAU.ADD i16 i17 i18 || PEU.PCCX EQ 21", "0fe8cc1c0008470a08865217002042094505"),
+            ("CMU.CP.32 i2 i3 || LSU0.LDIH i6 12345 || LSU1.STO.64 v8.1 i10 -123 || IAU.INCS i19 -123 || PEU.PCCX NEQ 47", "0fe8cc3c040833393086140aff6316fed90b"),
+        ):
+            self.assertEqual(encode(source), bytes.fromhex(expected))
+            self.assertEqual(encode(" || ".join(reversed(source.split(" || ")))), bytes.fromhex(expected))
+
+    def test_six_offset_store_logical_add_predicated_header(self) -> None:
+        for source, expected in (
+            ("CMU.CP.32 i0 i1 || LSU0.CP.32 i4 i5 || LSU1.STO.32 i8 i9 11 || SAU.AND i12 i13 i14 || IAU.ADD i16 i17 i18 || PEU.PCCX EQ 21", "0fe8ce1c0008470a0886521700b8310722945054"),
+            ("CMU.CP.32 i2 i3 || LSU0.LDIH i6 12345 || LSU1.STO.64 v8.1 i10 -123 || SAU.OR i15 i12 i13 || IAU.INCS i19 -123 || PEU.PCCX NEQ 47", "0fe8ce3c040833393086140aff9bbd3666e19fbd"),
+        ):
+            self.assertEqual(encode(source), bytes.fromhex(expected))
+            self.assertEqual(encode(" || ".join(reversed(source.split(" || ")))), bytes.fromhex(expected))
+
+    def test_five_scalar_arithmetic_add_predicated_header(self) -> None:
+        for source, expected in (
+            ("CMU.CP.32 i0 i1 || LSU0.CP.32 i4 i5 || SAU.ADD.I32 i12 i13 i14 || IAU.ADD i16 i17 i18 || PEU.PCCX EQ 21", "0f28cf1c0008470a08a031072042094505"),
+            ("CMU.CP.32 i2 i3 || LSU0.LDIH i6 12345 || SAU.SUB.I32 i15 i12 23 || IAU.INCS i19 -123 || PEU.PCCX NEQ 47", "0f28cf3c040833393082bd1b6316fed90b"),
+        ):
+            self.assertEqual(encode(source), bytes.fromhex(expected))
+            self.assertEqual(encode(" || ".join(reversed(source.split(" || ")))), bytes.fromhex(expected))
+
+    def test_five_offset_load_add_predicated_header(self) -> None:
+        for source, expected in (
+            ("CMU.CP.32 i0 i1 || LSU0.LDO.32 i4 i5 -7 || LSU1.CP.32 i8 i9 || IAU.ADD i16 i17 i18 || PEU.PCCX EQ 21", "0fb8cc1c0008424af3ff8712082042094505"),
+            ("CMU.CP.32 i2 i3 || LSU0.LDO.64 v4.1 i6 123 || LSU1.LDIL i10 54321 || IAU.INCS i19 -123 || PEU.PCCX NEQ 47", "0fb8cc3c0408420cf6005231d46316fed90b"),
+        ):
+            self.assertEqual(encode(source), bytes.fromhex(expected))
+            self.assertEqual(encode(" || ".join(reversed(source.split(" || ")))), bytes.fromhex(expected))
+
+    def test_six_offset_load_logical_predicated_header(self) -> None:
+        for source, expected in (
+            ("CMU.CP.32 i0 i1 || LSU0.LDO.32 i4 i5 -7 || LSU1.CP.32 i8 i9 || SAU.AND i12 i13 i14 || IAU.XOR i16 i17 i18 || PEU.PCCX EQ 21", "0fb8ca1c0008424af3ff871208b8312723944505"),
+            ("CMU.CP.32 i2 i3 || LSU0.LDO.64 v4.1 i6 123 || LSU1.LDIL i10 54321 || SAU.OR i15 i12 i13 || IAU.OR i19 i16 i17 || PEU.PCCX NEQ 47", "0fb8ca3c0408420cf6005231d49bbd16e18cd90b"),
+        ):
+            self.assertEqual(encode(source), bytes.fromhex(expected))
+            self.assertEqual(encode(" || ".join(reversed(source.split(" || ")))), bytes.fromhex(expected))
 
     def test_invalid_or_unmeasured_input_fails_closed(self) -> None:
         for source in [
