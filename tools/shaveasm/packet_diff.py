@@ -213,11 +213,12 @@ def generate_packets(seed: int, count: int) -> list[str]:
                 for right in values:
                     packets.append("\n || ".join(f"{mnemonic} i16 i17 {right}" if unit == "IAU.ADD24"
                                                   else operation(unit, store_packet=store_packet) for unit in shape))
-        if "LSU0" in shape:
-            packets.append("\n || ".join("LSU0.CP.128 v4 v5" if unit == "LSU0"
-                                          else "VAU.MUL.F32 v28 v29 v30" if unit == "VAU"
-                                          else "VAU.OR v28 v29 v30" if unit == "VAU.OR20"
-                                          else operation(unit, store_packet=store_packet) for unit in shape))
+        for copy_unit, destination, source in (("LSU0", "v4", "v5"), ("LSU1", "v8", "v9")):
+            if copy_unit in shape:
+                packets.append("\n || ".join(f"{copy_unit}.CP.128 {destination} {source}" if unit == copy_unit
+                                              else "VAU.MUL.F32 v28 v29 v30" if unit == "VAU"
+                                              else "VAU.OR v28 v29 v30" if unit == "VAU.OR20"
+                                              else operation(unit, store_packet=store_packet) for unit in shape))
         if "CMU" in shape:
             for copy in ("CMU.CP.128.32.R v0 i1", "CMU.CP.128 v0 v1"):
                 packets.append("\n || ".join(copy if unit == "CMU"
@@ -389,7 +390,7 @@ def generate_packets(seed: int, count: int) -> list[str]:
         for register in range(32):
             operands = ["v0", "v0"]
             operands[position] = f"v{register}"
-            for mnemonic in ("CMU.CP.128", "LSU0.CP.128"):
+            for mnemonic in ("CMU.CP.128", "LSU0.CP.128", "LSU1.CP.128"):
                 packets.append(mnemonic + " " + " ".join(operands))
     packets.extend(f"CMU.CP.128.32.R v{r} i0" for r in range(32))
     packets.extend(f"CMU.CP.128.32.R v0 i{r}" for r in range(32))
