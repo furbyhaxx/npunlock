@@ -1180,9 +1180,8 @@ byte offset and addend. No instruction fixup type beyond the exercised
 `R_SHAVE_PCREL16`/`R_SHAVE_PCREL16_AT4` (209/210) is claimed as verified here.
 
 Branch encoding receives the following packets in its current code-section run.
-The writer classifies PC-relative fixups and `BRU.BRA*`, `BRU.JMP`, and
-`BRU.SWP` mnemonics as control transfers; the encoder also exposes a separate
-control-transfer predicate, and unmeasured forms remain unsupported. A `.code`
+The writer uses the encoder's shared control-transfer predicate for non-NOP
+`BRU` operations; unmeasured forms remain unsupported. A `.code`
 switch ends that run, including a repeated `.code` of the same name; repeating
 `.section` for the current section does not. Data and alignment inside the
 next six branch issue slots, or another control transfer there, fail

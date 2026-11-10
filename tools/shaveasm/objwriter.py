@@ -178,13 +178,7 @@ class _Assembler:
             for index, event in enumerate(section.events):
                 if not isinstance(event, _PendingPacket):
                     continue
-                is_branch = (
-                    any(fixup.kind.startswith("R_SHAVE_PCREL") for fixup in event.fixups)
-                    or any(
-                        op.mnemonic in ("BRU.JMP", "BRU.SWP") or op.mnemonic.startswith("BRU.BRA")
-                        for op in event.packet.operations
-                    )
-                )
+                is_branch = encoding.is_control_transfer(event.packet)
                 following = []
                 slots = 0
                 packet_line = event.packet.operations[0].line

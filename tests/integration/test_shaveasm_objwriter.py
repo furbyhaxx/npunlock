@@ -117,8 +117,9 @@ class ObjectWriterTests(unittest.TestCase):
         self.assertEqual(image.section(".text.jump").data, bytes.fromhex("47f106308222010007"))
         self.assertEqual(image.section(".text.jumpmixed").data, bytes.fromhex("ae18d294131f0050"))
 
-    def test_register_jump_delay_window_rejects_directives(self) -> None:
-        for branch in ("BRU.JMP i30", "IAU.XOR i5 i6 i7 || BRU.JMP i30"):
+    def test_register_control_transfer_delay_window_rejects_directives(self) -> None:
+        for branch in ("BRU.JMP i30", "IAU.XOR i5 i6 i7 || BRU.JMP i30",
+                       "BRU.SWP i30", "IAU.XOR i5 i6 i7 || BRU.SWP i30"):
             for directive in (".align 1", ".byte 0", ".fill 0"):
                 source = f".code x\n{branch}\nNOP 4\n{directive}\nNOP 2\n"
                 with self.subTest(branch=branch, directive=directive), self.assertRaisesRegex(
