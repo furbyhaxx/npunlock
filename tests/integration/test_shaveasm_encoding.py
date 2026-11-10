@@ -15,6 +15,19 @@ def encode(source: str) -> bytes:
 
 
 class EncodingTests(unittest.TestCase):
+    def test_lsu1_indirect_doubleword_store_uses_strict_vector_lanes(self) -> None:
+        for operands, expected in (("i0 i0", "89098000"), ("i1 i2", "89198400"),
+                                   ("i31 i31", "89f9bf00"), ("v31.1 i31", "89f9ff08")):
+            with self.subTest(operands=operands):
+                self.assertEqual(encode("LSU1.ST.64 " + operands), bytes.fromhex(expected))
+        self.assertEqual(encode("LSU1.ST.64 v8.0 i9 || LSU0.CP.32 i4 i5"), bytes.fromhex("a9470a08899208"))
+        for source in ("LSU1.ST.64 v0.2 i0", "LSU1.ST.64 i32 i0", "LSU1.ST.64 v32.0 i0",
+                       "LSU1.ST.64 i8 i9 || CMU.CMII.I32 i0 i1",
+                       "LSU1.ST.64 i8 i9 || LSU0.CP.32 i4 i5",
+                       "LSU1.ST.64 i8 i9 || LSU0.STO.64 i4 i5 -3"):
+            with self.subTest(source=source), self.assertRaises(AssemblyError):
+                encode(source)
+
     def test_sau_unsigned_halfword_shift_uses_register_or_five_bit_immediate(self) -> None:
         for source, expected in (("i0 i0 0", "3c120050"), ("i1 i2 3", "3c528451"),
                                  ("i31 i31 31", "3cf2ff5f"), ("i1 i2 i3", "3c528441")):

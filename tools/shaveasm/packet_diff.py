@@ -219,6 +219,11 @@ def generate_packets(seed: int, count: int) -> list[str]:
     for key in _PREFIXES:
         shape = key.split(",")
         if "LSU1" in shape:
+            for source in ("i8", "v8.0", "v8.1"):
+                packets.append("\n || ".join(f"LSU1.ST.64 {source} i9" if unit == "LSU1"
+                                              else "LSU0.LD.32 i4 i5" if unit == "LSU0"
+                                              else "LSU0.LDO.32 i4 i5 -3" if unit == "LSU0.LDO32"
+                                              else operation(unit, store_packet=True) for unit in shape))
             for destination in ("i8", "v8.0", "v8.1"):
                 if destination == "i8" and "LSU0.LD20" in shape:
                     continue
@@ -273,6 +278,10 @@ def generate_packets(seed: int, count: int) -> list[str]:
                    (0, -1, 16383, -16384, *(1 << bit for bit in range(14)),
                     *(-(1 << bit) for bit in range(15))))
     packets.extend(f"LSU1.STO.32 i31 i0 {value}" for value in (-16384, -1, 0, 1, 16383))
+    packets.extend(f"LSU1.ST.64 i{register} i0" for register in range(32))
+    packets.extend(f"LSU1.ST.64 v{register}.{lane} i0"
+                   for register in range(32) for lane in range(2))
+    packets.extend(f"LSU1.ST.64 i0 i{register}" for register in range(32))
     packets.extend(f"LSU1.LD.64 i{register} i0" for register in range(32))
     packets.extend(f"LSU1.LD.64 v{register}.{lane} i0"
                    for register in range(32) for lane in range(2))

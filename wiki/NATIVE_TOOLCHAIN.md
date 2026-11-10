@@ -1231,6 +1231,20 @@ instruction rejections fall from 277 to 267. Fixtures:
 `/mnt/cache/build-shave/scalar-next-measure`, `sau-shru16-{3720,9001}` and
 `corpus-parity-sau-shru16`.
 
+### LSU1 indirect doubleword store
+
+`LSU1.ST.64 src base` uses the 24-bit LSU1 class and payload
+`0x8009 | N<<4 | base<<9`, with vector sources adding `0x80000 | lane<<14`.
+Only vector lanes 0..1 are accepted. Scalar sources conflict with LSU0 scalar
+stores/copies on read port 8, and scalar LSU0.STO.64 also conflicts; vector
+sources can co-issue. All sources conflict with CMII on read port 6.
+All 755 headers, 32 scalar sources, 64 vector sources and 32 bases match.
+Both seeds pass **74820/74820** cases; **102 offline tests** pass.
+Corpus parity remains **29/55 exact**, zero different, 26 rejected; diagnostic
+instruction rejections fall from 267 to 243. Fixtures:
+`/mnt/cache/build-shave/scalar-next-measure`, `lsu1-st64-{3720,9001}` and
+`corpus-parity-lsu1-st64`.
+
 ### Differential gates and corpus inventory
 
 Cached assembly can be inventoried without Wine or recompilation:
