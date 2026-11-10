@@ -45,6 +45,8 @@ def generate_packets(seed: int, count: int) -> list[str]:
         if unit == "CMU":
             mnemonic = "CMU.CP.32" if store_packet else rng.choice(("CMU.CP.32", "CMU.CMII.I32", "CMU.CMII.U32", "CMU.CMII.F32"))
             return f"{mnemonic} {registers[0]} {registers[1]}"
+        if unit == "LSU0" and rng.randrange(4) == 0:
+            return f"LSU0.LD.16 {registers[0]}.{rng.randrange(4)} {registers[1]}"
         if unit == "LSU1" and rng.randrange(4) == 0:
             return f"LSU1.CP.32 {registers[0]} {registers[1]}"
         if unit in ("LSU0", "LSU1") and rng.randrange(3) == 0:
@@ -121,6 +123,9 @@ def generate_packets(seed: int, count: int) -> list[str]:
                 packets.append("\n || ".join(f"{mnemonic} i12 i13 {right}" if unit == "SAU"
                                               else operation(unit, store_packet=store_packet) for unit in shape))
         if "LSU0" in shape:
+            for lane in range(4):
+                packets.append("\n || ".join(f"LSU0.LD.16 i4.{lane} i5" if unit == "LSU0"
+                                              else operation(unit, store_packet=store_packet) for unit in shape))
             for immediate in ("43210", "external_target"):
                 packets.append("\n || ".join(f"LSU0.LDIH i4 {immediate}" if unit == "LSU0"
                                               else operation(unit, store_packet=store_packet) for unit in shape))
@@ -202,6 +207,9 @@ def generate_packets(seed: int, count: int) -> list[str]:
                    (0, -1, 16383, -16384, *(1 << bit for bit in range(14)),
                     *(-(1 << bit) for bit in range(15))))
     packets.extend(f"LSU1.STO.32 i31 i0 {value}" for value in (-16384, -1, 0, 1, 16383))
+    packets.extend(f"LSU0.LD.16 i{register}.{lane} i0"
+                   for register in range(32) for lane in range(4))
+    packets.extend(f"LSU0.LD.16 i0.0 i{register}" for register in range(32))
     for mnemonic in ("LSU0.LD.32", "LSU0.CP.32", "LSU0.LD.32.F16.F32"):
         for position in range(2):
             for register in range(32):

@@ -64,6 +64,19 @@ class EncodingTests(unittest.TestCase):
             with self.subTest(source=source), self.assertRaises(AssemblyError):
                 encode(source)
 
+    def test_lsu0_halfword_load_selects_one_of_four_scalar_lanes(self) -> None:
+        self.assertEqual(encode("LSU0.LD.16 i0.0 i0"), bytes.fromhex("820d0002"))
+        self.assertEqual(encode("LSU0.LD.16 i1.0 i2"), bytes.fromhex("821d0402"))
+        self.assertEqual(encode("LSU0.LD.16 i0.1 i0"), bytes.fromhex("820d4002"))
+        self.assertEqual(encode("LSU0.LD.16 i0.2 i0"), bytes.fromhex("820d8002"))
+        self.assertEqual(encode("LSU0.LD.16 i0.3 i0"), bytes.fromhex("820dc002"))
+        self.assertEqual(encode("LSU0.LD.16 i31.1 i31"), bytes.fromhex("82fd7f02"))
+        for source in ("LSU0.LD.16 i0 i0", "LSU0.LD.16 i0.4 i0",
+                       "LSU0.LD.16 i32.0 i0", "LSU0.LD.16 v0.0 i0",
+                       "LSU0.LD.16 i0.0 i32", "LSU0.LD.16 i0.0 1"):
+            with self.subTest(source=source), self.assertRaises(AssemblyError):
+                encode(source)
+
     def test_lsu0_half_load_converts_to_float_in_the_twenty_bit_class(self) -> None:
         self.assertEqual(encode("LSU0.LD.32.F16.F32 i0 i0"), bytes.fromhex("42000000"))
         self.assertEqual(encode("LSU0.LD.32.F16.F32 i1 i2"), bytes.fromhex("42100400"))

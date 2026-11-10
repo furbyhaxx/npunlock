@@ -1954,6 +1954,13 @@ def _operation(instruction: Instruction) -> _Operation:
         }[mnemonic]
         return _Operation(unit, opcode | register << 4 | base << 9 | immediate << 17, 32,
                           prefix_class=prefix_class)
+    if mnemonic == "LSU0.LD.16" and len(operands) == 2:
+        destination = re.fullmatch(r"[iI]([0-9]+)\.([0-9]+)", operands[0])
+        if destination is None or not 0 <= int(destination[1]) < 32 or not 0 <= int(destination[2]) < 4:
+            raise AssemblyError(f"line {line}: invalid scalar halfword register {operands[0]!r}")
+        register, lane = int(destination[1]), int(destination[2])
+        base = _register(operands[1], line)
+        return _Operation(unit, 0x2000D | register << 4 | base << 9 | lane << 14, 24)
     if mnemonic == "LSU0.LD.32.F16.F32" and len(operands) == 2:
         destination, base = (_register(op, line) for op in operands)
         return _Operation(unit, destination << 4 | base << 9, 20, prefix_class="LSU0.LD20")
