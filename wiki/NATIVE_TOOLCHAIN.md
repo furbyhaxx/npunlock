@@ -996,6 +996,51 @@ tests pass. Object parity remains **11/55 exact**, zero different objects,
 with 800 diagnostic instruction rejections. Fixtures and reports remain under
 `/mnt/cache/build-shave/ldo64-{3720,9001}` and `corpus-parity-ldo64`.
 
+### LSU1 offset doubleword load
+
+`LSU1.LDO.64` reuses the measured LSU0 doubleword operand field, signed
+15-bit offset and 32-bit LSU1.STO32 headers (standalone prefix `0xc9`).
+All 408 header shapes match for vector destinations. Scalar destinations
+also match all 320 shapes not containing LSU0.LD20, with LSU0 copies or stores
+selected to avoid the measured scalar write-port-4 conflict with LSU0 loads.
+CMII conflicts on scalar read port 6, including vector destinations.
+All 32 scalar registers, 512 vector register/lane combinations, 32 bases and
+33 offset cases match. Both seeds pass **39047/39047** cases and 82 offline
+tests pass. Object parity remains **11/55 exact**, zero different objects.
+Fixtures and reports: `/mnt/cache/build-shave/lsu1-ldo64-{3720,9001}` and
+`corpus-parity-lsu1-ldo64`.
+
+### LSU1 post-increment float-to-half store
+
+`LSU1.STI.16.F32.F16 src base` converts a scalar float to a stored half and
+post-increments the scalar base. Its 20-bit payload is
+`0x80004 | src<<4 | base<<9`, standalone prefix `0x49`. Substitution into all
+508 existing LSU1 shapes uniquely measured the new LSU1.STI20 headers;
+combined prefixes cannot be borrowed from the 24-bit LSU1 class.
+CMII co-issue is rejected for its measured scalar read-port-6 conflict.
+All new shapes, randomized textual order and operands, and 64 independent
+register sweeps match moviAsm. No LSU0 variant occurs in either cached corpus.
+Both seeds pass **43889/43889** cases across 2390 headers, and 83 offline
+tests pass. Object parity rises to **15/55 exact**, zero different objects,
+with 701 diagnostic instruction rejections. Fixtures and reports:
+`/mnt/cache/build-shave/sti-f16-{3720,9001}` and `corpus-parity-sti-f16`.
+
+### LSU1 offset doubleword store
+
+`LSU1.STO.64 src base offset` shares LSU1.LDO.64's operand fields and headers,
+with opcode 6 in place of 2. All 408 headers, scalar and both vector selectors,
+32 scalar registers, 512 vector register/lane combinations, 32 bases and 33
+signed offset cases match moviAsm. Scalar sources conflict with LSU0.STO.32
+and LSU0.CP.32 on scalar read port 8; all sources conflict with CMII on port 6.
+Both seeds pass **45677/45677** cases, and 84 offline tests pass.
+
+Coverage is **11345/11912** packets. Object parity is **15/55 exact**, one
+different and 39 rejected. The newly accepted `a5173dc0c638a441.s` has exact
+code bytes, but local function and section symbols have swapped symbol-table
+ordering, changing relocation symbol indices; this is an object-writer gap.
+Fixtures and reports: `/mnt/cache/build-shave/lsu1-sto64-{3720,9001}` and
+`corpus-parity-lsu1-sto64` (602 diagnostic instruction rejections).
+
 ### Differential gates and corpus inventory
 
 Cached assembly can be inventoried without Wine or recompilation:
@@ -1014,9 +1059,9 @@ command. The combined baseline is 3291/11912 accepted packets and **98** distinc
 mnemonics (97 in the literal corpus alone). With symbolic branches, signed
 loads/stores, indirect loads, integer addition, comparisons, PCCX, AND/OR,
 LMULL, INCS, scalar floating-point addition and immediate SHL, coverage is
-**11097/11912** packets, including 979 requiring symbolic fixups, after the
+**11345/11912** packets, including 983 requiring symbolic fixups, after the
 additional measured forms documented above.
-Forty-eight distinct mnemonics occur in accepted packets (six at baseline); the
+Fifty-two distinct mnemonics occur in accepted packets (six at baseline); the
 corpus still has 98 mnemonics.
 `accepted_packets` counts bytes-plus-fixups support and `relocatable_packets`
 identifies that subset. Coverage tests isolated packet forms; it does not
@@ -1035,8 +1080,8 @@ python3 -m tools.shaveasm.corpus --native-dir build/linux \
   --output /mnt/cache/build-shave/native-asm-corpus
 ```
 
-Offline regressions: 81 passed, including the merged object-writer/corpus tests.
-Each current randomized gate passes **37332/37332 cases**. Before the eight
+Offline regressions: 84 passed, including the merged object-writer/corpus tests.
+Each current randomized gate passes **45677/45677 cases**. Before the eight
 additional forms documented above, the gate passed **12156/12156 cases**
 (seeds 3720 and 9001): the original 2362 isolated-packet cases (1000 random
 packets, 457 shapes, 352 mixed operand sweeps, 96 ADD sweeps, 384 PCCX pairs,
