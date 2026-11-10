@@ -1019,6 +1019,14 @@ class EncodingTests(unittest.TestCase):
         self.assertEqual(encode(" || ".join(operations)), expected)
         self.assertEqual(encode(" || ".join(reversed(operations))), expected)
 
+    def test_cmu_unsigned_halfword_comparison(self) -> None:
+        self.assertEqual(encode("CMU.CMII.U16 i0 i0"), bytes.fromhex("81000002"))
+        self.assertEqual(encode("CMU.CMII.U16 i1 i2"), bytes.fromhex("81100402"))
+        self.assertEqual(encode("CMU.CMII.U16 i31 i31"), bytes.fromhex("81f03f02"))
+        for operands in ("i32 i0", "i0 i32", "v0 i0", "i0 1"):
+            with self.subTest(operands=operands), self.assertRaises(AssemblyError):
+                encode("CMU.CMII.U16 " + operands)
+
     def test_invalid_or_unmeasured_input_fails_closed(self) -> None:
         for source in [
             "LSU0.LDIL i4 65536",

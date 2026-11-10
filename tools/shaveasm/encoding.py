@@ -3857,10 +3857,10 @@ def _operation(instruction: Instruction) -> _Operation:
     if mnemonic == "CMU.CMZ.I32" and len(operands) == 1:
         source = _register(operands[0], line)
         return _Operation(unit, source << 4, 16, prefix_class="CMU.CMZ16")
-    if mnemonic in ("CMU.CMII.I32", "CMU.CMII.U32", "CMU.CMII.F32", "CMU.CMII.I8") and len(operands) == 2:
+    if mnemonic in ("CMU.CMII.I32", "CMU.CMII.U32", "CMU.CMII.F32", "CMU.CMII.I8", "CMU.CMII.U16") and len(operands) == 2:
         left, right = (_register(op, line) for op in operands)
         selector = {"CMU.CMII.I32": 0x10000, "CMU.CMII.U32": 0,
-                    "CMU.CMII.F32": 0x80000, "CMU.CMII.I8": 0x50000}[mnemonic]
+                    "CMU.CMII.F32": 0x80000, "CMU.CMII.I8": 0x50000, "CMU.CMII.U16": 0x20000}[mnemonic]
         return _Operation(unit, selector | left << 4 | right << 9, 24)
     if mnemonic == "CMU.CP.16.F32.F16" and len(operands) == 2:
         destination = _scalar_lane_register(operands[0], line, 2, register_shift=9)

@@ -1666,6 +1666,16 @@ instruction rejections fall from 35 to 32. The contrib/hnsw object is now
 exact. Fixtures: `/mnt/cache/build-shave/five-add-pred-measure`,
 `five-add-pred-{3720,9001}` and `corpus-parity-five-add-pred`.
 
+### CMU unsigned halfword register comparison
+
+`CMU.CMII.U16 left right` uses the 24-bit CMU class with payload
+`0x20000 | left<<4 | right<<9`. All 32 registers in both fields and the
+eligible comparison headers match moviAsm. Vector operands and immediates
+fail closed. Both seeds pass **118165/118165** cases; **137 offline tests**
+pass. Corpus parity remains **53/55 exact**, zero different, two rejected.
+Fixtures: `/mnt/cache/build-shave/cmu-cmiiu16-measure`,
+`cmu-cmiiu16-{3720,9001}` and `corpus-parity-cmu-cmiiu16`.
+
 ### Differential gates and corpus inventory
 
 Cached assembly can be inventoried without Wine or recompilation:
