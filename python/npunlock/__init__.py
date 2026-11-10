@@ -191,7 +191,7 @@ def _resolve_movi_dll_dir(explicit: str | Path | None) -> str | Path | None:
     return os.environ.get("NPUNLOCK_MOVITOOLS_DIR") or None
 
 
-def _resolve_shave_toolchain(mode: str | None, linker: str | Path | None) -> ShaveToolchain:
+def _resolve_shave_toolchain(mode: str | None, linker: str | os.PathLike[str] | None) -> ShaveToolchain:
     return resolve_toolchain(
         mode if mode is not None else _configured_shave_toolchain,
         linker if linker is not None else _configured_shave_linker,

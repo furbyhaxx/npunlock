@@ -189,6 +189,25 @@ python examples/example_gelu_f32.py
 python examples/example_global_hybrid_five_input_custom.py
 ```
 
+### SHAVE assembler and linker mode
+
+On Linux, the default `vendor` mode runs MoviTools' compiler, assembler and
+linker under Wine. Select the experimental native assembler and patched linker:
+
+```bash
+export NPUNLOCK_SHAVE_TOOLCHAIN=auto       # vendor, hybrid, or auto
+export NPUNLOCK_SHAVE_LINKER=/opt/shave-lld/bin/ld.lld  # optional override
+python -m npunlock doctor --full
+```
+
+`hybrid` uses the native assembler and linker after `moviCompile`, and reports
+unsupported assembly with its source line. `auto` falls back to the vendor
+assembler and linker for each rejected kernel. Compiler and linker failures do
+not trigger fallback. Each hybrid/auto compilation reports its chosen path on
+stderr. The native assembler supports a measured subset; it is not a complete
+replacement for MoviTools. See [Native SHAVE toolchain](wiki/NATIVE_TOOLCHAIN.md)
+for linker setup, limits, Python options and cache behavior.
+
 The Wine prefix defaults to `$XDG_DATA_HOME/npunlock/wine`, or
 `~/.local/share/npunlock/wine` when XDG_DATA_HOME is unset. Override it with an
 absolute `WINEPREFIX`; retain Wine's default `Z:` mapping to `/`. First use may

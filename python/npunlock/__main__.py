@@ -14,6 +14,8 @@ def _parser() -> argparse.ArgumentParser:
     doctor.add_argument("--json", action="store_true", help="write the versioned machine-readable report")
     doctor.add_argument("--native-dir", help="development override containing the native library and workers")
     doctor.add_argument("--movi-dll-dir", help="MVC_DEPEND root; otherwise use NPUNLOCK_MOVITOOLS_DIR")
+    doctor.add_argument("--shave-toolchain", choices=("vendor", "hybrid", "auto"), help="SHAVE assembler/linker mode")
+    doctor.add_argument("--shave-linker", help="patched native SHAVE ld.lld path")
     doctor.add_argument("--timeout-ms", type=int, default=20_000, help="finite graph-compiler timeout")
     checks = doctor.add_mutually_exclusive_group()
     checks.add_argument("--skip-driver", action="store_true", help="check package files without querying the NPU")
@@ -33,6 +35,8 @@ def main(arguments: Sequence[str] | None = None) -> int:
         timeout_ms=options.timeout_ms,
         check_driver=not options.skip_driver,
         full_check=options.full,
+        shave_toolchain=options.shave_toolchain,
+        shave_linker=options.shave_linker,
     )
     if options.json:
         print(json.dumps(report, indent=2, sort_keys=True))

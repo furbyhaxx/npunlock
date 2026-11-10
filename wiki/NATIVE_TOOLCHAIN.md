@@ -2,16 +2,28 @@
 
 ## Status and scope
 
-The Linux default is still the full MoviTools toolchain under Wine. **There is
-no selectable hybrid mode yet.** On 2026-11-09, native linking was validated
-on NPU3720 (`8086:ad1d`), but the published Python assembler failed the vendor
-assembly compatibility gate. Do not advertise the linker-only experiment as
-replacement of both assembler and linker.
-
-The intended interface is C -> Wine `moviCompile -S` -> native assembler ->
-native `ld.lld` -> existing native patchblob and inference. The compiler and
+The default `vendor` mode uses the full MoviTools toolchain under Wine.
+Linux `hybrid` mode uses Wine `moviCompile -S`, the bundled native assembler,
+and patched native `ld.lld`. The native assembler accepts a measured subset
+and fails closed on unsupported forms; `auto` falls back to the vendor
+assembler and linker separately for each rejected kernel. The compiler and
 `mlibm.a` remain proprietary. The archive is a native link input, not a program
 executed by Wine. No vendor payload is bundled here.
+
+Set `NPUNLOCK_SHAVE_TOOLCHAIN` to `vendor`, `hybrid` or `auto`; override the
+patched linker with `NPUNLOCK_SHAVE_LINKER` (default
+`/opt/shave-lld/bin/ld.lld`). Python accepts `shave_toolchain=` and
+`shave_linker=` at compile/build entry points or in `npu.configure()`. Explicit
+arguments override process configuration, environment and defaults. `doctor`
+reports both native tools and the selected mode; `--shave-toolchain` and
+`--shave-linker` override its environment. Hybrid/auto report the path used per
+kernel on stderr. Auto falls back only on assembler rejection, not compiler or
+linker failures. Cache requests include each actual path and native tool
+identities; auto compiles kernels before cache lookup to determine their paths.
+
+On 2026-11-09, native linking was validated on NPU3720 (`8086:ad1d`), while the
+separate published external assembler failed the compatibility gate described
+below. Those historical measurements do not describe the bundled assembler.
 
 ## Pinned native linker
 
@@ -126,10 +138,9 @@ object path concatenates correctly encoded slot bytes while the vendor packs
 the issue packet differently (seven bytes versus eight). A return-only
 control did match: `BRU.JMP i30` followed by vendor `NOP 6` or native
 `.byte 0x50` produced `47f10150`. No mismatching packet was executed on hardware.
-A correct vendor-dialect parser **and packet encoder**, including predicate and
-compressed-NOP handling, are required before wiring selectable mode/config,
-worker timeouts, cache identity and doctor. The assembler and its recovered
-tables were deliberately not adopted before that gate.
+This historical gate showed that syntax normalization alone was insufficient.
+The external assembler and its recovered tables were not adopted; the separate
+bundled assembler implements measured vendor packet forms and rejects the rest.
 
 ## Verified ELF and relocation observations
 
@@ -196,13 +207,13 @@ absolute error `2.38419e-07`; five-input matched all 32 values exactly, copied
 and shared buffers. This is **not** end-to-end hybrid compilation: both compiler
 and assembler still ran under Wine offline. The unchanged default
 `python -m npunlock doctor --full` passed 32-element FP16 add-one with zero
-mismatches. Doctor in a new mode is not implemented or validated.
+mismatches in the vendor mode used for that experiment.
 
 ## Independent native parser and packet encoder
 
 The follow-up implementation in `tools/shaveasm/` is independent stdlib Python;
-no third-party assembler or encoding table was imported. It remains a development
-library, not a complete `.s` -> `.o` assembler or a selectable toolchain mode.
+no third-party assembler or encoding table was imported. Its object writer is
+bundled for the selectable hybrid and auto modes, but covers only measured forms.
 `parser.py` preserves directives and labels, strips comments without damaging
 quoted strings, and joins inline/continued packets without rescheduling.
 `encoding.py` fails closed outside the measured instruction forms below.
@@ -963,17 +974,16 @@ bytes-plus-fixups support to **10659/11912** with the additional measured forms
 above. These are
 syntactic coverage counts, **not** full-stream or whole-object parity claims.
 Calls, other branch forms, additional instruction/header classes, data and
-alignment directives, ELF symbols and relocations remain the next gate. Hybrid
-worker/config/cache integration and new-mode doctor/NPU acceptance must wait
-for whole-corpus object parity. The existing default and prior linker-only
-hardware evidence are unchanged; no branch push is justified yet.
+alignment directives, ELF symbols and relocations remain coverage limits.
+The selectable hybrid mode rejects unsupported forms, and auto uses the vendor
+assembler and linker when the native assembler rejects a kernel.
 
 ## Native object writer
 
 `tools/shaveasm/asm.py` assembles the measured packet subset and supported
 vendor directives into relocatable objects. This section supersedes the earlier
 pre-writer statement that no object writer or fixture parity exists; it does not
-claim complete compiler-corpus compatibility or a selectable native mode.
+claim complete compiler-corpus compatibility.
 
 ```sh
 python3 -m tools.shaveasm.asm input.s -o output.o

@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import importlib
 import os
 import platform
+import shutil
 import struct
 from pathlib import Path
 
@@ -41,6 +43,16 @@ def _file_report(path: Path) -> dict[str, object]:
     }
 
 
+def _native_assembler_report() -> dict[str, object]:
+    try:
+        module = importlib.import_module("tools.shaveasm.objwriter")
+        if not callable(getattr(module, "assemble", None)):
+            raise ImportError("assembler entry point is missing")
+        return {"status": "ok", "path": module.__file__}
+    except (ImportError, OSError, SyntaxError) as error:
+        return {"status": "unavailable", "path": None, "error": str(error)}
+
+
 def _driver_report(native: NativeLibraries, timeout_ms: int) -> dict[str, object]:
     result = native.query_ir_provenance(timeout_ms=timeout_ms)
     return {
@@ -55,7 +67,9 @@ def _driver_report(native: NativeLibraries, timeout_ms: int) -> dict[str, object
     }
 
 
-def _full_check_report(native: NativeLibraries, movi_root: Path, timeout_ms: int) -> dict[str, object]:
+def _full_check_report(
+    native: NativeLibraries, movi_root: Path, timeout_ms: int, mode: str, linker: Path
+) -> dict[str, object]:
     # Import lazily so the ordinary doctor path remains independent of the
     # high-level compiler orchestration and avoids a package import cycle.
     from . import compile as compile_graph
@@ -69,6 +83,8 @@ def _full_check_report(native: NativeLibraries, movi_root: Path, timeout_ms: int
         Graph([x], [y], name="npunlock_doctor_full"),
         movi_dll_dir=movi_root,
         timeout_ms=timeout_ms,
+        shave_toolchain=mode,
+        shave_linker=linker,
         libraries=native,
     ) as program:
         outputs = program.run({"doctor_input": values})
@@ -93,12 +109,23 @@ def collect_diagnostics(
     timeout_ms: int = 20_000,
     check_driver: bool = True,
     full_check: bool = False,
+    shave_toolchain: str | None = None,
+    shave_linker: str | os.PathLike[str] | None = None,
     libraries: NativeLibraries | None = None,
 ) -> dict[str, object]:
     """Collect installation capabilities and optionally run a custom-kernel oracle."""
 
     if isinstance(timeout_ms, bool) or not isinstance(timeout_ms, int) or timeout_ms <= 0:
         raise ValueError("timeout_ms must be a positive integer")
+    from . import _resolve_shave_toolchain
+
+    toolchain = _resolve_shave_toolchain(shave_toolchain, shave_linker)
+    assembler_report = _native_assembler_report()
+    linker_path = shutil.which(os.fspath(toolchain.linker))
+    linker_report = {
+        "status": "ok" if linker_path is not None else "not-found",
+        "path": linker_path if linker_path is not None else str(toolchain.linker),
+    }
     runtime_root = _native_directory(native_dir)
     runtime_files = tuple(_file_report(runtime_root / name) for name in NATIVE_RUNTIME_FILES)
     runtime: dict[str, object] = {
@@ -158,7 +185,9 @@ def collect_diagnostics(
     else:
         try:
             assert selected_movi is not None
-            custom_kernel_check = _full_check_report(native, Path(selected_movi).expanduser().resolve(), timeout_ms)
+            custom_kernel_check = _full_check_report(
+                native, Path(selected_movi).expanduser().resolve(), timeout_ms, toolchain.mode, toolchain.linker
+            )
         except Exception as exc:
             custom_kernel_check = {"status": "error", "error": str(exc)}
     return {
@@ -172,11 +201,20 @@ def collect_diagnostics(
         },
         "native_runtime": runtime,
         "movitools": movitools,
+        "shave_toolchain": {
+            "mode": toolchain.mode,
+            "native_assembler": assembler_report,
+            "native_linker": linker_report,
+        },
         "npu_driver": driver,
         "custom_kernel_check": custom_kernel_check,
         "capabilities": {
             "run_saved_program": ready_to_run,
-            "compile_custom_c": ready_to_run and movitools["status"] == "ok",
+            "compile_custom_c": ready_to_run
+            and movitools["status"] == "ok"
+            and (
+                toolchain.mode == "vendor" or (assembler_report["status"] == "ok" and linker_report["status"] == "ok")
+            ),
         },
     }
 
@@ -185,12 +223,14 @@ def human_report(report: dict[str, object]) -> str:
     host = report["host"]
     runtime = report["native_runtime"]
     movitools = report["movitools"]
+    toolchain = report["shave_toolchain"]
     driver = report["npu_driver"]
     custom_kernel_check = report["custom_kernel_check"]
     capabilities = report["capabilities"]
     assert isinstance(host, dict)
     assert isinstance(runtime, dict)
     assert isinstance(movitools, dict)
+    assert isinstance(toolchain, dict)
     assert isinstance(driver, dict)
     assert isinstance(custom_kernel_check, dict)
     assert isinstance(capabilities, dict)
@@ -199,6 +239,9 @@ def human_report(report: dict[str, object]) -> str:
         f"host: {host['system']} {host['release']} {host['machine']} ({host['pointer_bits']}-bit Python)",
         f"native runtime: {runtime['status']} ({runtime['path']})",
         f"MoviTools: {movitools['status']}" + (f" ({movitools['path']})" if movitools["path"] else ""),
+        f"SHAVE toolchain: {toolchain['mode']}",
+        f"  native assembler: {toolchain['native_assembler']['status']} ({toolchain['native_assembler']['path']})",
+        f"  native linker: {toolchain['native_linker']['status']} ({toolchain['native_linker']['path']})",
         f"NPU driver/compiler: {driver['status']}",
     ]
     if driver["status"] == "ok":

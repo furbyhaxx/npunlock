@@ -241,9 +241,37 @@ Resolution order is:
 2. the process-local value set by `npu.configure()`; then
 3. `NPUNLOCK_MOVITOOLS_DIR`.
 
-Pass `None` to `configure()` to clear the process-local override. The supplied
-path must be the root containing `bin` and `lib`; passing `bin` itself is not
-supported. See [Getting MoviTools](GET_MOVITOOLS.md).
+Pass `movi_dll_dir=None` to `configure()` to clear the process-local override.
+The supplied path must be the root containing `bin` and `lib`; passing `bin`
+itself is not supported. See [Getting MoviTools](GET_MOVITOOLS.md).
+
+### SHAVE assembler and linker selection
+
+`shave_toolchain` selects `vendor` (default), `hybrid`, or `auto`. The hybrid
+path runs `moviCompile` under Wine, the bundled native assembler, then a patched
+native `ld.lld`; the default linker is `/opt/shave-lld/bin/ld.lld`. `auto`
+falls back per kernel only when the native assembler rejects the compiler's
+output. Hybrid/auto print the actual path on stderr, including the rejected
+line and form when falling back. Compiler and linker errors propagate.
+
+```python
+npu.configure(shave_toolchain="auto", shave_linker="/opt/shave-lld/bin/ld.lld")
+program = npu.compile(graph, shave_toolchain="hybrid")  # overrides configure()
+```
+
+Explicit `shave_toolchain=` and `shave_linker=` arguments override
+`configure()`, which overrides `NPUNLOCK_SHAVE_TOOLCHAIN` and
+`NPUNLOCK_SHAVE_LINKER`, then the built-in defaults. Pass `None` to
+`configure()` to clear an individual override. The same keywords are accepted
+by `compile_kernel()`, `compile_cached()`, `PreparedIr.build()`,
+`PreparedGraph.build()`, and `BuildPlan.build()`. The `doctor` command also
+accepts `--shave-toolchain` and `--shave-linker`.
+
+Cached programs record the actual path for every source kernel and hash native
+assembler/linker inputs for hybrid results. Auto mode compiles kernels before a
+cache lookup to determine their paths; a cache hit still avoids rebuilding the
+carrier. Native assembly is experimental and fails closed on unmeasured forms.
+See [Native SHAVE toolchain](NATIVE_TOOLCHAIN.md) for the patched linker build.
 
 ## Environment diagnostics
 
@@ -263,7 +291,8 @@ The final capability lines are intentionally separate:
 - **run saved programs** requires the bundled native runtime plus the Intel NPU
   driver/compiler path;
 - **compile custom C** additionally requires all expected DLLs and `mlibm.a`
-  under the configured `MVC_DEPEND` root.
+  under the configured `MVC_DEPEND` root; hybrid/auto also require the native
+  assembler and configured patched linker.
 
 Use `--json` for schema `npunlock.doctor.v2`, or `--skip-driver` to inspect the
 package and MoviTools files without querying an NPU:

@@ -888,6 +888,33 @@ class ShaveToolchainTests(unittest.TestCase):
 
 
 class DoctorTests(unittest.TestCase):
+    def test_doctor_reports_selected_mode_and_native_tools(self) -> None:
+        with patch.dict("os.environ", {"NPUNLOCK_SHAVE_TOOLCHAIN": "auto"}):
+            report = collect_diagnostics(native_dir="unused", check_driver=False, libraries=FakeNative())
+        toolchain = report["shave_toolchain"]
+        self.assertEqual(toolchain["mode"], "auto")
+        self.assertEqual(toolchain["native_assembler"]["status"], "ok")
+        self.assertIn(toolchain["native_linker"]["status"], ("ok", "not-found"))
+        self.assertIn("SHAVE toolchain: auto", human_report(report))
+        with patch("npunlock.doctor.shutil.which", return_value=None), patch("npunlock.doctor._MOVITOOLS_FILES", ()):
+            report = collect_diagnostics(
+                native_dir="unused",
+                movi_dll_dir=".",
+                check_driver=False,
+                libraries=FakeNative(),
+                shave_toolchain="hybrid",
+            )
+            vendor = collect_diagnostics(
+                native_dir="unused",
+                movi_dll_dir=".",
+                check_driver=False,
+                libraries=FakeNative(),
+                shave_toolchain="vendor",
+            )
+        self.assertEqual(report["shave_toolchain"]["native_linker"]["status"], "not-found")
+        self.assertFalse(report["capabilities"]["compile_custom_c"])
+        self.assertTrue(vendor["capabilities"]["compile_custom_c"])
+
     def test_doctor_distinguishes_run_and_custom_compile_capabilities(self) -> None:
         fake = FakeNative()
         root = ROOT / "build" / "doctor-test-movitools"
