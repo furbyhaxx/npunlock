@@ -3710,6 +3710,13 @@ def _register(text: str, line: int) -> int:
     return int(match[1])
 
 
+def _scalar_lane_register(text: str, line: int, lanes: int) -> int:
+    match = re.fullmatch(r"[iI]([0-9]+)\.([0-9]+)", text)
+    if match is None or not 0 <= int(match[1]) < 32 or not 0 <= int(match[2]) < lanes:
+        raise AssemblyError(f"line {line}: invalid scalar lane register {text!r}")
+    return int(match[1]) << 4 | int(match[2]) << 14
+
+
 def _vector_register(text: str, line: int) -> int:
     match = re.fullmatch(r"[vV]([0-9]+)", text)
     if match is None or not 0 <= int(match[1]) < 32:
@@ -3789,14 +3796,11 @@ def _operation(instruction: Instruction) -> _Operation:
         opcode = 0x8009 if mnemonic == "LSU1.ST.64" else 0x800D
         return _Operation(unit, opcode | register | base << 9, 24)
     if mnemonic in ("LSU0.LD.16", "LSU1.LD.16", "LSU0.LD.8", "LSU1.STI.16") and len(operands) == 2:
-        destination = re.fullmatch(r"[iI]([0-9]+)\.([0-9]+)", operands[0])
-        if destination is None or not 0 <= int(destination[1]) < 32 or not 0 <= int(destination[2]) < 4:
-            raise AssemblyError(f"line {line}: invalid scalar lane register {operands[0]!r}")
-        register, lane = int(destination[1]), int(destination[2])
+        register = _scalar_lane_register(operands[0], line, 4)
         base = _register(operands[1], line)
         opcode = {"LSU1.STI.16": 0x820009, "LSU0.LD.16": 0x2000D,
                   "LSU1.LD.16": 0x2000D, "LSU0.LD.8": 0x4000D}[mnemonic]
-        return _Operation(unit, opcode | register << 4 | base << 9 | lane << 14, 24)
+        return _Operation(unit, opcode | register | base << 9, 24)
     if mnemonic in ("LSU0.LD.32.F16.F32", "LSU1.LD.32.F16.F32") and len(operands) == 2:
         destination, base = (_register(op, line) for op in operands)
         return _Operation(unit, destination << 4 | base << 9, 20,
@@ -3847,6 +3851,10 @@ def _operation(instruction: Instruction) -> _Operation:
         selector = {"CMU.CMII.I32": 0x10000, "CMU.CMII.U32": 0,
                     "CMU.CMII.F32": 0x80000, "CMU.CMII.I8": 0x50000}[mnemonic]
         return _Operation(unit, selector | left << 4 | right << 9, 24)
+    if mnemonic == "CMU.CP.32.F16.F32" and len(operands) == 2:
+        destination = _register(operands[0], line)
+        source = _scalar_lane_register(operands[1], line, 2)
+        return _Operation(unit, 0x680001 | destination << 9 | source, 24)
     if mnemonic in ("CMU.CP.32.U32.F32", "CMU.CP.32.F32.U32S") and len(operands) == 2:
         destination, source = (_register(op, line) for op in operands)
         opcode = 0x64000E if mnemonic == "CMU.CP.32.U32.F32" else 0x640004

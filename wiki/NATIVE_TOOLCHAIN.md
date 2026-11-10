@@ -1419,6 +1419,19 @@ rejections fall from 97 to 93. Fixtures:
 `/mnt/cache/build-shave/cmu-minf32-{3720,9001}` and
 `corpus-parity-cmu-minf32`.
 
+### CMU scalar half-to-float conversion
+
+`CMU.CP.32.F16.F32 d iS.lane` uses the 24-bit CMU class with payload
+`0x680001 | d<<9 | s<<4 | lane<<14`. Unlike LSU halfword selectors,
+only lanes 0 and 1 are accepted by moviAsm. Scalar lane validation is shared
+with LSU lane forms. This conversion can co-issue with LSU1 postincrement
+stores. All 693 headers with both lanes, 32 destinations and 64 source/lane
+pairs match moviAsm. Both seeds pass **94029/94029** cases; **118 offline
+tests** pass. Corpus parity rises from **45/55 to 46/55 exact**, zero
+different, nine rejected; diagnostic instruction rejections fall from 93 to
+91. Fixtures: `/mnt/cache/build-shave/cmu-cpf16-{3720,9001}` and
+`corpus-parity-cmu-cpf16`.
+
 ### Differential gates and corpus inventory
 
 Cached assembly can be inventoried without Wine or recompilation:
@@ -1458,8 +1471,8 @@ python3 -m tools.shaveasm.corpus --native-dir build/linux \
   --output /mnt/cache/build-shave/native-asm-corpus
 ```
 
-Offline regressions: 117 passed, including the merged object-writer/corpus tests.
-Each current randomized gate passes **92547/92547 cases**. Before the eight
+Offline regressions: 118 passed, including the merged object-writer/corpus tests.
+Each current randomized gate passes **94029/94029 cases**. Before the eight
 additional forms documented above, the gate passed **12156/12156 cases**
 (seeds 3720 and 9001): the original 2362 isolated-packet cases (1000 random
 packets, 457 shapes, 352 mixed operand sweeps, 96 ADD sweeps, 384 PCCX pairs,

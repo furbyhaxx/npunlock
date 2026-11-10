@@ -830,6 +830,15 @@ class EncodingTests(unittest.TestCase):
         with self.assertRaisesRegex(AssemblyError, "write port 3"):
             encode("CMU.MIN.F32 i0 i1 i2 || LSU1.STI.32 i8 i9")
 
+    def test_cmu_scalar_half_to_float_conversion(self) -> None:
+        self.assertEqual(encode("CMU.CP.32.F16.F32 i0 i0.0"), bytes.fromhex("81010068"))
+        self.assertEqual(encode("CMU.CP.32.F16.F32 i31 i31.1"), bytes.fromhex("81f17f68"))
+        for source in ("CMU.CP.32.F16.F32 i32 i0.0", "CMU.CP.32.F16.F32 i0 i32.0",
+                       "CMU.CP.32.F16.F32 i0 i0.2", "CMU.CP.32.F16.F32 i0 i1",
+                       "CMU.CP.32.F16.F32 i0 v1.0"):
+            with self.subTest(source=source), self.assertRaises(AssemblyError):
+                encode(source)
+
     def test_invalid_or_unmeasured_input_fails_closed(self) -> None:
         for source in [
             "LSU0.LDIL i4 65536",
