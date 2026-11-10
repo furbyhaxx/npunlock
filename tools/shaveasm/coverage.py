@@ -9,7 +9,7 @@ from collections import Counter
 from pathlib import Path
 
 from .encoding import encode_packet_with_fixups
-from .parser import AssemblyError, Instruction, Packet, parse
+from .parser import AssemblyError, Instruction, Packet, is_float_literal, parse
 
 
 def operand_shape(instruction: Instruction) -> str:
@@ -19,6 +19,8 @@ def operand_shape(instruction: Instruction) -> str:
         register = re.fullmatch(r"([iIvVbB])\d+(\.\d+)?", operand)
         if register:
             shapes.append(register[1].lower() + "reg" + ("_lane" if register[2] else ""))
+        elif is_float_literal(operand):
+            shapes.append("float")
         elif operand.upper() in {"EQ", "NEQ", "LT", "LTE", "GT", "GTE"}:
             shapes.append("condition")
         else:

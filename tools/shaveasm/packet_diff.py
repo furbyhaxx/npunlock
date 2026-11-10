@@ -14,7 +14,7 @@ from .fixups import Fixup
 from .oracle import Oracle
 from .parser import Packet, parse
 
-_UNITS = ("CMU", "LSU0", "LSU1", "SAU", "IAU", "BRU", "PEU")
+_UNITS = ("CMU", "LSU0", "LSU1", "SAU", "IAU", "BRU", "PEU", "VAU")
 
 
 def generate_packets(seed: int, count: int) -> list[str]:
@@ -22,6 +22,9 @@ def generate_packets(seed: int, count: int) -> list[str]:
     rng = random.Random(seed)
 
     def operation(unit: str, registers: tuple[str, str, str] | None = None, *, store_packet: bool = False) -> str:
+        if unit in ("VAU", "VAU.OR20"):
+            mnemonic = "VAU.OR" if unit == "VAU.OR20" else "VAU.MUL.F32"
+            return mnemonic + " " + " ".join(f"v{rng.randrange(32)}" for _ in range(3))
         if unit == "BRU":
             return "BRU.BRA external_target"
         if unit == "BRU.JMP16":
@@ -61,7 +64,7 @@ def generate_packets(seed: int, count: int) -> list[str]:
             immediate = "external_target" if rng.randrange(2) else str(rng.randrange(65536))
             return f"{unit}.LDIH {registers[0]} {immediate}"
         if unit == "LSU0" and rng.randrange(3):
-            mnemonic = rng.choice(("LSU0.LD.32", "LSU0.CP.32"))
+            mnemonic = rng.choice(("LSU0.LD.32", "LSU0.CP.32", "LSU0.ST.32"))
             return f"{mnemonic} {registers[0]} {registers[1]}"
         if unit in ("LSU0", "LSU1"):
             immediate = "external_target" if unit == "LSU1" and rng.randrange(2) else str(rng.randrange(65536))
@@ -87,17 +90,27 @@ def generate_packets(seed: int, count: int) -> list[str]:
             right = registers[2] if rng.randrange(2) else str(immediate)
             return f"{mnemonic} {registers[0]} {registers[1]} {right}"
         if unit == "IAU":
-            mnemonic = rng.choice(("IAU.XOR", "IAU.AND", "IAU.OR", "IAU.LMULL", "IAU.LMULH", "IAU.ADDCI"))
+            mnemonic = rng.choice(("IAU.XOR", "IAU.AND", "IAU.OR", "IAU.LMULL", "IAU.LMULH", "IAU.ADDCI", "IAU.SUBCI"))
             return f"{mnemonic} {registers[0]} {registers[1]} {registers[2]}"
         condition = rng.choice(("EQ", "NEQ", "LT", "LTE", "GT", "GTE"))
         if unit == "PEU.PCCX12":
             return f"PEU.PCCX {condition} {rng.randrange(64)}"
         return "PEU.PC1C " + condition
 
-    packets = ["NOP", *(f"NOP {n}" for n in range(1, 65))]
+    packets = []
+    for position in range(3):
+        for register in range(32):
+            operands = ["v0"] * 3
+            operands[position] = f"v{register}"
+            for mnemonic in ("VAU.MUL.F32", "VAU.ADD.F32", "VAU.SUB.F32", "VAU.OR"):
+                packets.append(mnemonic + " " + " ".join(operands))
+    packets.extend(["NOP", *(f"NOP {n}" for n in range(1, 65))])
     for register in range(32):
         for unit in (*_UNITS, "LSU0.LDO32", "LSU1.STO32", "IAU.ADD24", "CMU.CMZ16", "PEU.PCCX12", "BRU.JMP16", "LSU0.LD20", "LSU1.STI20"):
             packets.append(operation(unit, (f"i{register}", f"i{31 - register}", f"i{(register + 11) % 32}")))
+    packets.extend(f"{mnemonic} i{r} i{31-r} {literal}"
+                   for mnemonic in ("SAU.ADD.F32", "SAU.MUL.F32") for r in range(32)
+                   for literal in ("0.5", "1.0", "2.0", "3.0", "-0.5", "-1.0", "-2.0", "-3.0", "+1.0"))
     packets.extend(("LSU0.LDIL i31 65535", "LSU1.LDIL i0 0", "SAU.ADD.i32 i0 i31 31"))
     packets.extend(f"LSU0.LDO.32 i31 i0 {value}" for value in (-16384, -1, 0, 1, 16383))
     packets.extend(f"IAU.ADD i{r} i{31-r} i{(r+11)%32}" for r in range(32))
@@ -112,8 +125,20 @@ def generate_packets(seed: int, count: int) -> list[str]:
         packets.append("\n || ".join(operation(unit, store_packet=bool({"LSU1.STO32", "LSU1.STI20"} & set(shape))) for unit in order))
     for key in _PREFIXES:
         shape = key.split(",")
+        if "VAU" in shape:
+            for mnemonic in ("VAU.ADD.F32", "VAU.SUB.F32"):
+                packets.append("\n || ".join(f"{mnemonic} v3 v4 v5" if unit == "VAU"
+                                              else operation(unit, store_packet=bool({"LSU1.STO32", "LSU1.STI20"} & set(shape)))
+                                              for unit in shape))
         store_packet = bool({"LSU1.STO32", "LSU1.STI20"} & set(shape))
         if "LSU0.LDO32" in shape:
+            for source in ("i4", "v4.0", "v4.1"):
+                if source == "i4" and "LSU1.STI20" in shape:
+                    continue
+                packets.append("\n || ".join(f"LSU0.STO.64 {source} i5 -3" if unit == "LSU0.LDO32"
+                                              else "LSU1.LD.32 i8 i9" if unit == "LSU1"
+                                              else "LSU1.LDO.32 i8 i9 -3" if unit == "LSU1.STO32"
+                                              else operation(unit, store_packet=True) for unit in shape))
             for destination in ("i4", "v4.0", "v4.1"):
                 packets.append("\n || ".join(f"LSU0.LDO.64 {destination} i5 -3" if unit == "LSU0.LDO32"
                                               else "LSU1.STO.32 i8 i9 -3" if unit == "LSU1.STO32"
@@ -135,29 +160,44 @@ def generate_packets(seed: int, count: int) -> list[str]:
                                               else operation(unit, store_packet=True) for unit in shape))
             packets.append("\n || ".join("LSU1.LDO.32 i8 i9 -3" if unit == "LSU1.STO32"
                                           else operation(unit, store_packet=True) for unit in shape))
+        if "LSU1.STI20" in shape:
+            packets.append("\n || ".join("LSU1.LD.32.F16.F32 i8 i9" if unit == "LSU1.STI20"
+                                          else "LSU0.LDO.32 i4 i5 -3" if unit == "LSU0.LDO32"
+                                          else operation(unit, store_packet=True) for unit in shape))
         if "BRU.JMP16" in shape:
             packets.append("\n || ".join("BRU.SWP i30" if unit == "BRU.JMP16"
                                           else operation(unit, store_packet=store_packet) for unit in shape))
+        if "SAU.AND20" in shape:
+            for mnemonic in ("SAU.XOR", "SAU.OR"):
+                packets.append("\n || ".join(f"{mnemonic} i12 i13 i14" if unit == "SAU.AND20"
+                                              else operation(unit, store_packet=store_packet) for unit in shape))
         if "SAU" in shape:
-            for mnemonic in ("SAU.ADD.I32", "SAU.SHL.X32", "SAU.SHR.U32"):
+            for mnemonic in ("SAU.ADD.F32", "SAU.MUL.F32"):
+                packets.append("\n || ".join(f"{mnemonic} i12 i13 " + rng.choice(("0.5", "1.0", "3.0", "-1.0")) if unit == "SAU"
+                                              else operation(unit, store_packet=store_packet) for unit in shape))
+            for mnemonic in ("SAU.ADD.I32", "SAU.SHL.X32", "SAU.SHR.U32", "SAU.SHR.U16"):
                 packets.append("\n || ".join(f"{mnemonic} i12 i13 i14" if unit == "SAU"
                                               else operation(unit, store_packet=store_packet) for unit in shape))
-            for mnemonic in ("SAU.ADD.F32", "SAU.SUB.F32", "SAU.MUL.I32", "SAU.MUL.F32", "SAU.SHL.X32", "SAU.SHR.U32"):
-                right = str(rng.randrange(32)) if mnemonic in ("SAU.SHL.X32", "SAU.SHR.U32") else "i14"
+            for mnemonic in ("SAU.ADD.F32", "SAU.SUB.F32", "SAU.MUL.I32", "SAU.MUL.F32", "SAU.DIV.F32", "SAU.SHL.X32", "SAU.SHR.U32", "SAU.SHR.U16"):
+                right = str(rng.randrange(32)) if mnemonic in ("SAU.SHL.X32", "SAU.SHR.U32", "SAU.SHR.U16") else "i14"
                 packets.append("\n || ".join(f"{mnemonic} i12 i13 {right}" if unit == "SAU"
                                               else operation(unit, store_packet=store_packet) for unit in shape))
         if "LSU0" in shape:
+            for destination in ("i4", "v4.0", "v4.1"):
+                packets.append("\n || ".join(f"LSU0.LD.64 {destination} i5" if unit == "LSU0"
+                                              else "LSU1.STO.32 i8 i9 -3" if unit == "LSU1.STO32"
+                                              else operation(unit, store_packet=store_packet) for unit in shape))
             for lane in range(4):
                 packets.append("\n || ".join(f"LSU0.LD.16 i4.{lane} i5" if unit == "LSU0"
                                               else operation(unit, store_packet=store_packet) for unit in shape))
             for immediate in ("43210", "external_target"):
                 packets.append("\n || ".join(f"LSU0.LDIH i4 {immediate}" if unit == "LSU0"
                                               else operation(unit, store_packet=store_packet) for unit in shape))
-            for mnemonic in ("LSU0.LD.32", "LSU0.CP.32"):
+            for mnemonic in ("LSU0.LD.32", "LSU0.CP.32", "LSU0.ST.32"):
                 packets.append("\n || ".join(f"{mnemonic} i4 i5" if unit == "LSU0"
                                               else operation(unit, store_packet=store_packet) for unit in shape))
         if "IAU" in shape:
-            for mnemonic in ("IAU.AND", "IAU.OR", "IAU.LMULL", "IAU.LMULH", "IAU.ADDCI"):
+            for mnemonic in ("IAU.AND", "IAU.OR", "IAU.LMULL", "IAU.LMULH", "IAU.ADDCI", "IAU.SUBCI"):
                 packets.append("\n || ".join(f"{mnemonic} i16 i17 i18" if unit == "IAU"
                                               else operation(unit, store_packet=store_packet) for unit in shape))
         if "IAU.ADD24" in shape:
@@ -178,12 +218,27 @@ def generate_packets(seed: int, count: int) -> list[str]:
                 packets.append("\n || ".join(f"CMU.CP.32 i0 v31.{lane}" if unit == "CMU"
                                               else operation(unit, store_packet=store_packet) for unit in shape))
         if "CMU" in shape and not store_packet:
-            for mnemonic in ("CMU.CMII.I32", "CMU.CMII.U32", "CMU.CMII.F32"):
+            for mnemonic in ("CMU.CMII.I32", "CMU.CMII.U32", "CMU.CMII.F32", "CMU.CMII.I8"):
                 packets.append("\n || ".join(f"{mnemonic} i0 i1" if unit == "CMU"
                                               else operation(unit) for unit in shape))
     for key in _PREFIXES:
         shape = key.split(",")
         if "LSU1" in shape:
+            for lane in range(4):
+                packets.append("\n || ".join(f"LSU1.STI.16 i8.{lane} i9" if unit == "LSU1"
+                                              else operation(unit, store_packet=True) for unit in shape))
+            for source in ("i8", "v8.0", "v8.1"):
+                packets.append("\n || ".join(f"LSU1.ST.64 {source} i9" if unit == "LSU1"
+                                              else "LSU0.LD.32 i4 i5" if unit == "LSU0"
+                                              else "LSU0.LDO.32 i4 i5 -3" if unit == "LSU0.LDO32"
+                                              else operation(unit, store_packet=True) for unit in shape))
+            for destination in ("i8", "v8.0", "v8.1"):
+                if destination == "i8" and "LSU0.LD20" in shape:
+                    continue
+                packets.append("\n || ".join(f"LSU1.LD.64 {destination} i9" if unit == "LSU1"
+                                              else "LSU0.CP.32 i4 i5" if unit == "LSU0"
+                                              else "LSU0.STO.32 i4 i5 -3" if unit == "LSU0.LDO32"
+                                              else operation(unit, store_packet=True) for unit in shape))
             packets.append("\n || ".join("LSU1.CP.32 i8 i9" if unit == "LSU1"
                                           else operation(unit, store_packet="LSU1.STO32" in shape) for unit in shape))
             packets.append("\n || ".join("LSU1.LDIL i8 external_target" if unit == "LSU1"
@@ -198,10 +253,10 @@ def generate_packets(seed: int, count: int) -> list[str]:
         for register in range(32):
             operands = ["i0", "i0"]
             operands[position] = f"i{register}"
-            for mnemonic in ("LSU1.STI.32", "LSU1.LD.32", "LSU1.ST.32", "LSU1.CP.32", "LSU1.STI.16.F32.F16"):
+            for mnemonic in ("LSU1.STI.32", "LSU1.LD.32", "LSU1.ST.32", "LSU1.CP.32", "LSU1.STI.16.F32.F16", "LSU1.LD.32.F16.F32"):
                 packets.append(mnemonic + " " + " ".join(operands))
-    for mnemonic in ("IAU.AND", "IAU.OR", "IAU.LMULL", "IAU.LMULH", "IAU.ADDCI",
-                     "SAU.ADD.F32", "SAU.ADD.I32", "SAU.SHL.X32", "SAU.SUB.F32", "SAU.MUL.I32", "SAU.MUL.F32", "SAU.AND", "IAU.SHL", "IAU.SHR.U32", "SAU.SHR.U32"):
+    for mnemonic in ("IAU.AND", "IAU.OR", "IAU.LMULL", "IAU.LMULH", "IAU.ADDCI", "IAU.SUBCI",
+                     "SAU.ADD.F32", "SAU.ADD.I32", "SAU.SHL.X32", "SAU.SUB.F32", "SAU.MUL.I32", "SAU.MUL.F32", "SAU.DIV.F32", "SAU.AND", "SAU.XOR", "SAU.OR", "IAU.SHL", "IAU.SHR.U32", "SAU.SHR.U32", "SAU.SHR.U16"):
         for position in range(3):
             for register in range(32):
                 operands = ["i0"] * 3
@@ -211,11 +266,11 @@ def generate_packets(seed: int, count: int) -> list[str]:
         for register in range(32):
             operands = ["i0", "i0", "0"]
             operands[position] = f"i{register}"
-            for mnemonic in ("IAU.SHL", "IAU.SHR.U32", "SAU.SHL.X32", "SAU.SHR.U32"):
+            for mnemonic in ("IAU.SHL", "IAU.SHR.U32", "SAU.SHL.X32", "SAU.SHR.U32", "SAU.SHR.U16"):
                 packets.append(mnemonic + " " + " ".join(operands))
     packets.extend(f"{mnemonic} i0 i0 {n}"
-                   for mnemonic in ("IAU.SHL", "IAU.SHR.U32", "SAU.SHL.X32", "SAU.SHR.U32") for n in range(32))
-    for mnemonic in ("CMU.CMII.I32", "CMU.CMII.U32", "CMU.CMII.F32"):
+                   for mnemonic in ("IAU.SHL", "IAU.SHR.U32", "SAU.SHL.X32", "SAU.SHR.U32", "SAU.SHR.U16") for n in range(32))
+    for mnemonic in ("CMU.CMII.I32", "CMU.CMII.U32", "CMU.CMII.F32", "CMU.CMII.I8"):
         for position in range(2):
             for register in range(32):
                 operands = ["i0", "i0"]
@@ -231,6 +286,28 @@ def generate_packets(seed: int, count: int) -> list[str]:
                    (0, -1, 16383, -16384, *(1 << bit for bit in range(14)),
                     *(-(1 << bit) for bit in range(15))))
     packets.extend(f"LSU1.STO.32 i31 i0 {value}" for value in (-16384, -1, 0, 1, 16383))
+    packets.extend(f"LSU1.STI.16 i{register}.{lane} i0"
+                   for register in range(32) for lane in range(4))
+    packets.extend(f"LSU1.STI.16 i0.0 i{register}" for register in range(32))
+    packets.extend(f"LSU1.ST.64 i{register} i0" for register in range(32))
+    packets.extend(f"LSU1.ST.64 v{register}.{lane} i0"
+                   for register in range(32) for lane in range(2))
+    packets.extend(f"LSU1.ST.64 i0 i{register}" for register in range(32))
+    packets.extend(f"LSU1.LD.64 i{register} i0" for register in range(32))
+    packets.extend(f"LSU1.LD.64 v{register}.{lane} i0"
+                   for register in range(32) for lane in range(2))
+    packets.extend(f"LSU1.LD.64 i0 i{register}" for register in range(32))
+    packets.extend(f"LSU0.LD.64 i{register} i0" for register in range(32))
+    packets.extend(f"LSU0.LD.64 v{register}.{lane} i0"
+                   for register in range(32) for lane in range(2))
+    packets.extend(f"LSU0.LD.64 i0 i{register}" for register in range(32))
+    packets.extend(f"LSU0.STO.64 i{register} i0 0" for register in range(32))
+    packets.extend(f"LSU0.STO.64 v{register}.{lane} i0 0"
+                   for register in range(32) for lane in range(16))
+    packets.extend(f"LSU0.STO.64 i0 i{register} 0" for register in range(32))
+    packets.extend(f"LSU0.STO.64 i0 i0 {value}" for value in
+                   (0, -1, 16383, -16384, *(1 << bit for bit in range(14)),
+                    *(-(1 << bit) for bit in range(15))))
     packets.extend(f"LSU1.STO.64 i{register} i0 0" for register in range(32))
     packets.extend(f"LSU1.STO.64 v{register}.{lane} i0 0"
                    for register in range(32) for lane in range(16))
@@ -255,7 +332,7 @@ def generate_packets(seed: int, count: int) -> list[str]:
     packets.extend(f"LSU0.LD.16 i{register}.{lane} i0"
                    for register in range(32) for lane in range(4))
     packets.extend(f"LSU0.LD.16 i0.0 i{register}" for register in range(32))
-    for mnemonic in ("LSU0.LD.32", "LSU0.CP.32", "LSU0.LD.32.F16.F32"):
+    for mnemonic in ("LSU0.LD.32", "LSU0.CP.32", "LSU0.ST.32", "LSU0.LD.32.F16.F32"):
         for position in range(2):
             for register in range(32):
                 operands = ["i0", "i0"]
@@ -334,38 +411,40 @@ def verify_packets(oracle: Oracle, output: Path, seed: int, count: int) -> None:
         raise ValueError("vendor fixtures must remain under /mnt/cache/build-shave")
     output.mkdir(parents=True, exist_ok=True)
     packets = generate_packets(seed, count)
-    # The vendor hazard analyzer carries write-back state across .code switches.
-    # Reuse the gap section to stay below ELF32's section-count limit.
-    source = (
-        "\n".join(
-            f".code .text.gap\n NOP 16\n.code .text.case_{index}\ncase_{index}:\n {packet}"
-            for index, packet in enumerate(packets)
-        )
-        + "\n.end\n"
-    )
-    (output / "packets.s").write_text(source)
-    data = oracle.assemble(source)
-    (output / "packets.o").write_bytes(data)
-    image = Elf32.parse(data)
     failures = []
-    for index, source_packet in enumerate(packets):
-        statements = parse(source_packet)
-        if not statements or any(not isinstance(statement, Packet) for statement in statements):
-            raise AssertionError("generated source is not a packet sequence")
-        sequence = [statement for statement in statements if isinstance(statement, Packet)]
-        actual = b""
-        fixups = []
-        for position, packet in enumerate(sequence):
-            data, packet_fixups = encode_packet_with_fixups(packet, following=sequence[position + 1:])
-            fixups.extend(Fixup(f.symbol, f.addend, f.bit_offset + len(actual) * 8, f.bit_width, f.kind)
-                          for f in packet_fixups)
-            actual += data
-        name = f".text.case_{index}"
-        expected = image.section(name).data
-        expected_fixups = _vendor_fixups(image, name)
-        if actual != expected or tuple(fixups) != expected_fixups:
-            failures.append({"index": index, "source": source_packet, "vendor": expected.hex(), "native": actual.hex(),
-                             "vendor_fixups": repr(expected_fixups), "native_fixups": repr(fixups)})
+    # Each case can add code, relocation and symbol sections to the bounded ELF32 object.
+    for start in range(0, len(packets), 30000):
+        # The vendor hazard analyzer carries write-back state across .code switches.
+        # Reuse the gap section to stay below ELF32's section-count limit.
+        source = (
+            "\n".join(
+                f".code .text.gap\n NOP 16\n.code .text.case_{index}\ncase_{index}:\n {packet}"
+                for index, packet in enumerate(packets[start:start + 30000], start)
+            )
+            + "\n.end\n"
+        )
+        (output / f"packets-{start // 30000}.s").write_text(source)
+        data = oracle.assemble(source)
+        (output / f"packets-{start // 30000}.o").write_bytes(data)
+        image = Elf32.parse(data)
+        for index, source_packet in enumerate(packets[start:start + 30000], start):
+            statements = parse(source_packet)
+            if not statements or any(not isinstance(statement, Packet) for statement in statements):
+                raise AssertionError("generated source is not a packet sequence")
+            sequence = [statement for statement in statements if isinstance(statement, Packet)]
+            actual = b""
+            fixups = []
+            for position, packet in enumerate(sequence):
+                data, packet_fixups = encode_packet_with_fixups(packet, following=sequence[position + 1:])
+                fixups.extend(Fixup(f.symbol, f.addend, f.bit_offset + len(actual) * 8, f.bit_width, f.kind)
+                              for f in packet_fixups)
+                actual += data
+            name = f".text.case_{index}"
+            expected = image.section(name).data
+            expected_fixups = _vendor_fixups(image, name)
+            if actual != expected or tuple(fixups) != expected_fixups:
+                failures.append({"index": index, "source": source_packet, "vendor": expected.hex(), "native": actual.hex(),
+                                 "vendor_fixups": repr(expected_fixups), "native_fixups": repr(fixups)})
     report = {"seed": seed, "random_packets": count, "random_delay_sequences": 6 * count,
               "total": len(packets), "failures": failures}
     (output / "report.json").write_text(json.dumps(report, indent=2) + "\n")

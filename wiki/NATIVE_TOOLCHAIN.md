@@ -226,7 +226,8 @@ For the six measured instruction forms, vendor output has these properties:
 
 1. Operations are encoded in canonical order **CMU, LSU0, LSU1, SAU, IAU, PEU**,
    independent of textual order. Symbolic `BRU.BRA` is measured between IAU and
-   PEU (see below); VAU order remains unmeasured.
+   PEU (see below). Measured VAU floating-point operations precede CMU;
+   their headers exclude SAU (see the VAU section below).
 2. Each standalone operation has an eight-bit prefix followed by its payload.
    In a packet, the individual prefixes are replaced by **one combined prefix**.
 3. The combined prefix occupies **8, 16 or 24 bits** for the measured shapes.
@@ -640,7 +641,7 @@ the locally named, measured relocation types in `lld-shave.patch`; the vendor
 objects themselves provide numeric types only. Targets are restricted to plain
 symbol names. A probe of `target+2` treated that entire token as a symbol,
 not an arithmetic addend, so expression syntax remains rejected. Calls, resolved
-branch distances and VAU classes remain unmeasured.
+branch distances remain unmeasured. VAU classes are documented below.
 
 #### Branch delay-window byte span
 
@@ -1034,12 +1035,283 @@ signed offset cases match moviAsm. Scalar sources conflict with LSU0.STO.32
 and LSU0.CP.32 on scalar read port 8; all sources conflict with CMII on port 6.
 Both seeds pass **45677/45677** cases, and 84 offline tests pass.
 
-Coverage is **11345/11912** packets. Object parity is **15/55 exact**, one
-different and 39 rejected. The newly accepted `a5173dc0c638a441.s` has exact
-code bytes, but local function and section symbols have swapped symbol-table
-ordering, changing relocation symbol indices; this is an object-writer gap.
+Coverage is **11345/11912** packets. Before the subsequent object-writer
+ordering correction, object parity was **15/55 exact**, one different and 39
+rejected. The newly accepted `a5173dc0c638a441.s` had exact code bytes but
+swapped local function and section symbol indices in its relocations.
 Fixtures and reports: `/mnt/cache/build-shave/lsu1-sto64-{3720,9001}` and
 `corpus-parity-lsu1-sto64` (602 diagnostic instruction rejections).
+
+### LSU0 offset doubleword store
+
+`LSU0.STO.64 src base offset` reuses the measured doubleword register field,
+15-bit signed offset and LSU0.LDO32 headers, with opcode 6 in place of 2.
+Vector sources match all 394 LSU0.LDO32 shapes. Scalar sources match the 321
+shapes without LSU1.STI20, using LSU1 loads to avoid scalar read-port-9
+conflicts with LSU1.CP.32, STO.32, ST.32, STI.32 and STI.16.F32.F16.
+Scalar doubleword stores on both LSUs also conflict. No scheduling is changed.
+All 32 scalar sources, 512 vector register/lane aliases, 32 bases and 33
+signed offset cases match moviAsm. Both seeds pass **47395/47395** cases
+across 2390 headers; 85 offline tests pass. Object parity remains **15/55 exact**,
+one different and 39 rejected; diagnostic instruction rejections drop from
+602 to 576. Fixtures: `/mnt/cache/build-shave/lsu0-sto64-{3720,9001}`,
+`lsu0-sto64-measure` and `corpus-parity-lsu0-sto64`.
+
+### LSU0 indirect doubleword load
+
+`LSU0.LD.64 dst base` uses the 24-bit LSU0 class (standalone prefix `0x82`).
+The payload is `0x800d | N<<4 | base<<9`, with vector destinations adding
+`0x80000 | lane<<14`. Scalar destinations select no additional bits.
+The register validation is shared with offset doubleword forms, but indirect
+loads accept only vector lanes 0 and 1: lanes 2..15 are rejected by moviAsm,
+rather than aliasing as they do for offset forms. Scalar destinations conflict
+with LSU1.LD.32/LDO.32 and scalar LDO.64; vector destinations can co-issue.
+All 508 headers, all scalar and vector registers, both vector lanes and all
+32 bases match. Both seeds pass **49047/49047** cases; 86 offline tests pass.
+Object parity remains **15/55 exact**, one different and 39 rejected, with
+543 diagnostic instruction rejections. Fixtures:
+`/mnt/cache/build-shave/lsu0-ld64-{3720,9001}`, `ld64-measure` and
+`corpus-parity-lsu0-ld64`.
+
+### LSU1 indirect doubleword load
+
+`LSU1.LD.64` shares LSU0.LD.64's 24-bit payload and strict vector lanes 0..1,
+using the LSU1 headers (standalone prefix `0x89`). Vector destinations match
+all 508 shapes. Scalar destinations match the 408 shapes without LSU0.LD20,
+using LSU0 copies or stores to avoid the scalar write-port-4 conflict with
+LSU0 loads. Scalar doubleword loads on both LSUs also conflict. All destinations
+conflict with CMII on scalar read port 6. All scalar/vector register fields,
+both lanes and 32 bases match. Both seeds pass **50599/50599** cases across
+2390 headers; 87 offline tests pass. Object parity remains **15/55 exact**,
+one different and 39 rejected, with 530 diagnostic instruction rejections.
+Fixtures: `/mnt/cache/build-shave/lsu1-ld64-{3720,9001}`, `ld64-measure` and
+`corpus-parity-lsu1-ld64`.
+
+### VAU floating-point multiplication
+
+`VAU.MUL.F32 d l r` accepts bare vector registers v0..v31 and has a 24-bit
+payload `0x200004 | d<<10 | l<<5 | r<<15`, with standalone prefix `0x33`.
+VAU precedes CMU, LSU0, LSU1, IAU, BRU and PEU, independent of textual order.
+SAU.ADD.I32 and SAU.ADD.F32 conflict on SHARED_RES_S5; all VAU/SAU shapes
+remain rejected. The table adds 643 independently measured VAU headers of
+8, 16 or 24 bits, limited to shapes with at most 80 scalar payload bits.
+Other combinations remain unmeasured and fail closed. Symbolic branch bias
+includes the leading vector payload, using the existing bit-level packing.
+
+All vector register fields and randomized textual permutations match moviAsm.
+Both seeds pass **51370/51370** cases across 3033 measured headers; 90 offline
+tests pass. Scalar alternative-form sweeps remain on scalar headers; vector
+headers receive their own generated case and randomized operand coverage to
+stay below the vendor ELF32 section-count limit. Corpus parity after merging
+the object-order fix is **16/55 exact**, zero different and 39 rejected, unchanged
+by multiplication; diagnostic instruction rejections fall from 530 to 471.
+Fixtures: `/mnt/cache/build-shave/vau-measure`, `vau-mul-{3720,9001}` and
+`corpus-parity-vau-mul`.
+
+### VAU floating-point addition
+
+`VAU.ADD.F32` shares MUL's 24-bit class, vector fields and measured headers,
+with opcode `0x200000`. All 643 headers and 96 independent vector register
+field cases match moviAsm. Both seeds pass **52109/52109** cases; 91 offline
+tests pass. Corpus parity remains **16/55 exact**, zero different, 39 rejected;
+diagnostic instruction rejections drop from 471 to 422. Fixtures:
+`/mnt/cache/build-shave/vau-add-{3720,9001}` and `corpus-parity-vau-add`.
+
+### VAU floating-point subtraction
+
+`VAU.SUB.F32` shares the measured floating-point VAU class and fields, with
+opcode `0x200002`. All 643 headers and 96 vector register field cases match.
+The differential harness now assembles batches of at most 30000 cases because
+larger runs exceeded moviAsm's ELF32 section limit. This restores the complete
+scalar alternative-form sweeps on vector headers without dropping cases.
+Both seeds pass **59393/59393** cases; 92 offline tests pass. Object parity is
+still **16/55 exact**, zero different, 39 rejected; diagnostic instruction
+rejections drop from 422 to 398. Fixtures:
+`/mnt/cache/build-shave/vau-sub-{3720,9001}` and `corpus-parity-vau-sub`.
+
+### VAU vector bitwise OR
+
+`VAU.OR d l r` uses the same bare-vector fields with a 20-bit payload,
+`0x1B | d<<10 | l<<5 | r<<15`, and standalone prefix `0x23`. It packs before
+the scalar units without padding its payload. Its distinct `VAU.OR20` class
+adds 643 measured combined prefixes, again with at most 80 scalar payload bits.
+SAU.AND and both integer and floating-point SAU.ADD conflict with both measured
+VAU classes on SHARED_RES_S5. Those packet shapes remain rejected.
+Both seeds pass **66677/66677** cases across 3676 headers; 93 offline tests
+pass. Object parity remains **16/55 exact**, zero different, 39 rejected;
+diagnostic instruction rejections drop from 398 to 391. Fixtures:
+`/mnt/cache/build-shave/vau-or-{3720,9001}`, `vau-measure/or-headers.*` and
+`corpus-parity-vau-or`.
+
+### LSU0 indirect scalar store
+
+`LSU0.ST.32 source base` uses the 24-bit LSU0 class with payload
+`0x10009 | source<<4 | base<<9`, matching LSU1.ST.32's fields. Both registers
+accept i0..i31. It conflicts with scalar LSU1.STO.64 on read port 8, while
+CMII, LSU1.CP.32/ST.32 and scalar LSU1.LD.64 can co-issue. All 754 current
+LSU0 headers and 64 independent register field cases match moviAsm.
+Both seeds pass **67495/67495** cases; 94 offline tests pass. Corpus parity
+remains **16/55 exact**, zero different, 39 rejected; diagnostic instruction
+rejections fall from 391 to 347. Fixtures:
+`/mnt/cache/build-shave/lsu0-st32-{3720,9001}`, `vau-measure/scalar-fields.*`
+and `corpus-parity-lsu0-st32`.
+
+### SAU scalar bitwise XOR
+
+`SAU.XOR d l r` shares AND's 20-bit SAU class and scalar register fields,
+using opcode `0x1A`: payload `0x1A | d<<10 | l<<5 | r<<15`. Immediate and
+vector operands remain rejected. All 605 current headers and 96 independent
+register field cases match moviAsm. Both seeds pass **68196/68196** cases;
+95 offline tests pass. Corpus parity remains **16/55 exact**, zero different,
+39 rejected; diagnostic instruction rejections fall from 347 to 324. Fixtures:
+`/mnt/cache/build-shave/sau-xor-{3720,9001}` and `corpus-parity-sau-xor`.
+
+### IAU scalar subtract with carry
+
+`IAU.SUBCI d l r` uses the 20-bit IAU class and five-bit scalar register
+fields, with payload `0x07 | d<<10 | l<<5 | r<<15`. Immediate and vector
+operands remain rejected. All 961 current headers and 96 independent register
+field cases match moviAsm. Both seeds pass **69253/69253** cases; 96 offline
+tests pass. This advances the first rejection in eight files but does not yet
+make another complete object exact: parity remains **16/55 exact**, zero
+different, 39 rejected. Diagnostic instruction rejections drop from 324 to 316.
+Fixtures: `/mnt/cache/build-shave/iau-subci-{3720,9001}` and
+`corpus-parity-iau-subci`.
+
+### Wide VAU OR corpus packet
+
+The five-unit `VAU.OR20,CMU,LSU0,LSU1,IAU` class uses a 24-bit combined
+prefix `0x08AA0F` and 112 payload bits, yielding a **136-bit** packet.
+It removes the two remaining corpus VAU.OR header rejections. This measured
+vendor output disproves the encoder's former 128-bit packet cap; accepted
+classes remain bounded by the explicit prefix table instead of an inferred
+maximum. Both seeds pass **69289/69289** cases across 3677 measured headers;
+97 offline tests pass. Corpus parity remains **16/55 exact**, zero different,
+39 rejected; diagnostic instruction rejections fall from 316 to 314.
+Fixtures: `/mnt/cache/build-shave/vau-or-wide-{3720,9001}`,
+`vau-measure/or-wide.*` and `corpus-parity-vau-or-wide`.
+
+### SAU XOR with immediate-class IAU and cross-condition predicate
+
+The corpus shape `CMU,LSU0,SAU.AND20,IAU.ADD24,PEU.PCCX12` has a measured
+24-bit prefix `0xCE280F`, followed by 104 payload bits. It supports the four
+remaining SAU.XOR corpus packet rejections, including integer comparison and
+IAU immediate addition or left shift. Both seeds pass **69319/69319** cases
+across 3678 headers; 98 offline tests pass. Corpus parity remains **16/55
+exact**, zero different, 39 rejected; diagnostic instruction rejections fall
+from 314 to 310. The original pre-merge baseline was 15 exact, one different,
+39 rejected and 530 diagnostic instruction rejections. Fixtures:
+`/mnt/cache/build-shave/sau-xor-wide-{3720,9001}`, `vau-measure/xor-wide.*`
+and `corpus-parity-sau-xor-wide`.
+
+### SAU floating-point ADD constant mapping
+
+`SAU.ADD.F32 d l literal` selects a constant ROM, not an IEEE immediate.
+The measured spellings `0.5`, `1.0`, `2.0`, `3.0` map to right-field values
+0..3; their negative spellings map to 16..19. `+1.0` aliases `1.0`.
+The payload adds selector `0x100000` to the register form, retaining the
+24-bit SAU class and all 585 measured headers. Spellings are significant:
+moviAsm rejects `0.50`, `.5`, `1.00`, `1e0` and `1.0e0`, as well as `0.0`,
+`0.25`, `1.5` and `4.0`. Other mappings remain unsupported. Shared operand
+classification now distinguishes decimal floats from symbols without altering
+source spelling. Both seeds pass **70192/70192** cases, including constant
+and register sweeps; **99 offline tests** pass. Corpus parity rises from
+**16/55 to 19/55 exact**, zero different, 36 rejected; diagnostic instruction
+rejections fall from 310 to 290. Fixtures: `/mnt/cache/build-shave/float-measure`,
+`float-add-{3720,9001}` and `corpus-parity-float-add`.
+
+### SAU floating-point MUL constant mapping
+
+`SAU.MUL.F32` shares ADD's measured constant ROM selector, spellings, fields
+and 585 headers, retaining opcode `0x200004`. Both seeds pass
+**71065/71065** cases and **100 offline tests** pass. Corpus parity rises
+from **19/55 to 29/55 exact**, zero different, 26 rejected; diagnostic
+instruction rejections fall from 290 to 277. Fixtures:
+`/mnt/cache/build-shave/float-mul-{3720,9001}` and `corpus-parity-float-mul`.
+
+### SAU unsigned halfword right shift
+
+`SAU.SHR.U16 d l r` uses the existing 24-bit SAU class with opcode
+`0x400012`, five-bit scalar fields and selector `0x100000` for immediates
+0..31. Despite the halfword type, moviAsm accepts shift counts 16..31;
+negative counts, 32 and float constants are rejected. All 585 SAU headers,
+96 register fields, 64 immediate register fields and 32 counts match.
+Both seeds pass **72427/72427** cases; **101 offline tests** pass.
+Corpus parity stays **29/55 exact**, zero different, 26 rejected; diagnostic
+instruction rejections fall from 277 to 267. Fixtures:
+`/mnt/cache/build-shave/scalar-next-measure`, `sau-shru16-{3720,9001}` and
+`corpus-parity-sau-shru16`.
+
+### LSU1 indirect doubleword store
+
+`LSU1.ST.64 src base` uses the 24-bit LSU1 class and payload
+`0x8009 | N<<4 | base<<9`, with vector sources adding `0x80000 | lane<<14`.
+Only vector lanes 0..1 are accepted. Scalar sources conflict with LSU0 scalar
+stores/copies on read port 8, and scalar LSU0.STO.64 also conflicts; vector
+sources can co-issue. All sources conflict with CMII on read port 6.
+All 755 headers, 32 scalar sources, 64 vector sources and 32 bases match.
+Both seeds pass **74820/74820** cases; **102 offline tests** pass.
+Corpus parity remains **29/55 exact**, zero different, 26 rejected; diagnostic
+instruction rejections fall from 267 to 243. Fixtures:
+`/mnt/cache/build-shave/scalar-next-measure`, `lsu1-st64-{3720,9001}` and
+`corpus-parity-lsu1-st64`.
+
+### LSU1 post-increment scalar halfword store
+
+`LSU1.STI.16 iN.lane base` uses the 24-bit LSU1 class with payload
+`0x820009 | N<<4 | base<<9 | lane<<14`. Scalar lanes 0..3 are accepted;
+bare scalar sources and lane 4 are rejected. CMII conflicts on read port 6;
+scalar LSU0.STO.64 conflicts on read port 9. All 755 LSU1 headers, 128
+source/lane pairs and 32 bases match. Both seeds pass **78000/78000** cases;
+**103 offline tests** pass. Corpus parity rises from **29/55 to 37/55 exact**,
+zero different, 18 rejected; diagnostic instruction rejections fall from
+243 to 234. Fixtures: `/mnt/cache/build-shave/scalar-next-measure`,
+`lsu1-sti16-{3720,9001}` and `corpus-parity-lsu1-sti16`.
+
+### LSU1 half-to-float scalar load
+
+`LSU1.LD.32.F16.F32 dst base` uses payload `dst<<4 | base<<9` in the
+existing 20-bit LSU1 class (`LSU1.STI20`, standalone prefix `0x49`).
+All 804 current headers and 64 register-field cases match. It can co-issue
+with LSU0 scalar and half-to-float loads, but conflicts with scalar LSU0
+LD.64/LDO.64 on write port 5 and CMII on read port 6.
+Both seeds pass **78868/78868** cases; **104 offline tests** pass.
+Corpus parity rises from **37/55 to 39/55 exact**, zero different, 16 rejected;
+diagnostic instruction rejections fall from 234 to 225. Fixtures:
+`/mnt/cache/build-shave/lsu1-ldf16-{3720,9001}` and `corpus-parity-lsu1-ldf16`.
+
+### SAU scalar floating-point division
+
+`SAU.DIV.F32 d l r` uses the existing 24-bit SAU class with payload
+`0x200006 | d<<10 | l<<5 | r<<15`. Only scalar register operands are
+supported. All 585 headers and 96 independent register-field cases match.
+Both seeds pass **79549/79549** cases; **105 offline tests** pass.
+Corpus parity rises from **39/55 to 40/55 exact**, zero different, 15 rejected;
+diagnostic instruction rejections fall from 225 to 210. Fixtures:
+`/mnt/cache/build-shave/sau-divf32-{3720,9001}` and `corpus-parity-sau-divf32`.
+
+### CMU signed byte register comparison
+
+`CMU.CMII.I8 l r` uses the existing 24-bit CMU class with payload
+`0x50000 | l<<4 | r<<9`. It retains the CMII read-port-6 conflict with
+LSU1 memory operations. All 471 eligible headers and 64 independent
+register-field cases match. Both seeds pass **80084/80084** cases;
+**106 offline tests** pass. Corpus parity remains **40/55 exact**, zero
+different, 15 rejected; diagnostic instruction rejections fall from 210 to
+188. Fixtures: `/mnt/cache/build-shave/cmu-cmiii8-{3720,9001}` and
+`corpus-parity-cmu-cmiii8`.
+
+### SAU scalar bitwise OR
+
+`SAU.OR d l r` uses the 20-bit scalar logical class (`SAU.AND20`) with
+payload `0x1B | d<<10 | l<<5 | r<<15`. Immediate and vector operands
+remain unsupported. All 606 current headers and 96 register-field cases
+match. Both seeds pass **80786/80786** cases; **107 offline tests** pass.
+Corpus parity stays **40/55 exact**, zero different, 15 rejected; diagnostic
+instruction rejections fall from 188 to 178. Twelve corpus OR packets still
+reject unmeasured combined headers; no headers are inferred from other
+classes. Fixtures: `/mnt/cache/build-shave/sau-or-{3720,9001}` and
+`corpus-parity-sau-or`.
 
 ### Differential gates and corpus inventory
 
@@ -1080,8 +1352,8 @@ python3 -m tools.shaveasm.corpus --native-dir build/linux \
   --output /mnt/cache/build-shave/native-asm-corpus
 ```
 
-Offline regressions: 84 passed, including the merged object-writer/corpus tests.
-Each current randomized gate passes **45677/45677 cases**. Before the eight
+Offline regressions: 107 passed, including the merged object-writer/corpus tests.
+Each current randomized gate passes **80786/80786 cases**. Before the eight
 additional forms documented above, the gate passed **12156/12156 cases**
 (seeds 3720 and 9001): the original 2362 isolated-packet cases (1000 random
 packets, 457 shapes, 352 mixed operand sweeps, 96 ADD sweeps, 384 PCCX pairs,
@@ -1113,8 +1385,8 @@ in the real compiler corpus.
 Original C, compiler `.s`, vendor `.o` and JSON manifests stay under the cache
 paths above. `elf.py` provides bounded ELF32 section inspection and a comparator
 which reports every section-attribute or byte difference while ignoring only
-file offsets. Whole-object native parity now reaches **11/55** exact cached
-objects; 44 still reject unmeasured instructions. See the object-writer
+file offsets. Whole-object native parity now reaches **40/55** exact cached
+objects, zero different; 15 still reject unmeasured instructions or headers. See the object-writer
 section below.
 
 The captured corpus has **55 distinct complete kernel sources**: 39 literal
@@ -1177,7 +1449,11 @@ four value bytes and zero extension. Negative `.fill` operands are rejected.
 The writer limits alignment to 1 MiB and each section to 64 MiB.
 
 In `.strtab`, explicit `.local`/`.global` names precede implicit names in
-reverse lexical order. Section symbols and local `.I` symbols precede globals;
+reverse lexical order. Explicit local symbols precede section symbols and
+private `.I` symbols, which are interleaved in first-creation order across
+sections. A reference or `.type` can create a private symbol before its
+section exists. The symbol-table `sh_info` is one past the last defined local
+or section symbol, so trailing undefined private symbols appear beyond it.
 `.I` is removed from emitted local symbol names. Temporary `.L` references use
 the defining section symbol and include the label offset in the relocation
 addend. Other references use their named symbol. Integer data references use `R_SHAVE_ABS32`
@@ -1186,9 +1462,8 @@ byte offset and addend. No instruction fixup type beyond the exercised
 `R_SHAVE_PCREL16`/`R_SHAVE_PCREL16_AT4` (209/210) is claimed as verified here.
 
 Branch encoding receives the following packets in its current code-section run.
-The writer classifies PC-relative fixups and `BRU.BRA*`, `BRU.JMP`, and
-`BRU.SWP` mnemonics as control transfers; the encoder exposes no shared
-control-transfer predicate, and unmeasured forms remain unsupported. A `.code`
+The writer uses the encoder's shared control-transfer predicate for non-NOP
+`BRU` operations; unmeasured forms remain unsupported. A `.code`
 switch ends that run, including a repeated `.code` of the same name; repeating
 `.section` for the current section does not. Data and alignment inside the
 next six branch issue slots, or another control transfer there, fail
@@ -1196,11 +1471,12 @@ closed because their delay encoding is unmeasured. Unsupported directives,
 expressions, packet classes and instructions also fail rather than being
 silently skipped.
 
-The eight independently authored `shaveasm-object-*.s` fixtures cover the six
+The nine independently authored `shaveasm-object-*.s` fixtures cover the six
 original scalar forms, NOP, named and temporary local labels, global and
-undefined symbols, data and fill, section flags and alignment, absolute data
-relocations, branch relocations at byte and half-byte offsets, register jumps,
-counted delay slots and section switches. On 2026-11-09 the command above
+undefined symbols, private-symbol creation order, data and fill, section flags
+and alignment, absolute data relocations, branch relocations at byte and
+half-byte offsets, register jumps, counted delay slots and section switches.
+On 2026-11-10 the command above
 compared every fixture to moviAsm: `compare_sections` reported zero differences
 and the complete objects were byte-identical. The test writes no vendor object
 to the repository.
@@ -1232,6 +1508,9 @@ shapes and no non-instruction rejections. After integrating ISA commit
 continuation finds 3535 instruction rejections and no non-instruction
 rejections. After integrating ISA commit `8b6061c` and checking register-jump
 delay windows, the result remains **0/55** exact; diagnostic continuation
-finds 2662 instruction rejections and no non-instruction rejections. This does
-not establish that non-instruction parity is complete once actual instruction
-lengths and relocations are available.
+finds 2662 instruction rejections and no non-instruction rejections. After
+integrating ISA commit `bca7506` and correcting local symbol ordering, the
+result is **16/55 exact**, zero different, and 39 rejected; diagnostic
+continuation finds 602 instruction rejections. This does not establish that
+non-instruction parity is complete once actual instruction lengths and
+relocations are available.

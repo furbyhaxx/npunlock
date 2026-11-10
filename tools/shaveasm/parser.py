@@ -46,6 +46,11 @@ class Label:
 Statement = Packet | Directive | Label
 
 
+def is_float_literal(operand: str) -> bool:
+    """Identify decimal float syntax without changing its vendor-significant spelling."""
+    return re.fullmatch(r"[+-]?(?:[0-9]+\.[0-9]*|\.[0-9]+)(?:[eE][+-]?[0-9]+)?|[+-]?[0-9]+[eE][+-]?[0-9]+", operand) is not None
+
+
 def _without_comments(source: str) -> str:
     out: list[str] = []
     index = 0

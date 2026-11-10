@@ -69,6 +69,32 @@ class ObjectWriterTests(unittest.TestCase):
         relas = list(struct.iter_unpack("<IIi", image.section(".rela.rodata4.ptrs").data))
         self.assertEqual(relas, [(0, 3 << 8 | 208, 4), (4, 5 << 8 | 208, 0), (8, 7 << 8 | 208, 0)])
 
+    def test_local_symbol_order_follows_creation_across_sections(self) -> None:
+        image = Elf32.parse(assemble((FIXTURES / "shaveasm-object-local-order.s").read_text()))
+        strings = image.section(".strtab").data
+        rows = []
+        for name, _, _, info, _, section in struct.iter_unpack("<IIIBBH", image.section(".symtab").data):
+            rows.append((strings[name:strings.index(b"\0", name)].decode(), info, section))
+        self.assertEqual(rows, [
+            ("", 0, 0), ("declared", 2, 2), ("", 3, 1), ("second", 2, 3), ("first", 2, 2),
+            ("missing", 0, 0), ("", 3, 2), ("late", 2, 2), ("", 3, 3), ("", 3, 4),
+            ("lastmissing", 0, 0), ("entry", 0x12, 1),
+        ])
+        self.assertEqual(image.section(".symtab").info, 10)
+        self.assertEqual(list(struct.iter_unpack("<IIi", image.section(".rela.text.main").data)),
+                         [(2, 3 << 8 | 202, 0), (6, 4 << 8 | 202, 0), (10, 5 << 8 | 202, 0)])
+        self.assertEqual(list(struct.iter_unpack("<IIi", image.section(".rela.data.ptrs").data)), [
+            (0, 3 << 8 | 208, 0), (4, 4 << 8 | 208, 0), (8, 7 << 8 | 208, 0),
+            (12, 6 << 8 | 208, 3), (16, 10 << 8 | 208, 0),
+        ])
+
+    def test_private_symbol_created_before_implicit_sections(self) -> None:
+        image = Elf32.parse(assemble(".type .Ih,@function\n.end\n"))
+        entries = list(struct.iter_unpack("<IIIBBH", image.section(".symtab").data))
+        self.assertEqual([(info, section) for _, _, _, info, _, section in entries],
+                         [(0, 0), (2, 0), (3, 1), (3, 2), (3, 3)])
+        self.assertEqual(image.section(".symtab").info, 5)
+
     def test_branch_fixups_include_the_following_issue_slots(self) -> None:
         image = Elf32.parse(assemble((FIXTURES / "shaveasm-object-branch.s").read_text()))
         self.assertEqual(image.section(".text.branch").data[:4], b"\xc7\x01\x00\x06")
@@ -91,8 +117,9 @@ class ObjectWriterTests(unittest.TestCase):
         self.assertEqual(image.section(".text.jump").data, bytes.fromhex("47f106308222010007"))
         self.assertEqual(image.section(".text.jumpmixed").data, bytes.fromhex("ae18d294131f0050"))
 
-    def test_register_jump_delay_window_rejects_directives(self) -> None:
-        for branch in ("BRU.JMP i30", "IAU.XOR i5 i6 i7 || BRU.JMP i30"):
+    def test_register_control_transfer_delay_window_rejects_directives(self) -> None:
+        for branch in ("BRU.JMP i30", "IAU.XOR i5 i6 i7 || BRU.JMP i30",
+                       "BRU.SWP i30", "IAU.XOR i5 i6 i7 || BRU.SWP i30"):
             for directive in (".align 1", ".byte 0", ".fill 0"):
                 source = f".code x\n{branch}\nNOP 4\n{directive}\nNOP 2\n"
                 with self.subTest(branch=branch, directive=directive), self.assertRaisesRegex(

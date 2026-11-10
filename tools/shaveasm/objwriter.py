@@ -103,13 +103,17 @@ class _Assembler:
     def __init__(self) -> None:
         self.sections: list[_Section] = []
         self.symbols: dict[str, _Symbol] = {}
+        self.local_order: list[int | _Symbol] = []
         self.current = 0
         self.ended = False
 
     def symbol(self, name: str, line: int) -> _Symbol:
         name = _name(name, line)
         if name not in self.symbols:
-            self.symbols[name] = _Symbol(name, binding=0 if name.startswith((".I", ".L")) else 1)
+            symbol = _Symbol(name, binding=0 if name.startswith((".I", ".L")) else 1)
+            self.symbols[name] = symbol
+            if symbol.private:
+                self.local_order.append(symbol)
         return self.symbols[name]
 
     def section(self, line: int) -> _Section:
@@ -127,6 +131,7 @@ class _Assembler:
                 return
         self.sections.append(_Section(name, kind, flags, alignment, data_section))
         self.current = len(self.sections)
+        self.local_order.append(self.current)
 
     def label(self, label: Label) -> None:
         section = self.section(label.line)
@@ -173,13 +178,7 @@ class _Assembler:
             for index, event in enumerate(section.events):
                 if not isinstance(event, _PendingPacket):
                     continue
-                is_branch = (
-                    any(fixup.kind.startswith("R_SHAVE_PCREL") for fixup in event.fixups)
-                    or any(
-                        op.mnemonic in ("BRU.JMP", "BRU.SWP") or op.mnemonic.startswith("BRU.BRA")
-                        for op in event.packet.operations
-                    )
-                )
+                is_branch = encoding.is_control_transfer(event.packet)
                 following = []
                 slots = 0
                 packet_line = event.packet.operations[0].line
@@ -335,6 +334,7 @@ class _Assembler:
         self.resolve_sizes()
         if not self.sections:
             self.sections.extend((_Section(".text", 1, 6, 1), _Section(".data", 1, 3, 1), _Section(".bss", 8, 3, 1)))
+            self.local_order.extend(range(1, len(self.sections) + 1))
         named = [symbol for symbol in self.symbols.values() if not symbol.temporary]
         explicit = sorted((s for s in named if s.explicit), key=lambda s: s.name, reverse=True)
         ordered = explicit + [s for s in named if not s.explicit]
@@ -357,17 +357,17 @@ class _Assembler:
 
         for symbol in locals_:
             add(symbol)
-        for index in range(1, len(self.sections) + 1):
-            section_indexes[index] = len(entries)
-            entries.append((0, 0, 0, 3, 0, index))
-            for symbol in ordered:
-                if symbol.private and not symbol.explicit and symbol.section == index:
-                    add(symbol)
-        # moviAsm excludes undefined .I symbols from sh_info's local count.
         first_global = len(entries)
-        for symbol in ordered:
-            if symbol.private and not symbol.defined:
-                add(symbol)
+        for item in self.local_order:
+            if isinstance(item, int):
+                section_indexes[item] = len(entries)
+                entries.append((0, 0, 0, 3, 0, item))
+                first_global = len(entries)
+            else:
+                add(item)
+                # moviAsm's sh_info excludes only trailing undefined locals.
+                if item.defined:
+                    first_global = len(entries)
         for symbol in globals_:
             add(symbol)
         symtab = b"".join(struct.pack("<IIIBBH", *entry) for entry in entries)
