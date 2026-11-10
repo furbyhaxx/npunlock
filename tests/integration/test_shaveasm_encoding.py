@@ -1060,6 +1060,16 @@ class EncodingTests(unittest.TestCase):
         with self.assertRaisesRegex(AssemblyError, "unmeasured packet class"):
             encode("CMU.VSZM.BYTE i0 i1 [ZZ10] || LSU1.LDIL i8 1")
 
+    def test_measured_combined_header_0(self) -> None:
+        source = "CMU.CP.32 i0 i1 || LSU0.CP.32 i4 i5 || LSU1.CP.32 i8 i9 || SAU.ADD.I32 i12 i13 i14 || IAU.ADD i16 i17 i18"
+        expected = bytes.fromhex("0fa80f1c0008470a08871208a03107204209")
+        self.assertEqual(encode(source), expected)
+        self.assertEqual(encode(" || ".join(reversed(source.split(" || ")))), expected)
+        source = "CMU.CP.32 i2 i3 || LSU0.LDIH i6 12345 || LSU1.LDIL i10 54321 || SAU.SUB.I32 i15 i12 23 || IAU.INCS i19 -123"
+        expected = bytes.fromhex("0fa80f3c04083339305231d482bd1b6316fe")
+        self.assertEqual(encode(source), expected)
+        self.assertEqual(encode(" || ".join(reversed(source.split(" || ")))), expected)
+
     def test_invalid_or_unmeasured_input_fails_closed(self) -> None:
         for source in [
             "LSU0.LDIL i4 65536",

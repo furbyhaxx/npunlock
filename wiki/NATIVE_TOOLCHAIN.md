@@ -1712,6 +1712,16 @@ registers with all four masks match moviAsm. Both seeds pass
 `/mnt/cache/build-shave/cmu-vszm-measure`, `cmu-vszm-{3720,9001}` and
 `corpus-parity-cmu-vszm`.
 
+### Measured combined packet header 0
+
+`CMU,LSU0,LSU1,SAU,IAU.ADD24` uses the measured 24-bit prefix
+`0xfa80f`. Two independent copy/arithmetic packets identify
+the same unique header width; reversed textual orders produce identical bytes.
+Both seeds pass **120410/120410** cases; **141 offline tests**
+pass. Corpus parity is **53/55 exact**, zero different. Fixtures:
+`/mnt/cache/build-shave/remaining-headers-measure`, `combined-header-0-{3720,9001}`
+and `corpus-parity-combined-header-0`.
+
 ### Differential gates and corpus inventory
 
 Cached assembly can be inventoried without Wine or recompilation:
