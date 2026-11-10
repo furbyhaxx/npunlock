@@ -1790,6 +1790,16 @@ Corpus parity remains **54/55 exact**, zero different, one rejected.
 Fixtures: `/mnt/cache/build-shave/iau-not-measure`, `iau-not-{3720,9001}`
 and `corpus-parity-iau-not`.
 
+### six scalar add predicated header
+
+`CMU,LSU0,LSU1,SAU,IAU.ADD24,PEU.PCCX12` uses the measured 24-bit
+prefix `0xcfa80f`. Two independent packets identify the same
+unique width; reversed textual orders encode identically. Both seeds pass
+**130020/130020** cases; **148 offline tests** pass. Corpus
+parity is **54/55 exact**, zero different. Fixtures:
+`/mnt/cache/build-shave/remaining-headers-measure`, `combined-header-1-{3720,9001}`
+and `corpus-parity-combined-header-1`.
+
 ### Differential gates and corpus inventory
 
 Cached assembly can be inventoried without Wine or recompilation:
