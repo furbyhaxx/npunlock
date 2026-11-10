@@ -3875,9 +3875,10 @@ def _operation(instruction: Instruction) -> _Operation:
         opcode = {"IAU.XOR": 0x12, "IAU.AND": 0x10, "IAU.OR": 0x11,
                   "IAU.LMULL": 0x04, "IAU.LMULH": 0x05, "IAU.ADDCI": 0x06}[mnemonic]
         return _Operation(unit, opcode | destination << 10 | left << 5 | right << 15, 20)
-    if mnemonic == "SAU.AND" and len(operands) == 3:
+    if mnemonic in ("SAU.AND", "SAU.XOR") and len(operands) == 3:
         destination, left, right = (_register(op, line) for op in operands)
-        return _Operation(unit, 0x18 | destination << 10 | left << 5 | right << 15, 20,
+        opcode = 0x18 if mnemonic == "SAU.AND" else 0x1A
+        return _Operation(unit, opcode | destination << 10 | left << 5 | right << 15, 20,
                           prefix_class="SAU.AND20")
     if mnemonic in ("SAU.ADD.F32", "SAU.SUB.F32", "SAU.MUL.I32", "SAU.MUL.F32") and len(operands) == 3:
         destination, left, right = (_register(op, line) for op in operands)

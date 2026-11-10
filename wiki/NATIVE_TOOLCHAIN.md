@@ -1145,6 +1145,16 @@ rejections fall from 391 to 347. Fixtures:
 `/mnt/cache/build-shave/lsu0-st32-{3720,9001}`, `vau-measure/scalar-fields.*`
 and `corpus-parity-lsu0-st32`.
 
+### SAU scalar bitwise XOR
+
+`SAU.XOR d l r` shares AND's 20-bit SAU class and scalar register fields,
+using opcode `0x1A`: payload `0x1A | d<<10 | l<<5 | r<<15`. Immediate and
+vector operands remain rejected. All 605 current headers and 96 independent
+register field cases match moviAsm. Both seeds pass **68196/68196** cases;
+95 offline tests pass. Corpus parity remains **16/55 exact**, zero different,
+39 rejected; diagnostic instruction rejections fall from 347 to 324. Fixtures:
+`/mnt/cache/build-shave/sau-xor-{3720,9001}` and `corpus-parity-sau-xor`.
+
 ### Differential gates and corpus inventory
 
 Cached assembly can be inventoried without Wine or recompilation:
