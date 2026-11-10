@@ -852,6 +852,18 @@ class EncodingTests(unittest.TestCase):
             with self.subTest(operation=operation), self.assertRaisesRegex(AssemblyError, port):
                 encode(operation + " || LSU1.STI.8 i8.0 i9")
 
+    def test_lsu1_indirect_halfword_lane_store(self) -> None:
+        self.assertEqual(encode("LSU1.ST.16 i0.0 i0"), bytes.fromhex("89090002"))
+        self.assertEqual(encode("LSU1.ST.16 i31.3 i31"), bytes.fromhex("89f9ff02"))
+        for source in ("LSU1.ST.16 i32.0 i0", "LSU1.ST.16 i0.4 i0",
+                       "LSU1.ST.16 i0 i1", "LSU1.ST.16 v0.0 i1", "LSU1.ST.16 i0.0 i32"):
+            with self.subTest(source=source), self.assertRaises(AssemblyError):
+                encode(source)
+        with self.assertRaisesRegex(AssemblyError, "read port 6"):
+            encode("CMU.CMII.I32 i0 i1 || LSU1.ST.16 i8.0 i9")
+        with self.assertRaisesRegex(AssemblyError, "read port 9"):
+            encode("LSU0.STO.64 i4 i5 0 || LSU1.ST.16 i8.0 i9")
+
     def test_invalid_or_unmeasured_input_fails_closed(self) -> None:
         for source in [
             "LSU0.LDIL i4 65536",
