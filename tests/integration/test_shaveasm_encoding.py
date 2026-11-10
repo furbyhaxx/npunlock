@@ -15,6 +15,16 @@ def encode(source: str) -> bytes:
 
 
 class EncodingTests(unittest.TestCase):
+    def test_lsu1_postincrement_halfword_store_accepts_scalar_lanes(self) -> None:
+        self.assertEqual(encode("LSU1.STI.16 i0.0 i0"), bytes.fromhex("89090082"))
+        self.assertEqual(encode("LSU1.STI.16 i31.3 i31"), bytes.fromhex("89f9ff82"))
+        self.assertEqual(encode("LSU1.STI.16 i1.2 i2"), bytes.fromhex("89198482"))
+        for source in ("LSU1.STI.16 i0.4 i0", "LSU1.STI.16 i0 i0", "LSU1.STI.16 i32.0 i0",
+                       "LSU1.STI.16 i8.0 i9 || CMU.CMII.I32 i0 i1",
+                       "LSU1.STI.16 i8.0 i9 || LSU0.STO.64 i4 i5 -3"):
+            with self.subTest(source=source), self.assertRaises(AssemblyError):
+                encode(source)
+
     def test_lsu1_indirect_doubleword_store_uses_strict_vector_lanes(self) -> None:
         for operands, expected in (("i0 i0", "89098000"), ("i1 i2", "89198400"),
                                    ("i31 i31", "89f9bf00"), ("v31.1 i31", "89f9ff08")):

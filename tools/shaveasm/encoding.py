@@ -3788,13 +3788,14 @@ def _operation(instruction: Instruction) -> _Operation:
         base = _register(operands[1], line)
         opcode = 0x8009 if mnemonic == "LSU1.ST.64" else 0x800D
         return _Operation(unit, opcode | register | base << 9, 24)
-    if mnemonic == "LSU0.LD.16" and len(operands) == 2:
+    if mnemonic in ("LSU0.LD.16", "LSU1.STI.16") and len(operands) == 2:
         destination = re.fullmatch(r"[iI]([0-9]+)\.([0-9]+)", operands[0])
         if destination is None or not 0 <= int(destination[1]) < 32 or not 0 <= int(destination[2]) < 4:
             raise AssemblyError(f"line {line}: invalid scalar halfword register {operands[0]!r}")
         register, lane = int(destination[1]), int(destination[2])
         base = _register(operands[1], line)
-        return _Operation(unit, 0x2000D | register << 4 | base << 9 | lane << 14, 24)
+        opcode = 0x820009 if mnemonic == "LSU1.STI.16" else 0x2000D
+        return _Operation(unit, opcode | register << 4 | base << 9 | lane << 14, 24)
     if mnemonic == "LSU0.LD.32.F16.F32" and len(operands) == 2:
         destination, base = (_register(op, line) for op in operands)
         return _Operation(unit, destination << 4 | base << 9, 20, prefix_class="LSU0.LD20")
@@ -3958,9 +3959,9 @@ def encode_packet_with_fixups(
         full, remaining = divmod(count, 16)
         return b"\xf0" * full + (bytes([(remaining - 1) << 4]) if remaining else b""), ()
     mnemonics = {instruction.mnemonic for instruction in packet.operations}
-    if mnemonics & {"LSU1.STO.32", "LSU1.LDO.32", "LSU1.LDO.64", "LSU1.LD.64", "LSU1.STO.64", "LSU1.ST.64", "LSU1.STI.16.F32.F16", "LSU1.STI.32", "LSU1.LD.32", "LSU1.ST.32"} and mnemonics & {"CMU.CMII.I32", "CMU.CMII.U32", "CMU.CMII.F32"}:
+    if mnemonics & {"LSU1.STO.32", "LSU1.LDO.32", "LSU1.LDO.64", "LSU1.LD.64", "LSU1.STO.64", "LSU1.ST.64", "LSU1.STI.16.F32.F16", "LSU1.STI.16", "LSU1.STI.32", "LSU1.LD.32", "LSU1.ST.32"} and mnemonics & {"CMU.CMII.I32", "CMU.CMII.U32", "CMU.CMII.F32"}:
         raise AssemblyError(f"line {first.line}: CMII and LSU1 memory operation conflict on scalar read port 6")
-    if mnemonics & {"LSU1.CP.32", "LSU1.STO.32", "LSU1.ST.32", "LSU1.STI.32", "LSU1.STI.16.F32.F16"} and any(
+    if mnemonics & {"LSU1.CP.32", "LSU1.STO.32", "LSU1.ST.32", "LSU1.STI.32", "LSU1.STI.16", "LSU1.STI.16.F32.F16"} and any(
         instruction.mnemonic == "LSU0.STO.64" and instruction.operands
         and re.fullmatch(r"[iI][0-9]+", instruction.operands[0])
         for instruction in packet.operations

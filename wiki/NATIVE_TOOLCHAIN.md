@@ -1245,6 +1245,18 @@ instruction rejections fall from 267 to 243. Fixtures:
 `/mnt/cache/build-shave/scalar-next-measure`, `lsu1-st64-{3720,9001}` and
 `corpus-parity-lsu1-st64`.
 
+### LSU1 post-increment scalar halfword store
+
+`LSU1.STI.16 iN.lane base` uses the 24-bit LSU1 class with payload
+`0x820009 | N<<4 | base<<9 | lane<<14`. Scalar lanes 0..3 are accepted;
+bare scalar sources and lane 4 are rejected. CMII conflicts on read port 6;
+scalar LSU0.STO.64 conflicts on read port 9. All 755 LSU1 headers, 128
+source/lane pairs and 32 bases match. Both seeds pass **78000/78000** cases;
+**103 offline tests** pass. Corpus parity rises from **29/55 to 37/55 exact**,
+zero different, 18 rejected; diagnostic instruction rejections fall from
+243 to 234. Fixtures: `/mnt/cache/build-shave/scalar-next-measure`,
+`lsu1-sti16-{3720,9001}` and `corpus-parity-lsu1-sti16`.
+
 ### Differential gates and corpus inventory
 
 Cached assembly can be inventoried without Wine or recompilation:
