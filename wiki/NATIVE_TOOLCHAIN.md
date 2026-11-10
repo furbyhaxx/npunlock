@@ -1023,10 +1023,10 @@ signed offset cases match moviAsm. Scalar sources conflict with LSU0.STO.32
 and LSU0.CP.32 on scalar read port 8; all sources conflict with CMII on port 6.
 Both seeds pass **45677/45677** cases, and 84 offline tests pass.
 
-Coverage is **11345/11912** packets. Object parity is **15/55 exact**, one
-different and 39 rejected. The newly accepted `a5173dc0c638a441.s` has exact
-code bytes, but local function and section symbols have swapped symbol-table
-ordering, changing relocation symbol indices; this is an object-writer gap.
+Coverage is **11345/11912** packets. Before the subsequent object-writer
+ordering correction, object parity was **15/55 exact**, one different and 39
+rejected. The newly accepted `a5173dc0c638a441.s` had exact code bytes but
+swapped local function and section symbol indices in its relocations.
 Fixtures and reports: `/mnt/cache/build-shave/lsu1-sto64-{3720,9001}` and
 `corpus-parity-lsu1-sto64` (602 diagnostic instruction rejections).
 
@@ -1167,7 +1167,11 @@ four value bytes and zero extension. Negative `.fill` operands are rejected.
 The writer limits alignment to 1 MiB and each section to 64 MiB.
 
 In `.strtab`, explicit `.local`/`.global` names precede implicit names in
-reverse lexical order. Section symbols and local `.I` symbols precede globals;
+reverse lexical order. Explicit local symbols precede section symbols and
+private `.I` symbols, which are interleaved in first-creation order across
+sections. A reference or `.type` can create a private symbol before its
+section exists. The symbol-table `sh_info` is one past the last defined local
+or section symbol, so trailing undefined private symbols appear beyond it.
 `.I` is removed from emitted local symbol names. Temporary `.L` references use
 the defining section symbol and include the label offset in the relocation
 addend. Other references use their named symbol. Integer data references use `R_SHAVE_ABS32`
@@ -1177,7 +1181,7 @@ byte offset and addend. No instruction fixup type beyond the exercised
 
 Branch encoding receives the following packets in its current code-section run.
 The writer classifies PC-relative fixups and `BRU.BRA*`, `BRU.JMP`, and
-`BRU.SWP` mnemonics as control transfers; the encoder exposes no shared
+`BRU.SWP` mnemonics as control transfers; the encoder also exposes a separate
 control-transfer predicate, and unmeasured forms remain unsupported. A `.code`
 switch ends that run, including a repeated `.code` of the same name; repeating
 `.section` for the current section does not. Data and alignment inside the
@@ -1186,11 +1190,12 @@ closed because their delay encoding is unmeasured. Unsupported directives,
 expressions, packet classes and instructions also fail rather than being
 silently skipped.
 
-The eight independently authored `shaveasm-object-*.s` fixtures cover the six
+The nine independently authored `shaveasm-object-*.s` fixtures cover the six
 original scalar forms, NOP, named and temporary local labels, global and
-undefined symbols, data and fill, section flags and alignment, absolute data
-relocations, branch relocations at byte and half-byte offsets, register jumps,
-counted delay slots and section switches. On 2026-11-09 the command above
+undefined symbols, private-symbol creation order, data and fill, section flags
+and alignment, absolute data relocations, branch relocations at byte and
+half-byte offsets, register jumps, counted delay slots and section switches.
+On 2026-11-10 the command above
 compared every fixture to moviAsm: `compare_sections` reported zero differences
 and the complete objects were byte-identical. The test writes no vendor object
 to the repository.
@@ -1222,6 +1227,9 @@ shapes and no non-instruction rejections. After integrating ISA commit
 continuation finds 3535 instruction rejections and no non-instruction
 rejections. After integrating ISA commit `8b6061c` and checking register-jump
 delay windows, the result remains **0/55** exact; diagnostic continuation
-finds 2662 instruction rejections and no non-instruction rejections. This does
-not establish that non-instruction parity is complete once actual instruction
-lengths and relocations are available.
+finds 2662 instruction rejections and no non-instruction rejections. After
+integrating ISA commit `bca7506` and correcting local symbol ordering, the
+result is **16/55 exact**, zero different, and 39 rejected; diagnostic
+continuation finds 602 instruction rejections. This does not establish that
+non-instruction parity is complete once actual instruction lengths and
+relocations are available.
