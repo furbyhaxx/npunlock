@@ -1314,6 +1314,17 @@ different, 13 rejected; diagnostic instruction rejections fall from 178 to
 171. Fixtures: `/mnt/cache/build-shave/cmu-u32-f32-{3720,9001}` and
 `corpus-parity-cmu-u32-f32`.
 
+### CMU floating-point to saturated unsigned conversion
+
+`CMU.CP.32.F32.U32S d s` shares the measured scalar conversion fields,
+24-bit CMU class and LSU1 postincrement-store write-port-3 conflict, with
+opcode `0x640004`. All 557 eligible headers and 64 register-field cases
+match moviAsm. Both seeds pass **82028/82028** cases; **109 offline tests**
+pass. Corpus parity remains **42/55 exact**, zero different, 13 rejected;
+diagnostic instruction rejections fall from 171 to 165. Fixtures:
+`/mnt/cache/build-shave/cmu-f32-u32s-{3720,9001}` and
+`corpus-parity-cmu-f32-u32s`.
+
 ### Differential gates and corpus inventory
 
 Cached assembly can be inventoried without Wine or recompilation:
@@ -1353,8 +1364,8 @@ python3 -m tools.shaveasm.corpus --native-dir build/linux \
   --output /mnt/cache/build-shave/native-asm-corpus
 ```
 
-Offline regressions: 108 passed, including the merged object-writer/corpus tests.
-Each current randomized gate passes **81407/81407 cases**. Before the eight
+Offline regressions: 109 passed, including the merged object-writer/corpus tests.
+Each current randomized gate passes **82028/82028 cases**. Before the eight
 additional forms documented above, the gate passed **12156/12156 cases**
 (seeds 3720 and 9001): the original 2362 isolated-packet cases (1000 random
 packets, 457 shapes, 352 mixed operand sweeps, 96 ADD sweeps, 384 PCCX pairs,
