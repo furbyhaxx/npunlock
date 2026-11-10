@@ -1722,6 +1722,16 @@ pass. Corpus parity is **53/55 exact**, zero different. Fixtures:
 `/mnt/cache/build-shave/remaining-headers-measure`, `combined-header-0-{3720,9001}`
 and `corpus-parity-combined-header-0`.
 
+### Measured combined packet header 3
+
+`CMU,LSU0,LSU1,SAU.AND20,IAU.ADD24` uses the measured 24-bit prefix
+`0xea80f`. Two independent copy/arithmetic packets identify
+the same unique header width; reversed textual orders produce identical bytes.
+Both seeds pass **120500/120500** cases; **142 offline tests**
+pass. Corpus parity is **53/55 exact**, zero different. Fixtures:
+`/mnt/cache/build-shave/remaining-headers-measure`, `combined-header-3-{3720,9001}`
+and `corpus-parity-combined-header-3`.
+
 ### Differential gates and corpus inventory
 
 Cached assembly can be inventoried without Wine or recompilation:
