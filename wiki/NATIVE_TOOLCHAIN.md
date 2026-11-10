@@ -1045,6 +1045,22 @@ one different and 39 rejected; diagnostic instruction rejections drop from
 602 to 576. Fixtures: `/mnt/cache/build-shave/lsu0-sto64-{3720,9001}`,
 `lsu0-sto64-measure` and `corpus-parity-lsu0-sto64`.
 
+### LSU0 indirect doubleword load
+
+`LSU0.LD.64 dst base` uses the 24-bit LSU0 class (standalone prefix `0x82`).
+The payload is `0x800d | N<<4 | base<<9`, with vector destinations adding
+`0x80000 | lane<<14`. Scalar destinations select no additional bits.
+The register validation is shared with offset doubleword forms, but indirect
+loads accept only vector lanes 0 and 1: lanes 2..15 are rejected by moviAsm,
+rather than aliasing as they do for offset forms. Scalar destinations conflict
+with LSU1.LD.32/LDO.32 and scalar LDO.64; vector destinations can co-issue.
+All 508 headers, all scalar and vector registers, both vector lanes and all
+32 bases match. Both seeds pass **49047/49047** cases; 86 offline tests pass.
+Object parity remains **15/55 exact**, one different and 39 rejected, with
+543 diagnostic instruction rejections. Fixtures:
+`/mnt/cache/build-shave/lsu0-ld64-{3720,9001}`, `ld64-measure` and
+`corpus-parity-lsu0-ld64`.
+
 ### Differential gates and corpus inventory
 
 Cached assembly can be inventoried without Wine or recompilation:

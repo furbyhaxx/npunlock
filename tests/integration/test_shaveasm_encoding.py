@@ -539,6 +539,20 @@ class EncodingTests(unittest.TestCase):
             with self.subTest(operation=operation), self.assertRaisesRegex(AssemblyError, "read port 9"):
                 encode("LSU0.STO.64 i4 i5 0 || " + operation)
 
+    def test_lsu0_indirect_doubleword_load_has_distinct_vector_selectors(self) -> None:
+        self.assertEqual(encode("LSU0.LD.64 v0.0 i0"), bytes.fromhex("820d8008"))
+        self.assertEqual(encode("LSU0.LD.64 v31.1 i31"), bytes.fromhex("82fdff08"))
+        self.assertEqual(encode("LSU0.LD.64 i31 i31"), bytes.fromhex("82fdbf00"))
+        for source in ("LSU0.LD.64 v32.0 i0", "LSU0.LD.64 v0.2 i0",
+                       "LSU0.LD.64 i32 i0", "LSU0.LD.64 v0 i0",
+                       "LSU0.LD.64 v0.0 i32", "LSU0.LD.64 v0.0 i0 0"):
+            with self.subTest(source=source), self.assertRaises(AssemblyError):
+                encode(source)
+        with self.assertRaisesRegex(AssemblyError, "write port 5"):
+            encode("LSU0.LD.64 i4 i5 || LSU1.LD.32 i8 i9")
+        with self.assertRaisesRegex(AssemblyError, "write port 4"):
+            encode("LSU0.LD.64 i4 i5 || LSU1.LDO.64 i8 i9 0")
+
     def test_invalid_or_unmeasured_input_fails_closed(self) -> None:
         for source in [
             "LSU0.LDIL i4 65536",

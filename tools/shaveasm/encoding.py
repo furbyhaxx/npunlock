@@ -2422,14 +2422,16 @@ def _register(text: str, line: int) -> int:
     return int(match[1])
 
 
-def _doubleword_register(text: str, line: int) -> int:
+def _doubleword_register(text: str, line: int, *, indirect: bool = False) -> int:
     match = re.fullmatch(r"[vV]([0-9]+)\.([0-9]+)", text)
     if match is not None:
         register, lane = int(match[1]), int(match[2])
-        if not 0 <= register < 32 or not 0 <= lane < 16:
+        if not 0 <= register < 32 or not 0 <= lane < (2 if indirect else 16):
             raise AssemblyError(f"line {line}: invalid vector doubleword register {text!r}")
-        return register << 4 | (0x4000 if lane == 0 else 0)
-    return _register(text, line) << 4 | 0x10000
+        selector = (0x80000 | (0x4000 if lane != 0 else 0) if indirect
+                    else 0x4000 if lane == 0 else 0)
+        return register << 4 | selector
+    return _register(text, line) << 4 | (0 if indirect else 0x10000)
 
 
 def _immediate(text: str, bits: int, line: int) -> int:
@@ -2479,6 +2481,10 @@ def _operation(instruction: Instruction) -> _Operation:
         opcode = 6 if ".STO." in mnemonic else 2
         return _Operation(unit, opcode | register | base << 9 | immediate << 17, 32,
                           prefix_class="LSU0.LDO32" if unit == "LSU0" else "LSU1.STO32")
+    if mnemonic == "LSU0.LD.64" and len(operands) == 2:
+        register = _doubleword_register(operands[0], line, indirect=True)
+        base = _register(operands[1], line)
+        return _Operation(unit, 0x800D | register | base << 9, 24)
     if mnemonic == "LSU0.LD.16" and len(operands) == 2:
         destination = re.fullmatch(r"[iI]([0-9]+)\.([0-9]+)", operands[0])
         if destination is None or not 0 <= int(destination[1]) < 32 or not 0 <= int(destination[2]) < 4:
@@ -2659,13 +2665,13 @@ def encode_packet_with_fixups(
            and re.fullmatch(r"[iI][0-9]+", instruction.operands[0])
            for instruction in packet.operations) and (
         mnemonics & {"LSU0.LDO.32", "LSU0.LD.32", "LSU0.LD.16", "LSU0.LD.32.F16.F32"}
-        or any(instruction.mnemonic == "LSU0.LDO.64" and instruction.operands
+        or any(instruction.mnemonic in ("LSU0.LDO.64", "LSU0.LD.64") and instruction.operands
                and re.fullmatch(r"[iI][0-9]+", instruction.operands[0])
                for instruction in packet.operations)
     ):
         raise AssemblyError(f"line {first.line}: LSU1 scalar doubleword load and LSU0 load conflict on scalar write port 4")
     if mnemonics & {"LSU1.LD.32", "LSU1.LDO.32"} and any(
-        instruction.mnemonic == "LSU0.LDO.64" and instruction.operands
+        instruction.mnemonic in ("LSU0.LDO.64", "LSU0.LD.64") and instruction.operands
         and re.fullmatch(r"[iI][0-9]+", instruction.operands[0])
         for instruction in packet.operations
     ):
