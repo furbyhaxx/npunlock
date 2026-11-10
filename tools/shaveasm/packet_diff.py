@@ -64,7 +64,7 @@ def generate_packets(seed: int, count: int) -> list[str]:
             immediate = "external_target" if rng.randrange(2) else str(rng.randrange(65536))
             return f"{unit}.LDIH {registers[0]} {immediate}"
         if unit == "LSU0" and rng.randrange(3):
-            mnemonic = rng.choice(("LSU0.LD.32", "LSU0.CP.32"))
+            mnemonic = rng.choice(("LSU0.LD.32", "LSU0.CP.32", "LSU0.ST.32"))
             return f"{mnemonic} {registers[0]} {registers[1]}"
         if unit in ("LSU0", "LSU1"):
             immediate = "external_target" if unit == "LSU1" and rng.randrange(2) else str(rng.randrange(65536))
@@ -179,7 +179,7 @@ def generate_packets(seed: int, count: int) -> list[str]:
             for immediate in ("43210", "external_target"):
                 packets.append("\n || ".join(f"LSU0.LDIH i4 {immediate}" if unit == "LSU0"
                                               else operation(unit, store_packet=store_packet) for unit in shape))
-            for mnemonic in ("LSU0.LD.32", "LSU0.CP.32"):
+            for mnemonic in ("LSU0.LD.32", "LSU0.CP.32", "LSU0.ST.32"):
                 packets.append("\n || ".join(f"{mnemonic} i4 i5" if unit == "LSU0"
                                               else operation(unit, store_packet=store_packet) for unit in shape))
         if "IAU" in shape:
@@ -303,7 +303,7 @@ def generate_packets(seed: int, count: int) -> list[str]:
     packets.extend(f"LSU0.LD.16 i{register}.{lane} i0"
                    for register in range(32) for lane in range(4))
     packets.extend(f"LSU0.LD.16 i0.0 i{register}" for register in range(32))
-    for mnemonic in ("LSU0.LD.32", "LSU0.CP.32", "LSU0.LD.32.F16.F32"):
+    for mnemonic in ("LSU0.LD.32", "LSU0.CP.32", "LSU0.ST.32", "LSU0.LD.32.F16.F32"):
         for position in range(2):
             for register in range(32):
                 operands = ["i0", "i0"]

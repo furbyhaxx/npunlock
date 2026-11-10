@@ -1132,6 +1132,19 @@ diagnostic instruction rejections drop from 398 to 391. Fixtures:
 `/mnt/cache/build-shave/vau-or-{3720,9001}`, `vau-measure/or-headers.*` and
 `corpus-parity-vau-or`.
 
+### LSU0 indirect scalar store
+
+`LSU0.ST.32 source base` uses the 24-bit LSU0 class with payload
+`0x10009 | source<<4 | base<<9`, matching LSU1.ST.32's fields. Both registers
+accept i0..i31. It conflicts with scalar LSU1.STO.64 on read port 8, while
+CMII, LSU1.CP.32/ST.32 and scalar LSU1.LD.64 can co-issue. All 754 current
+LSU0 headers and 64 independent register field cases match moviAsm.
+Both seeds pass **67495/67495** cases; 94 offline tests pass. Corpus parity
+remains **16/55 exact**, zero different, 39 rejected; diagnostic instruction
+rejections fall from 391 to 347. Fixtures:
+`/mnt/cache/build-shave/lsu0-st32-{3720,9001}`, `vau-measure/scalar-fields.*`
+and `corpus-parity-lsu0-st32`.
+
 ### Differential gates and corpus inventory
 
 Cached assembly can be inventoried without Wine or recompilation:

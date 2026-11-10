@@ -3802,7 +3802,7 @@ def _operation(instruction: Instruction) -> _Operation:
     if mnemonic == "LSU1.STI.16.F32.F16" and len(operands) == 2:
         source, base = (_register(op, line) for op in operands)
         return _Operation(unit, 0x80004 | source << 4 | base << 9, 20, prefix_class="LSU1.STI20")
-    if mnemonic in ("LSU1.ST.32", "LSU1.STI.32") and len(operands) == 2:
+    if mnemonic in ("LSU0.ST.32", "LSU1.ST.32", "LSU1.STI.32") and len(operands) == 2:
         source, base = (_register(op, line) for op in operands)
         opcode = 0x810009 if mnemonic == "LSU1.STI.32" else 0x10009
         return _Operation(unit, opcode | source << 4 | base << 9, 24)
@@ -3951,7 +3951,7 @@ def encode_packet_with_fixups(
         for instruction in packet.operations
     ):
         raise AssemblyError(f"line {first.line}: LSU0 scalar doubleword store and LSU1 scalar read conflict on scalar read port 9")
-    if (mnemonics & {"LSU0.STO.32", "LSU0.CP.32"} or any(
+    if (mnemonics & {"LSU0.STO.32", "LSU0.ST.32", "LSU0.CP.32"} or any(
         instruction.mnemonic == "LSU0.STO.64" and instruction.operands
         and re.fullmatch(r"[iI][0-9]+", instruction.operands[0])
         for instruction in packet.operations

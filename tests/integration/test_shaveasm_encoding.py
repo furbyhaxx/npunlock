@@ -15,6 +15,14 @@ def encode(source: str) -> bytes:
 
 
 class EncodingTests(unittest.TestCase):
+    def test_lsu0_indirect_store_uses_scalar_register_fields(self) -> None:
+        self.assertEqual(encode("LSU0.ST.32 i31 i30"), bytes.fromhex("82f93d01"))
+        self.assertEqual(encode("LSU0.ST.32 i0 i1"), bytes.fromhex("82090201"))
+        for source in ("LSU0.ST.32 v0.0 i0", "LSU0.ST.32 i32 i0",
+                       "LSU0.ST.32 i0 i32", "LSU0.ST.32 i4 i5 || LSU1.STO.64 i8 i9 0"):
+            with self.subTest(source=source), self.assertRaises(AssemblyError):
+                encode(source)
+
     def test_vau_or_has_a_twenty_bit_payload(self) -> None:
         self.assertEqual(encode("VAU.OR v31 v30 v29"), bytes.fromhex("23dbff0e"))
         self.assertEqual(encode("CMU.CP.32 i1 i2 || VAU.OR v3 v4 v5"),
