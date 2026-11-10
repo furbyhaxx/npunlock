@@ -15,6 +15,10 @@ def encode(source: str) -> bytes:
 
 
 class EncodingTests(unittest.TestCase):
+    def test_vau_subtraction_uses_vector_register_fields(self) -> None:
+        self.assertEqual(encode("VAU.SUB.F32 v31 v30 v29"), bytes.fromhex("33c2ff2e"))
+        self.assertEqual(encode("VAU.SUB.F32 v0 v0 v1"), bytes.fromhex("33028020"))
+
     def test_vau_addition_uses_vector_register_fields(self) -> None:
         self.assertEqual(encode("VAU.ADD.F32 v31 v30 v29"), bytes.fromhex("33c0ff2e"))
         self.assertEqual(encode("VAU.ADD.F32 v1 v0 v0"), bytes.fromhex("33000420"))

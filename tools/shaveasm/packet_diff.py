@@ -101,7 +101,7 @@ def generate_packets(seed: int, count: int) -> list[str]:
         for register in range(32):
             operands = ["v0"] * 3
             operands[position] = f"v{register}"
-            for mnemonic in ("VAU.MUL.F32", "VAU.ADD.F32"):
+            for mnemonic in ("VAU.MUL.F32", "VAU.ADD.F32", "VAU.SUB.F32"):
                 packets.append(mnemonic + " " + " ".join(operands))
     packets.extend(["NOP", *(f"NOP {n}" for n in range(1, 65))])
     for register in range(32):
@@ -122,10 +122,10 @@ def generate_packets(seed: int, count: int) -> list[str]:
     for key in _PREFIXES:
         shape = key.split(",")
         if "VAU" in shape:
-            packets.append("\n || ".join("VAU.ADD.F32 v3 v4 v5" if unit == "VAU"
-                                          else operation(unit, store_packet=bool({"LSU1.STO32", "LSU1.STI20"} & set(shape)))
-                                          for unit in shape))
-            continue
+            for mnemonic in ("VAU.ADD.F32", "VAU.SUB.F32"):
+                packets.append("\n || ".join(f"{mnemonic} v3 v4 v5" if unit == "VAU"
+                                              else operation(unit, store_packet=bool({"LSU1.STO32", "LSU1.STI20"} & set(shape)))
+                                              for unit in shape))
         store_packet = bool({"LSU1.STO32", "LSU1.STI20"} & set(shape))
         if "LSU0.LDO32" in shape:
             for source in ("i4", "v4.0", "v4.1"):
@@ -208,8 +208,6 @@ def generate_packets(seed: int, count: int) -> list[str]:
                                               else operation(unit) for unit in shape))
     for key in _PREFIXES:
         shape = key.split(",")
-        if "VAU" in shape:
-            continue
         if "LSU1" in shape:
             for destination in ("i8", "v8.0", "v8.1"):
                 if destination == "i8" and "LSU0.LD20" in shape:
@@ -383,38 +381,40 @@ def verify_packets(oracle: Oracle, output: Path, seed: int, count: int) -> None:
         raise ValueError("vendor fixtures must remain under /mnt/cache/build-shave")
     output.mkdir(parents=True, exist_ok=True)
     packets = generate_packets(seed, count)
-    # The vendor hazard analyzer carries write-back state across .code switches.
-    # Reuse the gap section to stay below ELF32's section-count limit.
-    source = (
-        "\n".join(
-            f".code .text.gap\n NOP 16\n.code .text.case_{index}\ncase_{index}:\n {packet}"
-            for index, packet in enumerate(packets)
-        )
-        + "\n.end\n"
-    )
-    (output / "packets.s").write_text(source)
-    data = oracle.assemble(source)
-    (output / "packets.o").write_bytes(data)
-    image = Elf32.parse(data)
     failures = []
-    for index, source_packet in enumerate(packets):
-        statements = parse(source_packet)
-        if not statements or any(not isinstance(statement, Packet) for statement in statements):
-            raise AssertionError("generated source is not a packet sequence")
-        sequence = [statement for statement in statements if isinstance(statement, Packet)]
-        actual = b""
-        fixups = []
-        for position, packet in enumerate(sequence):
-            data, packet_fixups = encode_packet_with_fixups(packet, following=sequence[position + 1:])
-            fixups.extend(Fixup(f.symbol, f.addend, f.bit_offset + len(actual) * 8, f.bit_width, f.kind)
-                          for f in packet_fixups)
-            actual += data
-        name = f".text.case_{index}"
-        expected = image.section(name).data
-        expected_fixups = _vendor_fixups(image, name)
-        if actual != expected or tuple(fixups) != expected_fixups:
-            failures.append({"index": index, "source": source_packet, "vendor": expected.hex(), "native": actual.hex(),
-                             "vendor_fixups": repr(expected_fixups), "native_fixups": repr(fixups)})
+    # Each case can add code, relocation and symbol sections to the bounded ELF32 object.
+    for start in range(0, len(packets), 30000):
+        # The vendor hazard analyzer carries write-back state across .code switches.
+        # Reuse the gap section to stay below ELF32's section-count limit.
+        source = (
+            "\n".join(
+                f".code .text.gap\n NOP 16\n.code .text.case_{index}\ncase_{index}:\n {packet}"
+                for index, packet in enumerate(packets[start:start + 30000], start)
+            )
+            + "\n.end\n"
+        )
+        (output / f"packets-{start // 30000}.s").write_text(source)
+        data = oracle.assemble(source)
+        (output / f"packets-{start // 30000}.o").write_bytes(data)
+        image = Elf32.parse(data)
+        for index, source_packet in enumerate(packets[start:start + 30000], start):
+            statements = parse(source_packet)
+            if not statements or any(not isinstance(statement, Packet) for statement in statements):
+                raise AssertionError("generated source is not a packet sequence")
+            sequence = [statement for statement in statements if isinstance(statement, Packet)]
+            actual = b""
+            fixups = []
+            for position, packet in enumerate(sequence):
+                data, packet_fixups = encode_packet_with_fixups(packet, following=sequence[position + 1:])
+                fixups.extend(Fixup(f.symbol, f.addend, f.bit_offset + len(actual) * 8, f.bit_width, f.kind)
+                              for f in packet_fixups)
+                actual += data
+            name = f".text.case_{index}"
+            expected = image.section(name).data
+            expected_fixups = _vendor_fixups(image, name)
+            if actual != expected or tuple(fixups) != expected_fixups:
+                failures.append({"index": index, "source": source_packet, "vendor": expected.hex(), "native": actual.hex(),
+                                 "vendor_fixups": repr(expected_fixups), "native_fixups": repr(fixups)})
     report = {"seed": seed, "random_packets": count, "random_delay_sequences": 6 * count,
               "total": len(packets), "failures": failures}
     (output / "report.json").write_text(json.dumps(report, indent=2) + "\n")

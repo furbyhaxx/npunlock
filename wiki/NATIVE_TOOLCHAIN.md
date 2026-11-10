@@ -1106,6 +1106,18 @@ tests pass. Corpus parity remains **16/55 exact**, zero different, 39 rejected;
 diagnostic instruction rejections drop from 471 to 422. Fixtures:
 `/mnt/cache/build-shave/vau-add-{3720,9001}` and `corpus-parity-vau-add`.
 
+### VAU floating-point subtraction
+
+`VAU.SUB.F32` shares the measured floating-point VAU class and fields, with
+opcode `0x200002`. All 643 headers and 96 vector register field cases match.
+The differential harness now assembles batches of at most 30000 cases because
+larger runs exceeded moviAsm's ELF32 section limit. This restores the complete
+scalar alternative-form sweeps on vector headers without dropping cases.
+Both seeds pass **59393/59393** cases; 92 offline tests pass. Object parity is
+still **16/55 exact**, zero different, 39 rejected; diagnostic instruction
+rejections drop from 422 to 398. Fixtures:
+`/mnt/cache/build-shave/vau-sub-{3720,9001}` and `corpus-parity-vau-sub`.
+
 ### Differential gates and corpus inventory
 
 Cached assembly can be inventoried without Wine or recompilation:
