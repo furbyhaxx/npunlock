@@ -1167,6 +1167,19 @@ different, 39 rejected. Diagnostic instruction rejections drop from 324 to 316.
 Fixtures: `/mnt/cache/build-shave/iau-subci-{3720,9001}` and
 `corpus-parity-iau-subci`.
 
+### Wide VAU OR corpus packet
+
+The five-unit `VAU.OR20,CMU,LSU0,LSU1,IAU` class uses a 24-bit combined
+prefix `0x08AA0F` and 112 payload bits, yielding a **136-bit** packet.
+It removes the two remaining corpus VAU.OR header rejections. This measured
+vendor output disproves the encoder's former 128-bit packet cap; accepted
+classes remain bounded by the explicit prefix table instead of an inferred
+maximum. Both seeds pass **69289/69289** cases across 3677 measured headers;
+97 offline tests pass. Corpus parity remains **16/55 exact**, zero different,
+39 rejected; diagnostic instruction rejections fall from 316 to 314.
+Fixtures: `/mnt/cache/build-shave/vau-or-wide-{3720,9001}`,
+`vau-measure/or-wide.*` and `corpus-parity-vau-or-wide`.
+
 ### Differential gates and corpus inventory
 
 Cached assembly can be inventoried without Wine or recompilation:

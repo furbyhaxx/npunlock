@@ -15,6 +15,11 @@ def encode(source: str) -> bytes:
 
 
 class EncodingTests(unittest.TestCase):
+    def test_vau_or_can_share_a_measured_136_bit_packet(self) -> None:
+        self.assertEqual(encode("LSU0.CP.32 i4 i5 || LSU1.CP.32 i8 i9 || "
+                                "CMU.CP.32 i1 i2 || VAU.OR v3 v4 v5 || IAU.OR i16 i17 i18"),
+                         bytes.fromhex("0faa089b8cc2228070a480702881102394"))
+
     def test_iau_subtract_with_carry_uses_twenty_bit_iau_headers(self) -> None:
         self.assertEqual(encode("IAU.SUBCI i31 i30 i29"), bytes.fromhex("86c7ff0e"))
         self.assertEqual(encode("IAU.SUBCI i0 i0 i1"), bytes.fromhex("86078000"))

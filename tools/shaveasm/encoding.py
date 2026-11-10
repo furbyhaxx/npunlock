@@ -3687,6 +3687,7 @@ _PREFIXES = {
     "VAU.OR20,CMU.CMPI28,LSU0.LD20,LSU1.STI20": (16, 0x5E0E),
     "VAU.OR20,CMU.CMPI28,LSU0.LD20,LSU1.STI20,PEU": (24, 0x805E0F),
     "VAU.OR20,CMU.CMPI28,LSU0.LD20,LSU1.STI20,PEU.PCCX12": (24, 0xC05E0F),
+    "VAU.OR20,CMU,LSU0,LSU1,IAU": (24, 0x8AA0F),
 }
 _PREDICATES = {"EQ": 1, "NEQ": 14, "LT": 4, "LTE": 5, "GT": 2, "GTE": 3}
 _PCCX_PREDICATES = {**_PREDICATES, "NEQ": 6}
@@ -3998,8 +3999,6 @@ def encode_packet_with_fixups(
             if fixup.kind == "R_SHAVE_PCREL16":
                 value |= ((bits // 8) | _branch_delay_span(following) << 16) << bits
         bits += operation.bits
-    if bits > 128:
-        raise AssemblyError(f"line {first.line}: packet exceeds 128 bits")
     return value.to_bytes((bits + 7) // 8, "little"), tuple(fixups)
 
 
