@@ -15,6 +15,15 @@ def encode(source: str) -> bytes:
 
 
 class EncodingTests(unittest.TestCase):
+    def test_sau_unsigned_halfword_shift_uses_register_or_five_bit_immediate(self) -> None:
+        for source, expected in (("i0 i0 0", "3c120050"), ("i1 i2 3", "3c528451"),
+                                 ("i31 i31 31", "3cf2ff5f"), ("i1 i2 i3", "3c528441")):
+            with self.subTest(source=source):
+                self.assertEqual(encode("SAU.SHR.U16 " + source), bytes.fromhex(expected))
+        for source in ("i0 i0 -1", "i0 i0 32", "i0 i0 0.5", "i0 i0 i32", "v0 i0 1"):
+            with self.subTest(source=source), self.assertRaises(AssemblyError):
+                encode("SAU.SHR.U16 " + source)
+
     def test_sau_xor_can_share_the_corpus_immediate_iau_header(self) -> None:
         self.assertEqual(encode("CMU.CMII.I32 i0 i1 || LSU0.LDIL i4 1 || "
                                 "SAU.XOR i12 i13 i14 || IAU.ADD i16 i17 3 || PEU.PCCX EQ 3"),

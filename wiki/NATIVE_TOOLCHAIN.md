@@ -1218,6 +1218,19 @@ from **19/55 to 29/55 exact**, zero different, 26 rejected; diagnostic
 instruction rejections fall from 290 to 277. Fixtures:
 `/mnt/cache/build-shave/float-mul-{3720,9001}` and `corpus-parity-float-mul`.
 
+### SAU unsigned halfword right shift
+
+`SAU.SHR.U16 d l r` uses the existing 24-bit SAU class with opcode
+`0x400012`, five-bit scalar fields and selector `0x100000` for immediates
+0..31. Despite the halfword type, moviAsm accepts shift counts 16..31;
+negative counts, 32 and float constants are rejected. All 585 SAU headers,
+96 register fields, 64 immediate register fields and 32 counts match.
+Both seeds pass **72427/72427** cases; **101 offline tests** pass.
+Corpus parity stays **29/55 exact**, zero different, 26 rejected; diagnostic
+instruction rejections fall from 277 to 267. Fixtures:
+`/mnt/cache/build-shave/scalar-next-measure`, `sau-shru16-{3720,9001}` and
+`corpus-parity-sau-shru16`.
+
 ### Differential gates and corpus inventory
 
 Cached assembly can be inventoried without Wine or recompilation:
