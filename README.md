@@ -69,8 +69,8 @@ project does not import, load, link, or require OpenVINO.
 ### Requirements
 
 - Windows x64 or Linux x64
-- Intel NPU3720 with an installed Intel NPU driver (Meteor Lake on Windows;
-  Arrow Lake PCI `8086:ad1d` verified on Linux)
+- Intel NPU3720 / 37xx with an installed Intel NPU driver (Meteor Lake
+  `8086:7d1d` on Windows; Arrow Lake `8086:ad1d` verified on Linux)
 - Python 3.10 or newer
 - CMake 3.24 or newer for installation from source; MSVC on Windows, or a C17
   compiler and `x86_64-w64-mingw32-gcc` on Linux

@@ -2456,6 +2456,61 @@ class CompilationFlowTests(unittest.TestCase):
         loaded_plan.build(movi_dll_dir="movi")
         self.assertEqual(fake.compile_ir_count, 1)
 
+    def test_prepared_bundle_accepts_only_intel_37xx_devices(self) -> None:
+        class DeviceNative(FakeNative):
+            saved_vendor = 0x8086
+            saved_device = 0x7D1D
+            current_vendor = 0x8086
+            current_device = 0xAD1D
+
+            def compile_ir(self, xml: bytes, weights: bytes, **kwargs: object) -> npu.IrCompileResult:
+                return replace(
+                    super().compile_ir(xml, weights, **kwargs),
+                    vendor_id=self.saved_vendor,
+                    device_id=self.saved_device,
+                )
+
+            def query_ir_provenance(self, **kwargs: object) -> npu.IrCompileResult:
+                return replace(
+                    super().query_ir_provenance(**kwargs),
+                    vendor_id=self.current_vendor,
+                    device_id=self.current_device,
+                )
+
+        x = npu.input("x", shape=(1, 32), dtype="f16")
+        y = npu.custom(x, source=b"kernel", carrier="Abs", _name="y")
+        graph = npu.Graph([x], [y], name="prepared_devices")
+        path = ROOT / "build" / "python-api-prepared-devices.npunlock"
+        cases = [
+            (0x8086, saved, 0x8086, current, None)
+            for saved in (0x7D1D, 0xAD1D)
+            for current in (0x7D1D, 0xAD1D)
+        ]
+        for device in (0x643E, 0xB03E):
+            cases.append((0x8086, device, 0x8086, 0xAD1D, "outside the supported NPU3720 contract"))
+            cases.append((0x8086, 0xAD1D, 0x8086, device, "outside the supported NPU3720 contract"))
+        cases.extend((
+            (0x1234, 0xAD1D, 0x8086, 0xAD1D, "outside the supported NPU3720 contract"),
+            (0x8086, 0xAD1D, 0x1234, 0xAD1D, "outside the supported NPU3720 contract"),
+        ))
+        try:
+            for saved_vendor, saved_device, current_vendor, current_device, error in cases:
+                with self.subTest(saved=(saved_vendor, saved_device), current=(current_vendor, current_device)):
+                    fake = DeviceNative()
+                    fake.saved_vendor, fake.saved_device = saved_vendor, saved_device
+                    fake.current_vendor, fake.current_device = current_vendor, current_device
+                    prepared = npu.prepare(graph, libraries=fake)  # type: ignore[arg-type]
+                    prepared.export(path)
+                    if error is None:
+                        loaded = npu.load_prepared(path, graph=graph, libraries=fake)  # type: ignore[arg-type]
+                        self.assertEqual(loaded.ir_provenance.device_id, saved_device)
+                        self.assertEqual(fake.compile_ir_count, 1)
+                    else:
+                        with self.assertRaisesRegex(ValueError, error):
+                            npu.load_prepared(path, graph=graph, libraries=fake)  # type: ignore[arg-type]
+        finally:
+            path.unlink(missing_ok=True)
+
     def test_prepared_bundle_revalidates_evidence_backed_binding(self) -> None:
         x = npu.input("x", shape=(1, 32), dtype="f16")
         y = npu.custom(x, source=b"kernel", carrier="Abs", _name="reviewed")

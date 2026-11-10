@@ -2105,7 +2105,15 @@ process with an empty `XDG_CACHE_HOME`; outputs were compared byte for byte.
 All 36 completed SHAVE cases produced bit-identical vendor and hybrid outputs
 and met their reference checks. `doctor --full --shave-toolchain hybrid`:
 `fp16_add1_exact: 32 elements, 0 mismatches`, `toolchain=hybrid`.
-The two failures (`example_branched_network.py`,
-`example_connected_mixed_precision.py`) are toolchain-independent: the
-prepared-bundle loader accepts only device ID `0x7d1d` and rejects `0xad1d`.
+The two original failures (`example_branched_network.py`,
+`example_connected_mixed_precision.py`) were toolchain-independent: the
+prepared-bundle loader accepted only device ID `0x7d1d` and rejected `0xad1d`.
 Cold-cache README GELU compile: vendor 10.1-10.2 s, hybrid 3.5-4.2 s.
+
+The prepared-bundle loader now accepts both NPU3720 / 37xx IDs and allows
+reload across them while retaining vendor and driver/compiler checks. Both
+examples were rerun end to end on `8086:ad1d` in vendor and strict hybrid
+modes: the branched FP16 and FP32 maximum absolute errors were both 0;
+connected mixed-precision prepared and saved-program reloads matched exact
+host oracles. Source-checkout hybrid runs require both `python/` and the
+repository root on `PYTHONPATH` for `tools.shaveasm`.

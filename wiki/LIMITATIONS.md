@@ -22,7 +22,7 @@ below as unsupported rather than "probably compatible."
 | Area | Confirmed scope |
 | --- | --- |
 | host | Windows x64 |
-| hardware | Meteor Lake / NPU3720 (`0x7d1d`) |
+| hardware | Meteor Lake / Arrow Lake NPU3720 / 37xx (`8086:7d1d`, `8086:ad1d`) |
 | SHAVE target | `3720xx` |
 | graph compiler | current path validated with version 8.3 |
 | primary custom tensors | static, dense FP16 |

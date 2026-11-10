@@ -484,6 +484,10 @@ carriers. The driver reported compiler 8.3; the produced blobs passed the
 existing NPU3720/loader-ELF 1.2.0/mapped-inference 7.0.4 checks without relaxing
 validation. ACT discovery found one group with four invocations in each
 carrier. This is evidence for that stack and those static graphs only.
+Prepared-bundle reload accepts both Meteor Lake `8086:7d1d` and Arrow Lake
+`8086:ad1d` as NPU3720 / 37xx, including cross-device reload with matching
+driver/compiler provenance. Other IP generations remain unsupported; see
+[the graph compatibility contract](../ABI/GRAPH_ELF.md).
 
 ### Wine-hosted MoviTools on Linux
 

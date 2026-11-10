@@ -8,7 +8,14 @@ files but may not know Intel NPU terminology.
 
 This is an observed compatibility contract, not an Intel specification. The
 document covers only structures that were validated on a Meteor Lake NPU
-(device `0x7d1d`) with graph extension 1.18 and compiler 8.3.
+(device `0x7d1d`) with graph extension 1.18 and compiler 8.3. Arrow Lake
+(`0xad1d`) uses the same NPU3720 / 37xx IP; prepared bundles accept both IDs
+while retaining the vendor, driver, graph-extension and compiler checks.
+The upstream Linux `intel_vpu` driver's
+[`ivpu_drv.h`](https://github.com/torvalds/linux/blob/b3dfbde62cf1/drivers/accel/ivpu/ivpu_drv.h)
+and [`ivpu_ip_gen_init`](https://github.com/torvalds/linux/blob/b3dfbde62cf1/drivers/accel/ivpu/ivpu_drv.c)
+map MTL (`0x7d1d`) and ARL (`0xad1d`) to 37xx. LNL (`0x643e`) is 40xx
+and PTL (`0xb03e`) is 50xx; neither is supported by this contract.
 
 The confidence words used below have precise meanings:
 

@@ -157,6 +157,8 @@ _EXECUTION_NUMPY_DTYPES = {
     "i64": np.dtype("int64"),
 }
 _VALIDATED_POSITIONAL_COMPILER_VERSION = (8, 3)
+# Linux intel_vpu ivpu_ip_gen_init maps MTL and ARL to IVPU_HW_IP_37XX.
+_NPU3720_DEVICE_IDS = frozenset((0x7D1D, 0xAD1D))
 
 
 def configure(
@@ -3059,6 +3061,11 @@ def _prepared_identity(value: object, data: bytes, label: str) -> None:
         raise ValueError(f"caller graph {label} does not match the prepared carrier identity")
 
 
+def _require_npu3720_device(vendor_id: int, device_id: int) -> None:
+    if vendor_id != 0x8086 or device_id not in _NPU3720_DEVICE_IDS:
+        raise ValueError("prepared bundle provenance is outside the supported NPU3720 contract")
+
+
 def _prepared_provenance(value: object, graph_blob: bytes) -> IrCompileResult:
     integer_fields = (
         "driver_index",
@@ -3080,8 +3087,7 @@ def _prepared_provenance(value: object, graph_blob: bytes) -> IrCompileResult:
         or any(isinstance(item, bool) or not isinstance(item, int) or not 0 <= item <= 0xFFFF for item in compiler)
     ):
         raise ValueError("prepared bundle provenance is invalid")
-    if value["vendor_id"] != 0x8086 or value["device_id"] != 0x7D1D:
-        raise ValueError("prepared bundle provenance is outside the supported NPU3720 contract")
+    _require_npu3720_device(value["vendor_id"], value["device_id"])
     return IrCompileResult(
         graph_blob,
         value["driver_index"],
@@ -3275,12 +3281,12 @@ def load_prepared(
 
     native = libraries or _default_native_libraries(native_dir)
     current = native.query_ir_provenance(timeout_ms=timeout_ms, worker=ir_worker)
+    _require_npu3720_device(current.vendor_id, current.device_id)
     saved_contract = (
         provenance.driver_index,
         provenance.device_index,
         provenance.driver_version,
         provenance.vendor_id,
-        provenance.device_id,
         provenance.graph_extension_version,
         provenance.compiler_version,
     )
@@ -3289,7 +3295,6 @@ def load_prepared(
         current.device_index,
         current.driver_version,
         current.vendor_id,
-        current.device_id,
         current.graph_extension_version,
         current.compiler_version,
     )
