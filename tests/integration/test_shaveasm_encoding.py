@@ -15,6 +15,11 @@ def encode(source: str) -> bytes:
 
 
 class EncodingTests(unittest.TestCase):
+    def test_sau_xor_can_share_the_corpus_immediate_iau_header(self) -> None:
+        self.assertEqual(encode("CMU.CMII.I32 i0 i1 || LSU0.LDIL i4 1 || "
+                                "SAU.XOR i12 i13 i14 || IAU.ADD i16 i17 3 || PEU.PCCX EQ 3"),
+                         bytes.fromhex("0f28ce000201220100ba3107221c580c"))
+
     def test_vau_or_can_share_a_measured_136_bit_packet(self) -> None:
         self.assertEqual(encode("LSU0.CP.32 i4 i5 || LSU1.CP.32 i8 i9 || "
                                 "CMU.CP.32 i1 i2 || VAU.OR v3 v4 v5 || IAU.OR i16 i17 i18"),

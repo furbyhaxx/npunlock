@@ -1180,6 +1180,19 @@ maximum. Both seeds pass **69289/69289** cases across 3677 measured headers;
 Fixtures: `/mnt/cache/build-shave/vau-or-wide-{3720,9001}`,
 `vau-measure/or-wide.*` and `corpus-parity-vau-or-wide`.
 
+### SAU XOR with immediate-class IAU and cross-condition predicate
+
+The corpus shape `CMU,LSU0,SAU.AND20,IAU.ADD24,PEU.PCCX12` has a measured
+24-bit prefix `0xCE280F`, followed by 104 payload bits. It supports the four
+remaining SAU.XOR corpus packet rejections, including integer comparison and
+IAU immediate addition or left shift. Both seeds pass **69319/69319** cases
+across 3678 headers; 98 offline tests pass. Corpus parity remains **16/55
+exact**, zero different, 39 rejected; diagnostic instruction rejections fall
+from 314 to 310. The original pre-merge baseline was 15 exact, one different,
+39 rejected and 530 diagnostic instruction rejections. Fixtures:
+`/mnt/cache/build-shave/sau-xor-wide-{3720,9001}`, `vau-measure/xor-wide.*`
+and `corpus-parity-sau-xor-wide`.
+
 ### Differential gates and corpus inventory
 
 Cached assembly can be inventoried without Wine or recompilation:
