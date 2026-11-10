@@ -64,6 +64,15 @@ class EncodingTests(unittest.TestCase):
             with self.subTest(source=source), self.assertRaises(AssemblyError):
                 encode(source)
 
+    def test_lsu0_half_load_converts_to_float_in_the_twenty_bit_class(self) -> None:
+        self.assertEqual(encode("LSU0.LD.32.F16.F32 i0 i0"), bytes.fromhex("42000000"))
+        self.assertEqual(encode("LSU0.LD.32.F16.F32 i1 i2"), bytes.fromhex("42100400"))
+        self.assertEqual(encode("LSU0.LD.32.F16.F32 i31 i31"), bytes.fromhex("42f03f00"))
+        for source in ("LSU0.LD.32.F16.F32 i32 i0", "LSU0.LD.32.F16.F32 i0 i32",
+                       "LSU0.LD.32.F16.F32 i0.0 i0", "LSU0.LD.32.F16.F32 i0 1"):
+            with self.subTest(source=source), self.assertRaises(AssemblyError):
+                encode(source)
+
     def test_lsu1_scalar_copy_can_share_a_packet_with_comparison(self) -> None:
         self.assertEqual(encode("LSU1.CP.32 i0 i0"), bytes.fromhex("89070008"))
         self.assertEqual(encode("LSU1.CP.32 i1 i2"), bytes.fromhex("89170408"))
@@ -312,7 +321,7 @@ class EncodingTests(unittest.TestCase):
         self.assertEqual(encode("LSU0.LD.32 i31 i31"), bytes.fromhex("82fd3f01"))
         self.assertEqual(encode("LSU0.LD.32 i1 i2"), bytes.fromhex("821d0401"))
         for source in ("LSU0.LD.32 i0 0", "LSU0.LD.32 i0 i32",
-                       "LSU0.LD.32 i0 i1 0", "LSU0.LD.32.f16.f32 i0 i1"):
+                       "LSU0.LD.32 i0 i1 0", "LSU0.LD.32.f32.f16 i0 i1"):
             with self.subTest(source=source), self.assertRaises(AssemblyError):
                 encode(source)
 

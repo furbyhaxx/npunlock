@@ -34,6 +34,8 @@ def generate_packets(seed: int, count: int) -> list[str]:
             mnemonic = (rng.choice(("LSU0.LDO.32", "LSU0.STO.32")) if unit == "LSU0.LDO32"
                         else rng.choice(("LSU1.STO.32", "LSU1.LDO.32")))
             return f"{mnemonic} {registers[0]} {registers[1]} {rng.randrange(-16384, 16384)}"
+        if unit == "LSU0.LD20":
+            return f"LSU0.LD.32.F16.F32 {registers[0]} {registers[1]}"
         if unit == "CMU.CMPI28":
             return f"CMU.CMPI {registers[0]} {rng.randrange(65536)}"
         if unit == "CMU.CMZ16":
@@ -84,7 +86,7 @@ def generate_packets(seed: int, count: int) -> list[str]:
 
     packets = ["NOP", *(f"NOP {n}" for n in range(1, 65))]
     for register in range(32):
-        for unit in (*_UNITS, "LSU0.LDO32", "LSU1.STO32", "IAU.ADD24", "CMU.CMZ16", "PEU.PCCX12", "BRU.JMP16"):
+        for unit in (*_UNITS, "LSU0.LDO32", "LSU1.STO32", "IAU.ADD24", "CMU.CMZ16", "PEU.PCCX12", "BRU.JMP16", "LSU0.LD20"):
             packets.append(operation(unit, (f"i{register}", f"i{31 - register}", f"i{(register + 11) % 32}")))
     packets.extend(("LSU0.LDIL i31 65535", "LSU1.LDIL i0 0", "SAU.ADD.i32 i0 i31 31"))
     packets.extend(f"LSU0.LDO.32 i31 i0 {value}" for value in (-16384, -1, 0, 1, 16383))
@@ -200,7 +202,7 @@ def generate_packets(seed: int, count: int) -> list[str]:
                    (0, -1, 16383, -16384, *(1 << bit for bit in range(14)),
                     *(-(1 << bit) for bit in range(15))))
     packets.extend(f"LSU1.STO.32 i31 i0 {value}" for value in (-16384, -1, 0, 1, 16383))
-    for mnemonic in ("LSU0.LD.32", "LSU0.CP.32"):
+    for mnemonic in ("LSU0.LD.32", "LSU0.CP.32", "LSU0.LD.32.F16.F32"):
         for position in range(2):
             for register in range(32):
                 operands = ["i0", "i0"]

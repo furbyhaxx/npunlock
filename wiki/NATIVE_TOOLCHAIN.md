@@ -944,6 +944,18 @@ with CMII.I32/U32/F32. Both seeds pass **29870/29870** cases and 78 offline test
 pass. Coverage is **11036/11912** packets, with **10/55 exact objects**, zero
 different objects, and 1021 diagnostic instruction rejections.
 
+### Half-to-float LSU0 load
+
+`LSU0.LD.32.F16.F32 dst base` uses a measured 20-bit LSU0.LD20 class:
+`dst<<4 | base<<9`, standalone prefix `0x42`. The 408 new header entries were
+measured independently by substituting this load into each existing LSU0
+shape and finding the unique 4..32-bit header width matching its payloads.
+Both seeds exercise all new shapes with randomized operands, textual orders
+and fixups; 64 independent register sweeps also match moviAsm. Both gates pass
+**33968/33968** cases across **1882** header shapes, and 79 offline tests pass.
+Coverage is **11080/11912** packets, with **11/55 exact objects**, zero different
+objects, and 969 diagnostic instruction rejections.
+
 ### Differential gates and corpus inventory
 
 Cached assembly can be inventoried without Wine or recompilation:
@@ -962,9 +974,9 @@ command. The combined baseline is 3291/11912 accepted packets and **98** distinc
 mnemonics (97 in the literal corpus alone). With symbolic branches, signed
 loads/stores, indirect loads, integer addition, comparisons, PCCX, AND/OR,
 LMULL, INCS, scalar floating-point addition and immediate SHL, coverage is
-**11036/11912** packets, including 979 requiring symbolic fixups, after the
+**11080/11912** packets, including 979 requiring symbolic fixups, after the
 additional measured forms documented above.
-Forty-six distinct mnemonics occur in accepted packets (six at baseline); the
+Forty-seven distinct mnemonics occur in accepted packets (six at baseline); the
 corpus still has 98 mnemonics.
 `accepted_packets` counts bytes-plus-fixups support and `relocatable_packets`
 identifies that subset. Coverage tests isolated packet forms; it does not
@@ -983,8 +995,8 @@ python3 -m tools.shaveasm.corpus --native-dir build/linux \
   --output /mnt/cache/build-shave/native-asm-corpus
 ```
 
-Offline regressions: 78 passed, including the merged object-writer/corpus tests.
-Each current randomized gate passes **29870/29870 cases**. Before the eight
+Offline regressions: 79 passed, including the merged object-writer/corpus tests.
+Each current randomized gate passes **33968/33968 cases**. Before the eight
 additional forms documented above, the gate passed **12156/12156 cases**
 (seeds 3720 and 9001): the original 2362 isolated-packet cases (1000 random
 packets, 457 shapes, 352 mixed operand sweeps, 96 ADD sweeps, 384 PCCX pairs,
@@ -1007,7 +1019,8 @@ JMP adds 280 header shapes, 32 register cases and the same 2232 delay-window
 sequences as BRA; the expanded headers also repeat existing alternative forms.
 SUB adds 482 register/immediate header cases, 96 register-field cases and ten
 immediate-bit/boundary cases. Those forms established 887 prefix shapes;
-SAU.AND and CMPI bring the current total to 1474.
+SAU.AND and CMPI established 1474 prefix shapes; the half-to-float LSU0 load
+brings the current total to 1882.
 Every case's full instruction bytes and fixups are compared to moviAsm, not
 merely round-tripped through native code. All measured instruction forms occur
 in the real compiler corpus.
@@ -1015,8 +1028,8 @@ in the real compiler corpus.
 Original C, compiler `.s`, vendor `.o` and JSON manifests stay under the cache
 paths above. `elf.py` provides bounded ELF32 section inspection and a comparator
 which reports every section-attribute or byte difference while ignoring only
-file offsets. Whole-object native parity now reaches **10/55** exact cached
-objects; 45 still reject unmeasured instructions. See the object-writer
+file offsets. Whole-object native parity now reaches **11/55** exact cached
+objects; 44 still reject unmeasured instructions. See the object-writer
 section below.
 
 The captured corpus has **55 distinct complete kernel sources**: 39 literal
@@ -1038,7 +1051,7 @@ The parser structurally accepted all 55 captured assemblies. The literal
 corpus contains 97 distinct mnemonics. Only **3291/11912** parsed packets are
 accepted by the original byte-only encoder across the two corpora; the symbolic
 branch, scalar-load/store, ADD, compare, PCCX, AND/OR, LMULL, INCS and SHL extensions raise
-bytes-plus-fixups support to **11036/11912** with the additional measured forms
+bytes-plus-fixups support to **11080/11912** with the additional measured forms
 above. These are
 syntactic coverage counts, **not** full-stream or whole-object parity claims.
 Calls, other branch forms, additional instruction/header classes, data and
