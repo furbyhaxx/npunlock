@@ -1612,6 +1612,19 @@ instruction rejections fall from 40 to 39. Fixtures:
 `/mnt/cache/build-shave/six-scalar-measure`, `six-scalar-{3720,9001}` and
 `corpus-parity-six-scalar`.
 
+### CMU scalar float-to-half conversion
+
+`CMU.CP.16.F32.F16 iD.lane s` uses the 24-bit CMU class with payload
+`0x688001 | d<<9 | s<<4 | lane<<14`. Only scalar destination lanes 0..1
+are accepted. Unlike the unsigned conversion forms, it can co-issue with
+LSU1 postincrement stores. All 695 headers with both lanes, 64 destination/
+lane pairs and 32 sources match moviAsm. Both seeds pass **114675/114675**
+cases; **133 offline tests** pass. Corpus parity rises from **51/55 to 52/55
+exact**, zero different, three rejected; diagnostic instruction rejections
+fall from 39 to 38. The contrib/yolo11-nms object is now exact. Fixtures:
+`/mnt/cache/build-shave/cmu-cpto16-measure`, `cmu-cpto16-{3720,9001}` and
+`corpus-parity-cmu-cpto16`.
+
 ### Differential gates and corpus inventory
 
 Cached assembly can be inventoried without Wine or recompilation:

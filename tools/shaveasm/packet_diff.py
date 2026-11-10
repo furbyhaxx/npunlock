@@ -246,6 +246,9 @@ def generate_packets(seed: int, count: int) -> list[str]:
             for lane in range(2):
                 packets.append("\n || ".join(f"CMU.CP.32.F16.F32 i0 i1.{lane}" if unit == "CMU"
                                               else operation(unit, store_packet=store_packet) for unit in shape))
+            for lane in range(2):
+                packets.append("\n || ".join(f"CMU.CP.16.F32.F16 i0.{lane} i1" if unit == "CMU"
+                                              else operation(unit, store_packet=store_packet) for unit in shape))
             for copy in ("CMU.CP.128.32.R v0 i1", "CMU.CP.128 v0 v1"):
                 packets.append("\n || ".join(copy if unit == "CMU"
                                               else "VAU.MUL.F32 v28 v29 v30" if unit == "VAU"
@@ -386,6 +389,9 @@ def generate_packets(seed: int, count: int) -> list[str]:
     packets.extend(f"LSU0.ST.16 i{register}.{lane} i0"
                    for register in range(32) for lane in range(4))
     packets.extend(f"LSU0.ST.16 i0.0 i{register}" for register in range(32))
+    packets.extend(f"CMU.CP.16.F32.F16 i{register}.{lane} i0"
+                   for register in range(32) for lane in range(2))
+    packets.extend(f"CMU.CP.16.F32.F16 i0.0 i{register}" for register in range(32))
     for mnemonic in ("LSU0.LD.32", "LSU0.CP.32", "LSU0.ST.32", "LSU0.LD.32.F16.F32"):
         for position in range(2):
             for register in range(32):

@@ -3712,11 +3712,11 @@ def _register(text: str, line: int) -> int:
     return int(match[1])
 
 
-def _scalar_lane_register(text: str, line: int, lanes: int) -> int:
+def _scalar_lane_register(text: str, line: int, lanes: int, *, register_shift: int = 4) -> int:
     match = re.fullmatch(r"[iI]([0-9]+)\.([0-9]+)", text)
     if match is None or not 0 <= int(match[1]) < 32 or not 0 <= int(match[2]) < lanes:
         raise AssemblyError(f"line {line}: invalid scalar lane register {text!r}")
-    return int(match[1]) << 4 | int(match[2]) << 14
+    return int(match[1]) << register_shift | int(match[2]) << 14
 
 
 def _vector_register(text: str, line: int) -> int:
@@ -3861,6 +3861,10 @@ def _operation(instruction: Instruction) -> _Operation:
         selector = {"CMU.CMII.I32": 0x10000, "CMU.CMII.U32": 0,
                     "CMU.CMII.F32": 0x80000, "CMU.CMII.I8": 0x50000}[mnemonic]
         return _Operation(unit, selector | left << 4 | right << 9, 24)
+    if mnemonic == "CMU.CP.16.F32.F16" and len(operands) == 2:
+        destination = _scalar_lane_register(operands[0], line, 2, register_shift=9)
+        source = _register(operands[1], line)
+        return _Operation(unit, 0x688001 | destination | source << 4, 24)
     if mnemonic in ("CMU.CP.32.F16.F32", "CMU.CP.32.U8.F32") and len(operands) == 2:
         destination = _register(operands[0], line)
         halfword = mnemonic == "CMU.CP.32.F16.F32"
