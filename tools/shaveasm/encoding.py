@@ -3842,10 +3842,12 @@ def _operation(instruction: Instruction) -> _Operation:
         destination, source = (_register(op, line) for op in operands)
         opcode = 0x64000E if mnemonic == "CMU.CP.32.U32.F32" else 0x640004
         return _Operation(unit, opcode | destination << 9 | source << 4, 24)
-    if mnemonic == "CMU.CP.128.32.R" and len(operands) == 2:
+    if mnemonic in ("CMU.CP.128.32.R", "CMU.CP.128") and len(operands) == 2:
         destination = _vector_register(operands[0], line)
-        source = _register(operands[1], line)
-        return _Operation(unit, 7 | destination << 9 | source << 4, 24)
+        replicated = mnemonic == "CMU.CP.128.32.R"
+        source = _register(operands[1], line) if replicated else _vector_register(operands[1], line)
+        opcode = 7 if replicated else 0x48000C
+        return _Operation(unit, opcode | destination << 9 | source << 4, 24)
     if mnemonic == "CMU.CP.32" and len(operands) == 2:
         destination = _register(operands[0], line)
         vector = re.fullmatch(r"[vV]([0-9]+)\.([0-9]+)", operands[1])
@@ -4005,7 +4007,7 @@ def encode_packet_with_fixups(
     ):
         raise AssemblyError(f"line {first.line}: LSU0 scalar doubleword load and LSU1 load conflict on scalar write port 5")
     vector_copies = [instruction for instruction in packet.operations
-                     if instruction.mnemonic == "CMU.CP.128.32.R" and len(instruction.operands) == 2]
+                     if instruction.mnemonic in ("CMU.CP.128.32.R", "CMU.CP.128") and len(instruction.operands) == 2]
     for copy in vector_copies:
         destination = _vector_register(copy.operands[0], copy.line)
         if any(instruction.mnemonic in ("VAU.MUL.F32", "VAU.ADD.F32", "VAU.SUB.F32", "VAU.OR")

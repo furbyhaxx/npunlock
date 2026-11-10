@@ -753,6 +753,16 @@ class EncodingTests(unittest.TestCase):
             with self.subTest(operation=operation), self.assertRaisesRegex(AssemblyError, "same vector register"):
                 encode("CMU.CP.128.32.R v0 i1 || " + operation + " v0 v2 v3")
 
+    def test_cmu_full_vector_copy(self) -> None:
+        self.assertEqual(encode("CMU.CP.128 v0 v0"), bytes.fromhex("810c0048"))
+        self.assertEqual(encode("CMU.CP.128 v31 v31"), bytes.fromhex("81fc3f48"))
+        for source in ("CMU.CP.128 v32 v0", "CMU.CP.128 v0 v32",
+                       "CMU.CP.128 i0 v1", "CMU.CP.128 v0.0 v1", "CMU.CP.128 v0 i1"):
+            with self.subTest(source=source), self.assertRaises(AssemblyError):
+                encode(source)
+        with self.assertRaisesRegex(AssemblyError, "same vector register"):
+            encode("CMU.CP.128 v0 v1 || VAU.OR v0 v2 v3")
+
     def test_invalid_or_unmeasured_input_fails_closed(self) -> None:
         for source in [
             "LSU0.LDIL i4 65536",
