@@ -978,6 +978,24 @@ in all 408 LSU0 header shapes, all 128 destination/lane combinations and all
 tests pass. Coverage is **11097/11912** packets, with **11/55 exact objects**,
 zero different objects, and 951 diagnostic instruction rejections.
 
+### LSU0 offset doubleword load
+
+`LSU0.LDO.64 dst base offset` uses the existing 32-bit LSU0.LDO32 class:
+`2 | register_field | base<<9 | (offset & 0x7fff)<<17`. Scalar `iN`
+selects `register_field = 0x10000 | N<<4`, including odd registers and i31.
+Vector `vN.lane` selects `N<<4 | (0x4000 if lane == 0 else 0)`;
+moviAsm accepts lanes 0..15 and aliases every nonzero lane to lane 1.
+Bare vector registers, v32, lane 16 and offsets outside signed 15-bit are
+rejected. Scalar doubleword loads conflict with LSU1.LD.32/LDO.32 on scalar
+write port 5; vector loads can co-issue with them.
+
+All 321 existing header shapes, scalar and both vector selectors, 32 scalar
+registers, all 512 vector register/lane combinations, 32 bases and 33 offset
+cases match moviAsm. Both seeds pass **37332/37332** cases and 81 offline
+tests pass. Object parity remains **11/55 exact**, zero different objects,
+with 800 diagnostic instruction rejections. Fixtures and reports remain under
+`/mnt/cache/build-shave/ldo64-{3720,9001}` and `corpus-parity-ldo64`.
+
 ### Differential gates and corpus inventory
 
 Cached assembly can be inventoried without Wine or recompilation:
@@ -1017,8 +1035,8 @@ python3 -m tools.shaveasm.corpus --native-dir build/linux \
   --output /mnt/cache/build-shave/native-asm-corpus
 ```
 
-Offline regressions: 80 passed, including the merged object-writer/corpus tests.
-Each current randomized gate passes **35760/35760 cases**. Before the eight
+Offline regressions: 81 passed, including the merged object-writer/corpus tests.
+Each current randomized gate passes **37332/37332 cases**. Before the eight
 additional forms documented above, the gate passed **12156/12156 cases**
 (seeds 3720 and 9001): the original 2362 isolated-packet cases (1000 random
 packets, 457 shapes, 352 mixed operand sweeps, 96 ADD sweeps, 384 PCCX pairs,

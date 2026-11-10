@@ -15,6 +15,20 @@ def encode(source: str) -> bytes:
 
 
 class EncodingTests(unittest.TestCase):
+    def test_lsu0_offset_doubleword_load_selects_scalar_pairs_and_vector_lanes(self) -> None:
+        self.assertEqual(encode("LSU0.LDO.64 i1 i19 72"), bytes.fromhex("c212269100"))
+        self.assertEqual(encode("LSU0.LDO.64 v9.1 i10 40"), bytes.fromhex("c292145000"))
+        self.assertEqual(encode("LSU0.LDO.64 v0.0 i0 0"), bytes.fromhex("c202400000"))
+        self.assertEqual(encode("LSU0.LDO.64 I31 i0 -1"), bytes.fromhex("c2f201ffff"))
+        self.assertEqual(encode("LSU0.LDO.64 V0.15 i0 0"), bytes.fromhex("c202000000"))
+        for source in ("LSU0.LDO.64 v32.0 i0 0", "LSU0.LDO.64 v0.16 i0 0",
+                       "LSU0.LDO.64 v0 i0 0", "LSU0.LDO.64 i32 i0 0",
+                       "LSU0.LDO.64 i0 i0 16384", "LSU0.LDO.64 i0 i0 -16385",
+                       "LSU0.LDO.64 i4 i5 0 || LSU1.LDO.32 i8 i9 0",
+                       "LSU0.LDO.64 i4 i5 0 || LSU1.LD.32 i8 i9"):
+            with self.subTest(source=source), self.assertRaises(AssemblyError):
+                encode(source)
+
     def test_packet_prefix_replaces_individual_prefixes(self) -> None:
         self.assertEqual(encode("LSU0.LDIL i4 1 || IAU.XOR i5 i5 i5"), bytes.fromhex("aa220100b29402"))
         self.assertEqual(encode("IAU.XOR i5 i5 i5 || LSU0.LDIL i4 1"), bytes.fromhex("aa220100b29402"))
