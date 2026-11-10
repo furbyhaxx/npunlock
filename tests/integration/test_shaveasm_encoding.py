@@ -716,6 +716,19 @@ class EncodingTests(unittest.TestCase):
         with self.assertRaisesRegex(AssemblyError, "read port 6"):
             encode("CMU.CMII.F32 i0 i1 || LSU1.LD.64 v8.0 i9")
 
+    def test_cmu_unsigned_to_float_conversion(self) -> None:
+        self.assertEqual(encode("CMU.CP.32.U32.F32 i0 i0"), bytes.fromhex("810e0064"))
+        self.assertEqual(encode("CMU.CP.32.U32.F32 i31 i31"), bytes.fromhex("81fe3f64"))
+        for source in ("CMU.CP.32.U32.F32 i32 i0", "CMU.CP.32.U32.F32 i0 i32",
+                       "CMU.CP.32.U32.F32 i0 v0", "CMU.CP.32.U32.F32 i0 i1.0",
+                       "CMU.CP.32.U32.F32 i0 i1 i2"):
+            with self.subTest(source=source), self.assertRaises(AssemblyError):
+                encode(source)
+
+        for operation in ("LSU1.STI.16.F32.F16 i8 i9", "LSU1.STI.16 i8.0 i9", "LSU1.STI.32 i8 i9"):
+            with self.subTest(operation=operation), self.assertRaisesRegex(AssemblyError, "write port 3"):
+                encode("CMU.CP.32.U32.F32 i0 i1 || " + operation)
+
     def test_invalid_or_unmeasured_input_fails_closed(self) -> None:
         for source in [
             "LSU0.LDIL i4 65536",
