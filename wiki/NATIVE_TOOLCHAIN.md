@@ -2088,3 +2088,24 @@ result is **16/55 exact**, zero different, and 39 rejected; diagnostic
 continuation finds 602 instruction rejections. This does not establish that
 non-instruction parity is complete once actual instruction lengths and
 relocations are available.
+
+## Hybrid toolchain acceptance (2026-11-10)
+
+NPU3720 (`8086:ad1d`) on devsrv01, commit `1a627f1`. Each runnable example and
+contrib entry point ran in strict `hybrid` and in `vendor`, each in a fresh
+process with an empty `XDG_CACHE_HOME`; outputs were compared byte for byte.
+
+| Result | Count |
+| --- | ---: |
+| Runnable entry points | 51 |
+| Passed in both modes | 49 (36 with custom SHAVE kernels, 11 graph-only, 2 CPU visualizers) |
+| Failed in both modes, before SHAVE compilation | 2 |
+| Skipped, need external model/data | 8 |
+
+All 36 completed SHAVE cases produced bit-identical vendor and hybrid outputs
+and met their reference checks. `doctor --full --shave-toolchain hybrid`:
+`fp16_add1_exact: 32 elements, 0 mismatches`, `toolchain=hybrid`.
+The two failures (`example_branched_network.py`,
+`example_connected_mixed_precision.py`) are toolchain-independent: the
+prepared-bundle loader accepts only device ID `0x7d1d` and rejects `0xad1d`.
+Cold-cache README GELU compile: vendor 10.1-10.2 s, hybrid 3.5-4.2 s.
