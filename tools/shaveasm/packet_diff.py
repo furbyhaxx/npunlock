@@ -178,10 +178,12 @@ def generate_packets(seed: int, count: int) -> list[str]:
                 packets.append("\n || ".join(f"{mnemonic} i12 i13 i14" if unit == "SAU.AND20"
                                               else operation(unit, store_packet=store_packet) for unit in shape))
         if "SAU" in shape:
+            packets.append("\n || ".join(f"SAU.SUB.I32 i12 i13 {rng.randrange(32)}" if unit == "SAU"
+                                          else operation(unit, store_packet=store_packet) for unit in shape))
             for mnemonic in ("SAU.ADD.F32", "SAU.MUL.F32"):
                 packets.append("\n || ".join(f"{mnemonic} i12 i13 " + rng.choice(("0.5", "1.0", "3.0", "-1.0")) if unit == "SAU"
                                               else operation(unit, store_packet=store_packet) for unit in shape))
-            for mnemonic in ("SAU.ADD.I32", "SAU.SHL.X32", "SAU.SHR.U32", "SAU.SHR.U16"):
+            for mnemonic in ("SAU.ADD.I32", "SAU.SUB.I32", "SAU.SHL.X32", "SAU.SHR.U32", "SAU.SHR.U16"):
                 packets.append("\n || ".join(f"{mnemonic} i12 i13 i14" if unit == "SAU"
                                               else operation(unit, store_packet=store_packet) for unit in shape))
             for mnemonic in ("SAU.ADD.F32", "SAU.SUB.F32", "SAU.MUL.I32", "SAU.MUL.F32", "SAU.DIV.F32", "SAU.DIV.U16", "SAU.DIV.U32", "SAU.SHL.X32", "SAU.SHR.U32", "SAU.SHR.U16"):
@@ -312,7 +314,7 @@ def generate_packets(seed: int, count: int) -> list[str]:
             for mnemonic in ("LSU1.STI.32", "LSU1.LD.32", "LSU1.ST.32", "LSU1.CP.32", "LSU1.STI.16.F32.F16", "LSU1.LD.32.F16.F32"):
                 packets.append(mnemonic + " " + " ".join(operands))
     for mnemonic in ("IAU.AND", "IAU.OR", "IAU.LMULL", "IAU.LMULH", "IAU.ADDCI", "IAU.SUBCI", "IAU.MAXU",
-                     "SAU.ADD.F32", "SAU.ADD.I32", "SAU.SHL.X32", "SAU.SUB.F32", "SAU.MUL.I32", "SAU.MUL.F32", "SAU.DIV.F32", "SAU.DIV.U16", "SAU.DIV.U32", "SAU.AND", "SAU.XOR", "SAU.OR", "IAU.SHL", "IAU.SHR.U32", "IAU.ROL", "SAU.SHR.U32", "SAU.SHR.U16"):
+                     "SAU.ADD.F32", "SAU.ADD.I32", "SAU.SUB.I32", "SAU.SHL.X32", "SAU.SUB.F32", "SAU.MUL.I32", "SAU.MUL.F32", "SAU.DIV.F32", "SAU.DIV.U16", "SAU.DIV.U32", "SAU.AND", "SAU.XOR", "SAU.OR", "IAU.SHL", "IAU.SHR.U32", "IAU.ROL", "SAU.SHR.U32", "SAU.SHR.U16"):
         for position in range(3):
             for register in range(32):
                 operands = ["i0"] * 3
@@ -324,6 +326,8 @@ def generate_packets(seed: int, count: int) -> list[str]:
             operands[position] = f"i{register}"
             for mnemonic in ("IAU.SHL", "IAU.SHR.U32", "IAU.ROL", "SAU.SHL.X32", "SAU.SHR.U32", "SAU.SHR.U16"):
                 packets.append(mnemonic + " " + " ".join(operands))
+    packets.extend(f"SAU.SUB.I32 i0 i0 {n}" for n in range(32))
+    packets.extend(f"SAU.SUB.I32 i{r} i{31-r} 0" for r in range(32))
     packets.extend(f"{mnemonic} i0 i0 {n}"
                    for mnemonic in ("IAU.SHL", "IAU.SHR.U32", "IAU.ROL", "SAU.SHL.X32", "SAU.SHR.U32", "SAU.SHR.U16") for n in range(32))
     for mnemonic in ("CMU.CMII.I32", "CMU.CMII.U32", "CMU.CMII.F32", "CMU.CMII.I8", "CMU.CMII.U16", "CMU.CP.64"):

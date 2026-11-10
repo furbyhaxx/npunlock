@@ -1027,6 +1027,15 @@ class EncodingTests(unittest.TestCase):
             with self.subTest(operands=operands), self.assertRaises(AssemblyError):
                 encode("CMU.CMII.U16 " + operands)
 
+    def test_sau_integer_subtraction(self) -> None:
+        for operands, expected in (("i0 i0 i0", "3c020000"), ("i1 i2 i3", "3c428401"),
+                                   ("i31 i31 i31", "3ce2ff0f"), ("i1 i2 0", "3c420410"),
+                                   ("i1 i2 31", "3c42841f")):
+            self.assertEqual(encode("SAU.SUB.I32 " + operands), bytes.fromhex(expected))
+        for operands in ("i0 i0 -1", "i0 i0 32", "i32 i0 0", "i0 v0 i1"):
+            with self.subTest(operands=operands), self.assertRaises(AssemblyError):
+                encode("SAU.SUB.I32 " + operands)
+
     def test_invalid_or_unmeasured_input_fails_closed(self) -> None:
         for source in [
             "LSU0.LDIL i4 65536",

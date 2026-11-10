@@ -3950,7 +3950,7 @@ def _operation(instruction: Instruction) -> _Operation:
                   "SAU.MUL.I32": 0x04, "SAU.MUL.F32": 0x200004, "SAU.DIV.F32": 0x200006,
                   "SAU.DIV.U16": 0x400006, "SAU.DIV.U32": 0x06}[mnemonic]
         return _Operation(unit, opcode | selector | destination << 10 | left << 5 | right << 15, 24)
-    if mnemonic in ("SAU.ADD.I32", "SAU.SHL.X32", "SAU.SHR.U32", "SAU.SHR.U16") and len(operands) == 3:
+    if mnemonic in ("SAU.ADD.I32", "SAU.SUB.I32", "SAU.SHL.X32", "SAU.SHR.U32", "SAU.SHR.U16") and len(operands) == 3:
         destination, source = (_register(op, line) for op in operands[:2])
         if re.fullmatch(r"[iI][0-9]+", operands[2]):
             right = _register(operands[2], line)
@@ -3958,7 +3958,7 @@ def _operation(instruction: Instruction) -> _Operation:
         else:
             right = _immediate(operands[2], 5, line)
             selector = 0x100000
-        opcode = {"SAU.ADD.I32": 0, "SAU.SHL.X32": 0x11, "SAU.SHR.U32": 0x12,
+        opcode = {"SAU.ADD.I32": 0, "SAU.SUB.I32": 2, "SAU.SHL.X32": 0x11, "SAU.SHR.U32": 0x12,
                   "SAU.SHR.U16": 0x400012}[mnemonic]
         return _Operation(unit, opcode | selector | destination << 10 | source << 5 | right << 15, 24)
     if mnemonic == "PEU.PCCX" and len(operands) == 2 and operands[0].upper() in _PCCX_PREDICATES:

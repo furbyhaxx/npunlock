@@ -1676,6 +1676,17 @@ pass. Corpus parity remains **53/55 exact**, zero different, two rejected.
 Fixtures: `/mnt/cache/build-shave/cmu-cmiiu16-measure`,
 `cmu-cmiiu16-{3720,9001}` and `corpus-parity-cmu-cmiiu16`.
 
+### SAU integer subtraction
+
+`SAU.SUB.I32 d s right` uses the 24-bit SAU class with payload
+`2 | d<<10 | s<<5 | right<<15`. Register operands use the scalar field;
+unsigned immediates 0..31 add `0x100000`. Negative counts and 32 fail closed.
+All SAU headers with both forms, all register fields and all 32 immediate
+values match moviAsm. Both seeds pass **119497/119497** cases; **138 offline
+tests** pass. Corpus parity remains **53/55 exact**, zero different, two
+rejected. Fixtures: `/mnt/cache/build-shave/sau-subi32-measure`,
+`sau-subi32-{3720,9001}` and `corpus-parity-sau-subi32`.
+
 ### Differential gates and corpus inventory
 
 Cached assembly can be inventoried without Wine or recompilation:
