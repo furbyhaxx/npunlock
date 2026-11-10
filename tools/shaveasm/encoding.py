@@ -3800,6 +3800,9 @@ def _operation(instruction: Instruction) -> _Operation:
         destination, base = (_register(op, line) for op in operands)
         return _Operation(unit, destination << 4 | base << 9, 20,
                           prefix_class="LSU0.LD20" if unit == "LSU0" else "LSU1.STI20")
+    if mnemonic == "LSU0.CP.128" and len(operands) == 2:
+        destination, source = (_vector_register(op, line) for op in operands)
+        return _Operation(unit, 0x480007 | destination << 4 | source << 9, 24)
     if mnemonic in ("LSU0.LD.32", "LSU1.LD.32", "LSU0.CP.32", "LSU1.CP.32") and len(operands) == 2:
         destination, source = (_register(op, line) for op in operands)
         opcode = 0x80007 if mnemonic.endswith(".CP.32") else 0x1000D
@@ -4007,14 +4010,14 @@ def encode_packet_with_fixups(
     ):
         raise AssemblyError(f"line {first.line}: LSU0 scalar doubleword load and LSU1 load conflict on scalar write port 5")
     vector_copies = [instruction for instruction in packet.operations
-                     if instruction.mnemonic in ("CMU.CP.128.32.R", "CMU.CP.128") and len(instruction.operands) == 2]
+                     if instruction.mnemonic in ("CMU.CP.128.32.R", "CMU.CP.128", "LSU0.CP.128") and len(instruction.operands) == 2]
     for copy in vector_copies:
         destination = _vector_register(copy.operands[0], copy.line)
         if any(instruction.mnemonic in ("VAU.MUL.F32", "VAU.ADD.F32", "VAU.SUB.F32", "VAU.OR")
                and len(instruction.operands) == 3
                and _vector_register(instruction.operands[0], instruction.line) == destination
                for instruction in packet.operations):
-            raise AssemblyError(f"line {first.line}: CMU and VAU write the same vector register")
+            raise AssemblyError(f"line {first.line}: vector copy and VAU write the same vector register")
     operations = [_operation(instruction) for instruction in packet.operations]
     if len({op.unit for op in operations}) != len(operations):
         raise AssemblyError(f"line {first.line}: repeated functional unit in packet")

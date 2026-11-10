@@ -1348,6 +1348,17 @@ tests** pass. Corpus parity remains **42/55 exact**, zero different,
 Fixtures: `/mnt/cache/build-shave/cmu-cp128-{3720,9001}` and
 `corpus-parity-cmu-cp128`.
 
+### LSU0 full-vector copy
+
+`LSU0.CP.128 d s` uses bare vector registers and the 24-bit LSU0 class,
+with payload `0x480007 | d<<4 | s<<9`. It retains the same-destination
+VAU conflict check. All 756 headers and 64 register-field cases match
+moviAsm. Both seeds pass **84362/84362** cases; **112 offline tests** pass.
+Corpus parity remains **42/55 exact**, zero different, 13 rejected;
+diagnostic instruction rejections fall from 130 to 117. Fixtures:
+`/mnt/cache/build-shave/lsu0-cp128-{3720,9001}` and
+`corpus-parity-lsu0-cp128`.
+
 ### Differential gates and corpus inventory
 
 Cached assembly can be inventoried without Wine or recompilation:
@@ -1387,8 +1398,8 @@ python3 -m tools.shaveasm.corpus --native-dir build/linux \
   --output /mnt/cache/build-shave/native-asm-corpus
 ```
 
-Offline regressions: 111 passed, including the merged object-writer/corpus tests.
-Each current randomized gate passes **83542/83542 cases**. Before the eight
+Offline regressions: 112 passed, including the merged object-writer/corpus tests.
+Each current randomized gate passes **84362/84362 cases**. Before the eight
 additional forms documented above, the gate passed **12156/12156 cases**
 (seeds 3720 and 9001): the original 2362 isolated-packet cases (1000 random
 packets, 457 shapes, 352 mixed operand sweeps, 96 ADD sweeps, 384 PCCX pairs,
