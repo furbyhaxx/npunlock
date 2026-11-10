@@ -1653,6 +1653,19 @@ zero different, three rejected; diagnostic instruction rejections fall from
 36 to 35. Fixtures: `/mnt/cache/build-shave/cmu-cp64-measure`,
 `cmu-cp64-{3720,9001}` and `corpus-parity-cmu-cp64`.
 
+### Five-unit predicated scalar add packet header
+
+`CMU,LSU0,LSU1,IAU.ADD24,PEU.PCCX12` uses the measured 24-bit prefix
+`0xcca80f`, followed by 108 payload bits (17 bytes total). Independent
+register-copy/add and symbolic-half-load/increment packets identify the
+same unique header width. The existing generator covers the new class,
+including symbol fixups and textual permutations. Both seeds pass
+**117627/117627** cases; **136 offline tests** pass. Corpus parity rises
+from **52/55 to 53/55 exact**, zero different, two rejected; diagnostic
+instruction rejections fall from 35 to 32. The contrib/hnsw object is now
+exact. Fixtures: `/mnt/cache/build-shave/five-add-pred-measure`,
+`five-add-pred-{3720,9001}` and `corpus-parity-five-add-pred`.
+
 ### Differential gates and corpus inventory
 
 Cached assembly can be inventoried without Wine or recompilation:

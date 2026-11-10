@@ -1012,6 +1012,13 @@ class EncodingTests(unittest.TestCase):
             with self.subTest(mnemonic=mnemonic), self.assertRaisesRegex(AssemblyError, "write port 1"):
                 encode(f"CMU.CP.64 i0 i1 || {mnemonic} i12 i13 i14")
 
+    def test_five_unit_scalar_add_predicated_header(self) -> None:
+        operations = ["CMU.CP.32 i0 i1", "LSU0.CP.32 i4 i5", "LSU1.CP.32 i8 i9",
+                      "IAU.ADD i16 i17 i18", "PEU.PCCX EQ 21"]
+        expected = bytes.fromhex("0fa8cc1c0008470a088712082042094505")
+        self.assertEqual(encode(" || ".join(operations)), expected)
+        self.assertEqual(encode(" || ".join(reversed(operations))), expected)
+
     def test_invalid_or_unmeasured_input_fails_closed(self) -> None:
         for source in [
             "LSU0.LDIL i4 65536",
