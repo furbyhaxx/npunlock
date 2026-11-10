@@ -22,8 +22,9 @@ def generate_packets(seed: int, count: int) -> list[str]:
     rng = random.Random(seed)
 
     def operation(unit: str, registers: tuple[str, str, str] | None = None, *, store_packet: bool = False) -> str:
-        if unit == "VAU":
-            return "VAU.MUL.F32 " + " ".join(f"v{rng.randrange(32)}" for _ in range(3))
+        if unit in ("VAU", "VAU.OR20"):
+            mnemonic = "VAU.OR" if unit == "VAU.OR20" else "VAU.MUL.F32"
+            return mnemonic + " " + " ".join(f"v{rng.randrange(32)}" for _ in range(3))
         if unit == "BRU":
             return "BRU.BRA external_target"
         if unit == "BRU.JMP16":
@@ -101,7 +102,7 @@ def generate_packets(seed: int, count: int) -> list[str]:
         for register in range(32):
             operands = ["v0"] * 3
             operands[position] = f"v{register}"
-            for mnemonic in ("VAU.MUL.F32", "VAU.ADD.F32", "VAU.SUB.F32"):
+            for mnemonic in ("VAU.MUL.F32", "VAU.ADD.F32", "VAU.SUB.F32", "VAU.OR"):
                 packets.append(mnemonic + " " + " ".join(operands))
     packets.extend(["NOP", *(f"NOP {n}" for n in range(1, 65))])
     for register in range(32):

@@ -1118,6 +1118,20 @@ still **16/55 exact**, zero different, 39 rejected; diagnostic instruction
 rejections drop from 422 to 398. Fixtures:
 `/mnt/cache/build-shave/vau-sub-{3720,9001}` and `corpus-parity-vau-sub`.
 
+### VAU vector bitwise OR
+
+`VAU.OR d l r` uses the same bare-vector fields with a 20-bit payload,
+`0x1B | d<<10 | l<<5 | r<<15`, and standalone prefix `0x23`. It packs before
+the scalar units without padding its payload. Its distinct `VAU.OR20` class
+adds 643 measured combined prefixes, again with at most 80 scalar payload bits.
+SAU.AND and both integer and floating-point SAU.ADD conflict with both measured
+VAU classes on SHARED_RES_S5. Those packet shapes remain rejected.
+Both seeds pass **66677/66677** cases across 3676 headers; 93 offline tests
+pass. Object parity remains **16/55 exact**, zero different, 39 rejected;
+diagnostic instruction rejections drop from 398 to 391. Fixtures:
+`/mnt/cache/build-shave/vau-or-{3720,9001}`, `vau-measure/or-headers.*` and
+`corpus-parity-vau-or`.
+
 ### Differential gates and corpus inventory
 
 Cached assembly can be inventoried without Wine or recompilation:

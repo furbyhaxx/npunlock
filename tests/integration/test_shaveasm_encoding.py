@@ -15,6 +15,13 @@ def encode(source: str) -> bytes:
 
 
 class EncodingTests(unittest.TestCase):
+    def test_vau_or_has_a_twenty_bit_payload(self) -> None:
+        self.assertEqual(encode("VAU.OR v31 v30 v29"), bytes.fromhex("23dbff0e"))
+        self.assertEqual(encode("CMU.CP.32 i1 i2 || VAU.OR v3 v4 v5"),
+                         bytes.fromhex("a19b8cc2228000"))
+        with self.assertRaises(AssemblyError):
+            encode("VAU.OR v0 v0 v0 || SAU.AND i0 i0 i0")
+
     def test_vau_subtraction_uses_vector_register_fields(self) -> None:
         self.assertEqual(encode("VAU.SUB.F32 v31 v30 v29"), bytes.fromhex("33c2ff2e"))
         self.assertEqual(encode("VAU.SUB.F32 v0 v0 v1"), bytes.fromhex("33028020"))
