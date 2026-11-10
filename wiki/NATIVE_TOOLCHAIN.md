@@ -660,6 +660,376 @@ transfers inside the first six delay slots fail closed. Non-packet layout
 changes inside a delay window remain unmeasured; section boundaries must not be
 silently treated as ordinary packet boundaries.
 
+### Unsigned immediate right shift
+
+`IAU.SHR.U32 dst src imm5` has the same 24-bit payload and `IAU.ADD24`
+header class as immediate SHL. Its payload is `0x80000e | dst<<10 |
+src<<5 | imm5<<15`. Independent destination/source register sweeps and all
+32 shift amounts matched moviAsm; all 241 existing ADD24 header shapes also
+match with this operation. Both seeds pass **12493/12493** packet cases and
+56 offline tests pass. Coverage is **9462/11912** packets (28 accepted
+mnemonics, 887 prefix shapes); exact corpus objects remain **0/55**.
+Diagnostic instruction rejections fall from 2857 to 2718. The new first
+rejections include LMULH, CMPI and STO.64, rather than immediate SHR.
+
+### Scalar high-word multiplication
+
+`IAU.LMULH dst left right` uses the existing 20-bit IAU header class and
+payload `0x05 | dst<<10 | left<<5 | right<<15`. All 96 independent register
+sweeps and 259 existing IAU header shapes match moviAsm. Both seeds pass
+**12848/12848** packet cases and 56 offline tests pass. Coverage rises to
+**9518/11912** packets (29 accepted mnemonics, 887 prefix shapes); exact
+objects remain **0/55**. Diagnostic instruction rejections fall to 2662;
+first rejections are SAU.AND (40 files), CMPI (8), and STO.64 (7).
+
+### Scalar SAU bitwise AND
+
+`SAU.AND dst left right` has a 20-bit payload `0x18 | dst<<10 | left<<5 |
+right<<15` and a distinct `SAU.AND20` header class. All 323 measured header
+combinations and 96 independent register sweeps match moviAsm. Both seeds
+pass **14502/14502** packet cases and 56 offline tests pass. Coverage is
+**9626/11912** packets (30 accepted mnemonics, 1210 prefix shapes); exact
+objects remain **0/55**. Diagnostic instruction rejections fall to 2544;
+first rejections are SAU.MUL.I32 (40 files), CMPI (8), and STO.64 (7).
+
+### Scalar SAU integer multiplication
+
+`SAU.MUL.I32 dst left right` uses the existing 24-bit SAU class and payload
+`0x04 | dst<<10 | left<<5 | right<<15`. All 323 SAU header combinations and
+96 independent register sweeps match moviAsm. Both seeds pass **14921/14921**
+packet cases; after merging the register-jump writer fix, 59 offline tests pass.
+Coverage is **9694/11912** packets (31 accepted mnemonics, 1210 prefix shapes),
+with **0/55** exact objects and 2476 diagnostic instruction rejections.
+First rejections are SAU.SHL.X32 (40 files), CMPI (8), and STO.64 (7).
+
+`encoding.is_control_transfer(packet)` identifies every non-NOP BRU operation,
+including unsupported forms, for conservative delay-window validation. It covers
+both encoded transfers (BRA and register JMP); object writers can use this
+predicate instead of duplicating mnemonic checks.
+
+### Scalar SAU immediate left shift
+
+`SAU.SHL.X32 dst src imm5` uses the 24-bit SAU class and payload
+`0x100011 | dst<<10 | src<<5 | imm5<<15`. All 323 SAU header combinations,
+64 register sweeps and 32 shift amounts match moviAsm. Both seeds pass
+**15340/15340** packet cases and 59 offline tests pass. Coverage is
+**9776/11912** packets (32 accepted mnemonics, 1210 prefix shapes), with
+**0/55** exact objects and 2391 diagnostic instruction rejections. First
+rejections are SAU.SHR.U32 (40 files), CMPI (8), and STO.64 (7).
+
+### Scalar SAU unsigned immediate right shift
+
+`SAU.SHR.U32 dst src imm5` uses the 24-bit SAU class and payload
+`0x100012 | dst<<10 | src<<5 | imm5<<15`. All 323 SAU header combinations,
+64 register sweeps and 32 shift amounts match moviAsm. Both seeds pass
+**15759/15759** packet cases and 59 offline tests pass. Coverage is
+**9887/11912** packets (33 accepted mnemonics, 1210 prefix shapes), with
+**0/55** exact objects and 2279 diagnostic instruction rejections. First
+rejections are IAU.ADDCI (40 files), CMPI (8), and STO.64 (7).
+
+### Scalar addition with carry
+
+`IAU.ADDCI dst left right` uses the 20-bit IAU class and payload
+`0x06 | dst<<10 | left<<5 | right<<15`. All 343 current IAU header shapes
+and 96 independent register sweeps match moviAsm; immediate operands remain
+unsupported. Both seeds pass **16198/16198** packet cases and 59 offline
+tests pass. Coverage is **9943/11912** packets (34 accepted mnemonics,
+1210 prefix shapes), with **0/55** exact objects and 2223 diagnostic
+instruction rejections. CMPI is now the most common first rejection (9 files).
+
+### Immediate scalar comparison
+
+`CMU.CMPI src imm16` accepts unsigned 0..65535 and uses a 28-bit payload
+`0x0a | src<<4 | imm16<<9`, with distinct `CMU.CMPI28` headers. Negative
+immediates are rejected by moviAsm. All 264 retained header combinations,
+32 register sweeps, 16 immediate-bit sweeps and boundaries match moviAsm.
+Headers exceeding the encoder's 128-bit packet limit remain unsupported.
+Both seeds pass **17667/17667** packet cases and 59 offline tests pass.
+Coverage is **10006/11912** packets (35 accepted mnemonics, 1474 prefix
+shapes), with **0/55** exact objects and 2136 diagnostic instruction
+rejections. First rejections are LSU0.LD.16 (9 files), LSU1.LDIH (8),
+LSU0.LD.32.F16.F32 and LSU1.STO.64 (7 each), LSU1.STI.32 (5),
+LSU1.LD.32 (4), SAU.MUL.F32 and LSU0.LD.8 (3 each), and IAU.MUL (1).
+
+### Scalar LSU1 postincrement store
+
+`LSU1.STI.32 src base` uses the existing 24-bit LSU1 class and payload
+`0x810009 | src<<4 | base<<9`. All 408 LSU1 header combinations and
+64 independent register sweeps match moviAsm. Both signed and unsigned CMII
+conflict with STI.32 on scalar read port 6; the encoder rejects these packets,
+matching vendor diagnostics. Both seeds pass **18139/18139** packet cases
+and 60 offline tests pass. Coverage is **10040/11912** packets, with the
+first **5/55 exact objects**, zero different objects, and 2102 diagnostic
+instruction rejections. The five exact files previously rejected only STI.32.
+
+### Scalar SAU floating-point multiplication
+
+`SAU.MUL.F32 dst left right` uses scalar registers, the existing 24-bit SAU
+class, and payload `0x200004 | dst<<10 | left<<5 | right<<15`. All 379
+current SAU header shapes and 96 independent register sweeps match moviAsm.
+Float-immediate variants remain unsupported. Both seeds pass **18614/18614**
+packet cases and 61 offline tests pass. Coverage is **10178/11912** packets,
+with **6/55 exact objects**, zero different objects, and 1957 diagnostic
+instruction rejections.
+
+### Scalar LSU1 indirect load
+
+`LSU1.LD.32 dst base` shares the 24-bit LSU1 class, with payload
+`0x1000d | dst<<4 | base<<9`. All 408 current LSU1 header combinations and
+64 independent register sweeps match moviAsm. Like STI.32, it conflicts with
+both CMII variants on scalar read port 6, and such packets are rejected.
+Both seeds pass **19086/19086** packet cases and 62 offline tests pass.
+Coverage is **10235/11912** packets, with **7/55 exact objects**, zero
+different objects, and 1896 diagnostic instruction rejections.
+
+### Scalar IAU register right shift
+
+`IAU.SHR.U32 dst src amount` also accepts a scalar register as the shift
+amount. It uses the existing 24-bit `IAU.ADD24` class and payload
+`0x0e | dst<<10 | src<<5 | amount<<15`, with the immediate selector cleared.
+All 376 current header shapes and 96 independent register sweeps match
+moviAsm. Register-amount SHL remains unmeasured and unsupported. Both seeds
+pass **19558/19558** packet cases and 63 offline tests pass. Coverage is
+**10243/11912** packets, with **7/55 exact objects**, zero different objects,
+and 1879 diagnostic instruction rejections.
+
+### CMU copy from a vector word lane
+
+`CMU.CP.32 dst vN.lane` accepts scalar destinations i0..i31, vector registers
+v0..v31, and word lanes 0..3. Its existing 24-bit CMU payload is
+`0x70000c | dst<<9 | N<<4 | lane<<14`. All four lanes in all 297 current CMU
+header shapes, all 32 destinations and all 128 vector/word pairs match
+moviAsm. Both seeds pass **20906/20906** packet cases and 65 offline tests
+pass. Coverage is **10390/11912** packets, with **7/55 exact objects**, zero
+different objects, and 1731 diagnostic instruction rejections.
+
+The parser already preserves lane-qualified tokens. Coverage now classifies
+`v13.2` as `vreg_lane` and `i6.0` as `ireg_lane`, rather than `symbol`;
+actual symbolic addresses such as `memcpy` retain the `symbol` shape.
+This classification does not enable any additional unmeasured encodings.
+
+### Scalar LSU1 high-half loads
+
+`LSU1.LDIH dst imm16` shares LSU0's payload
+`3 | dst<<3 | imm16<<8`, in the 24-bit LSU1 class. Symbolic operands emit
+`R_SHAVE_HI16` (202) or `R_SHAVE_HI16_AT4` (203), as measured from vendor
+relocations. All 408 LSU1 header shapes with immediate and symbolic operands,
+64 register cases and 18 immediate-bit/boundary cases match moviAsm.
+Both seeds pass **21804/21804** packet cases and 66 offline tests pass.
+Coverage is **10423/11912** packets, with **7/55 exact objects**, zero
+different objects, and 1697 diagnostic instruction rejections.
+
+### Symbolic LSU1 low-half loads
+
+`LSU1.LDIL dst symbol` uses the existing 24-bit LSU1 class and payload
+`2 | dst<<3`. The 16-bit field at payload bit 8 emits `R_SHAVE_LO16` (200),
+or `R_SHAVE_LO16_AT4` (201) for a half-byte-aligned field, matching vendor
+relocation rows. All 408 current LSU1 header shapes and all 32 destinations
+match moviAsm, including packets after a 28-bit CMPI. Symbol expressions
+remain unsupported. Both seeds pass **22244/22244** packet cases and
+67 offline tests pass. Coverage is **10499/11912** packets, with **7/55
+exact objects**, zero different objects, and 1620 diagnostic instruction
+rejections. No object-writer changes were needed.
+
+### Scalar SAU register right shift
+
+`SAU.SHR.U32 dst src amount` accepts a scalar register shift amount in the
+24-bit SAU class, with payload `0x12 | dst<<10 | src<<5 | amount<<15`.
+The immediate form retains selector bit 20. All 379 SAU header shapes and
+96 independent register sweeps match moviAsm. Register SHL remains unsupported.
+Both seeds pass **22719/22719** packet cases and 68 offline tests pass.
+Coverage is **10508/11912** packets, with **7/55 exact objects**, zero
+different objects, and 1603 diagnostic instruction rejections.
+
+### Register swap control transfer
+
+`BRU.SWP reg` uses the existing 16-bit `BRU.JMP16` class and payload
+`2 | reg<<3 | delay_bytes<<8`. The following six issue slots determine the
+byte span using the same measured rule as JMP, including counted NOPs.
+The shared control-transfer predicate already includes SWP; nested transfers
+inside its delay window are rejected. All 456 current header shapes,
+32 register cases and 2232 standalone/co-issued counted, repeated and random
+delay sequences match moviAsm. Both seeds pass **25439/25439** packet cases
+and 69 offline tests pass. Coverage is **10582/11912** packets, with
+**7/55 exact objects**, zero different objects, and 1527 diagnostic
+instruction rejections.
+
+### Scalar LSU1 store
+
+`LSU1.ST.32 src base` uses the existing 24-bit LSU1 class and payload
+`0x10009 | src<<4 | base<<9`, leaving the STI.32 postincrement selector
+clear. All 408 LSU1 header shapes and 64 independent register sweeps match
+moviAsm. Both integer CMII variants conflict on scalar read port 6, as
+confirmed by vendor diagnostics, and are rejected. Both seeds pass
+**25911/25911** packet cases and 70 offline tests pass. Coverage is
+**10659/11912** packets, with **7/55 exact objects**, zero different
+objects, and 1430 diagnostic instruction rejections.
+
+### Scalar IAU register left shift
+
+`IAU.SHL dst src amount` accepts a scalar register amount in the existing
+24-bit IAU class: `0x0c | dst<<10 | src<<5 | amount<<15`. Immediate amounts
+retain selector bit 23. All 376 current IAU.ADD24 header shapes and 96
+independent register sweeps match moviAsm. Both seeds pass **26383/26383**
+cases and 71 offline tests pass. Coverage is **10679/11912** packets, with
+**7/55 exact objects**, zero different objects, and 1410 diagnostic instruction
+rejections. Register SHL removes eight files' previous first rejection;
+those files still contain other unsupported forms.
+
+### Scalar floating-point subtraction
+
+`SAU.SUB.F32 dst left right` uses the existing 24-bit SAU class and payload
+`0x200002 | dst<<10 | left<<5 | right<<15`. All 379 SAU header shapes and
+96 independent register sweeps match moviAsm. Both seeds pass **26858/26858**
+cases and 72 offline tests pass. Coverage is **10700/11912** packets, with
+**8/55 exact objects**, zero different objects, and 1386 diagnostic instruction
+rejections. Float immediates remain unsupported.
+
+### Scalar floating-point comparison
+
+`CMU.CMII.F32 left right` uses the existing 24-bit CMU class and payload
+`0x80000 | left<<4 | right<<9`. All 241 legal CMU header shapes and 64
+independent register sweeps match moviAsm. Like integer CMII, it conflicts
+with LSU1 scalar memory operations on read port 6; these packets are rejected.
+Both seeds pass **27163/27163** cases and 73 offline tests pass. Coverage is
+**10789/11912** packets, with **8/55 exact objects**, zero different objects,
+and 1290 diagnostic instruction rejections.
+
+### Scalar IAU multiplication
+
+`IAU.MUL dst left right` uses the 24-bit IAU.ADD24 class with payload
+`2 | dst<<10 | left<<5 | right<<15`. An immediate right operand is signed
+8-bit and sets selector bit 23; unlike ADD/SUB, values 128..255 are rejected.
+Both forms in all 376 header shapes, 96 independent register sweeps and 19
+immediate-bit/boundary cases match moviAsm. Both seeds pass **28030/28030**
+cases and 74 offline tests pass. Coverage is **10812/11912** packets, with
+**10/55 exact objects**, zero different objects, and 1267 diagnostic instruction
+rejections.
+
+### Scalar LSU0 offset store
+
+`LSU0.STO.32 src base offset` shares the 32-bit LSU0.LDO32 class with payload
+`0x14006 | src<<4 | base<<9 | (offset & 0x7fff)<<17`. Offsets are signed
+15-bit. All 321 header shapes, 64 independent register sweeps and 33 signed
+immediate-bit/boundary cases match moviAsm. Both seeds pass **28448/28448**
+cases and 75 offline tests pass. Coverage is **10908/11912** packets, with
+**10/55 exact objects**, zero different objects, and 1168 diagnostic instruction
+rejections. The differential harness now reuses its NOP padding section;
+unique padding sections exceeded the ELF32 section-count limit (66030 sections).
+
+### Scalar SAU register addition
+
+`SAU.ADD.I32 dst left right` accepts a scalar register right operand in the
+24-bit SAU class: `dst<<10 | left<<5 | right<<15`. Immediate amounts retain
+selector bit 20. All 379 SAU header shapes and 96 independent register sweeps
+match moviAsm. Both seeds pass **28923/28923** cases and 76 offline tests pass.
+Coverage is **10966/11912** packets, with **10/55 exact objects**, zero different
+objects, and 1108 diagnostic instruction rejections.
+
+### Scalar SAU register left shift
+
+`SAU.SHL.X32 dst src amount` accepts a scalar register amount in the existing
+24-bit SAU class: `0x11 | dst<<10 | src<<5 | amount<<15`. Immediate amounts
+retain selector bit 20. All 379 SAU header shapes and 96 independent register
+sweeps match moviAsm. Both seeds pass **29398/29398** cases and 77 offline tests
+pass. Coverage is **10982/11912** packets, with **10/55 exact objects**, zero
+different objects, and 1092 diagnostic instruction rejections.
+
+### Scalar LSU1 register copy
+
+`LSU1.CP.32 dst src` shares LSU0's payload `0x80007 | dst<<4 | src<<9`
+in the 24-bit LSU1 class. All 408 LSU1 header shapes and 64 independent register
+sweeps match moviAsm. Unlike LSU1 memory operations, this copy can co-issue
+with CMII.I32/U32/F32. Both seeds pass **29870/29870** cases and 78 offline tests
+pass. Coverage is **11036/11912** packets, with **10/55 exact objects**, zero
+different objects, and 1021 diagnostic instruction rejections.
+
+### Half-to-float LSU0 load
+
+`LSU0.LD.32.F16.F32 dst base` uses a measured 20-bit LSU0.LD20 class:
+`dst<<4 | base<<9`, standalone prefix `0x42`. The 408 new header entries were
+measured independently by substituting this load into each existing LSU0
+shape and finding the unique 4..32-bit header width matching its payloads.
+Both seeds exercise all new shapes with randomized operands, textual orders
+and fixups; 64 independent register sweeps also match moviAsm. Both gates pass
+**33968/33968** cases across **1882** header shapes, and 79 offline tests pass.
+Coverage is **11080/11912** packets, with **11/55 exact objects**, zero different
+objects, and 969 diagnostic instruction rejections.
+
+### Scalar LSU0 halfword lane load
+
+`LSU0.LD.16 iN.lane base` requires an explicit scalar halfword lane 0..3;
+it uses the 24-bit LSU0 class and payload
+`0x2000d | N<<4 | base<<9 | lane<<14`. Bare scalar destinations, vector
+registers and lane 4 are rejected, matching vendor diagnostics. All four lanes
+in all 408 LSU0 header shapes, all 128 destination/lane combinations and all
+32 bases match moviAsm. Both seeds pass **35760/35760** cases and 80 offline
+tests pass. Coverage is **11097/11912** packets, with **11/55 exact objects**,
+zero different objects, and 951 diagnostic instruction rejections.
+
+### LSU0 offset doubleword load
+
+`LSU0.LDO.64 dst base offset` uses the existing 32-bit LSU0.LDO32 class:
+`2 | register_field | base<<9 | (offset & 0x7fff)<<17`. Scalar `iN`
+selects `register_field = 0x10000 | N<<4`, including odd registers and i31.
+Vector `vN.lane` selects `N<<4 | (0x4000 if lane == 0 else 0)`;
+moviAsm accepts lanes 0..15 and aliases every nonzero lane to lane 1.
+Bare vector registers, v32, lane 16 and offsets outside signed 15-bit are
+rejected. Scalar doubleword loads conflict with LSU1.LD.32/LDO.32 on scalar
+write port 5; vector loads can co-issue with them.
+
+All 321 existing header shapes, scalar and both vector selectors, 32 scalar
+registers, all 512 vector register/lane combinations, 32 bases and 33 offset
+cases match moviAsm. Both seeds pass **37332/37332** cases and 81 offline
+tests pass. Object parity remains **11/55 exact**, zero different objects,
+with 800 diagnostic instruction rejections. Fixtures and reports remain under
+`/mnt/cache/build-shave/ldo64-{3720,9001}` and `corpus-parity-ldo64`.
+
+### LSU1 offset doubleword load
+
+`LSU1.LDO.64` reuses the measured LSU0 doubleword operand field, signed
+15-bit offset and 32-bit LSU1.STO32 headers (standalone prefix `0xc9`).
+All 408 header shapes match for vector destinations. Scalar destinations
+also match all 320 shapes not containing LSU0.LD20, with LSU0 copies or stores
+selected to avoid the measured scalar write-port-4 conflict with LSU0 loads.
+CMII conflicts on scalar read port 6, including vector destinations.
+All 32 scalar registers, 512 vector register/lane combinations, 32 bases and
+33 offset cases match. Both seeds pass **39047/39047** cases and 82 offline
+tests pass. Object parity remains **11/55 exact**, zero different objects.
+Fixtures and reports: `/mnt/cache/build-shave/lsu1-ldo64-{3720,9001}` and
+`corpus-parity-lsu1-ldo64`.
+
+### LSU1 post-increment float-to-half store
+
+`LSU1.STI.16.F32.F16 src base` converts a scalar float to a stored half and
+post-increments the scalar base. Its 20-bit payload is
+`0x80004 | src<<4 | base<<9`, standalone prefix `0x49`. Substitution into all
+508 existing LSU1 shapes uniquely measured the new LSU1.STI20 headers;
+combined prefixes cannot be borrowed from the 24-bit LSU1 class.
+CMII co-issue is rejected for its measured scalar read-port-6 conflict.
+All new shapes, randomized textual order and operands, and 64 independent
+register sweeps match moviAsm. No LSU0 variant occurs in either cached corpus.
+Both seeds pass **43889/43889** cases across 2390 headers, and 83 offline
+tests pass. Object parity rises to **15/55 exact**, zero different objects,
+with 701 diagnostic instruction rejections. Fixtures and reports:
+`/mnt/cache/build-shave/sti-f16-{3720,9001}` and `corpus-parity-sti-f16`.
+
+### LSU1 offset doubleword store
+
+`LSU1.STO.64 src base offset` shares LSU1.LDO.64's operand fields and headers,
+with opcode 6 in place of 2. All 408 headers, scalar and both vector selectors,
+32 scalar registers, 512 vector register/lane combinations, 32 bases and 33
+signed offset cases match moviAsm. Scalar sources conflict with LSU0.STO.32
+and LSU0.CP.32 on scalar read port 8; all sources conflict with CMII on port 6.
+Both seeds pass **45677/45677** cases, and 84 offline tests pass.
+
+Coverage is **11345/11912** packets. Object parity is **15/55 exact**, one
+different and 39 rejected. The newly accepted `a5173dc0c638a441.s` has exact
+code bytes, but local function and section symbols have swapped symbol-table
+ordering, changing relocation symbol indices; this is an object-writer gap.
+Fixtures and reports: `/mnt/cache/build-shave/lsu1-sto64-{3720,9001}` and
+`corpus-parity-lsu1-sto64` (602 diagnostic instruction rejections).
+
 ### Differential gates and corpus inventory
 
 Cached assembly can be inventoried without Wine or recompilation:
@@ -678,8 +1048,9 @@ command. The combined baseline is 3291/11912 accepted packets and **98** distinc
 mnemonics (97 in the literal corpus alone). With symbolic branches, signed
 loads/stores, indirect loads, integer addition, comparisons, PCCX, AND/OR,
 LMULL, INCS, scalar floating-point addition and immediate SHL, coverage is
-**9325/11912** packets, including 878 requiring symbolic fixups.
-Twenty-seven distinct mnemonics occur in accepted packets (six at baseline); the
+**11345/11912** packets, including 983 requiring symbolic fixups, after the
+additional measured forms documented above.
+Fifty-two distinct mnemonics occur in accepted packets (six at baseline); the
 corpus still has 98 mnemonics.
 `accepted_packets` counts bytes-plus-fixups support and `relocatable_packets`
 identifies that subset. Coverage tests isolated packet forms; it does not
@@ -698,8 +1069,9 @@ python3 -m tools.shaveasm.corpus --native-dir build/linux \
   --output /mnt/cache/build-shave/native-asm-corpus
 ```
 
-Offline regressions: 56 passed, including the merged object-writer/corpus tests.
-Each randomized gate passed **12156/12156 cases**
+Offline regressions: 84 passed, including the merged object-writer/corpus tests.
+Each current randomized gate passes **45677/45677 cases**. Before the eight
+additional forms documented above, the gate passed **12156/12156 cases**
 (seeds 3720 and 9001): the original 2362 isolated-packet cases (1000 random
 packets, 457 shapes, 352 mixed operand sweeps, 96 ADD sweeps, 384 PCCX pairs,
 eight immediate boundaries and 65 NOP cases), plus 64 counted-NOP branch
@@ -720,7 +1092,9 @@ LSU0.LDIH adds 362 immediate/symbol header cases, 64 register cases and 18 immed
 JMP adds 280 header shapes, 32 register cases and the same 2232 delay-window
 sequences as BRA; the expanded headers also repeat existing alternative forms.
 SUB adds 482 register/immediate header cases, 96 register-field cases and ten
-immediate-bit/boundary cases. The current total is 887 prefix shapes.
+immediate-bit/boundary cases. Those forms established 887 prefix shapes;
+SAU.AND and CMPI established 1474 prefix shapes; the half-to-float LSU0 load
+brings the current total to 1882.
 Every case's full instruction bytes and fixups are compared to moviAsm, not
 merely round-tripped through native code. All measured instruction forms occur
 in the real compiler corpus.
@@ -728,9 +1102,9 @@ in the real compiler corpus.
 Original C, compiler `.s`, vendor `.o` and JSON manifests stay under the cache
 paths above. `elf.py` provides bounded ELF32 section inspection and a comparator
 which reports every section-attribute or byte difference while ignoring only
-file offsets. There are **no whole-object native parity results yet** because
-the native object writer, expressions, symbol/relocation lowering and remaining
-instruction classes are not implemented.
+file offsets. Whole-object native parity now reaches **11/55** exact cached
+objects; 44 still reject unmeasured instructions. See the object-writer
+section below.
 
 The captured corpus has **55 distinct complete kernel sources**: 39 literal
 sources (including all seven contrib `.c` kernels) and 16 generated variants
@@ -751,7 +1125,8 @@ The parser structurally accepted all 55 captured assemblies. The literal
 corpus contains 97 distinct mnemonics. Only **3291/11912** parsed packets are
 accepted by the original byte-only encoder across the two corpora; the symbolic
 branch, scalar-load/store, ADD, compare, PCCX, AND/OR, LMULL, INCS and SHL extensions raise
-bytes-plus-fixups support to **9325/11912**. These are
+bytes-plus-fixups support to **11097/11912** with the additional measured forms
+above. These are
 syntactic coverage counts, **not** full-stream or whole-object parity claims.
 Calls, other branch forms, additional instruction/header classes, data and
 alignment directives, ELF symbols and relocations remain the next gate. Hybrid

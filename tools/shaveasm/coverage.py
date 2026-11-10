@@ -16,9 +16,9 @@ def operand_shape(instruction: Instruction) -> str:
     """Group operands by register bank, integer sign, predicate, or symbolic expression."""
     shapes = []
     for operand in instruction.operands:
-        register = re.fullmatch(r"([iIvVbB])\d+", operand)
+        register = re.fullmatch(r"([iIvVbB])\d+(\.\d+)?", operand)
         if register:
-            shapes.append(register[1].lower() + "reg")
+            shapes.append(register[1].lower() + "reg" + ("_lane" if register[2] else ""))
         elif operand.upper() in {"EQ", "NEQ", "LT", "LTE", "GT", "GTE"}:
             shapes.append("condition")
         else:
