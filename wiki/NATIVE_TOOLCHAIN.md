@@ -1408,6 +1408,17 @@ rejections fall from 101 to 97. Fixtures:
 `/mnt/cache/build-shave/cmu-maxf32-{3720,9001}` and
 `corpus-parity-cmu-maxf32`.
 
+### CMU scalar floating-point minimum
+
+`CMU.MIN.F32 d l r` shares MAX's 28-bit CMU.CMPI28 class, fields and
+scalar port conflicts, with opcode `0x400005`. All 405 eligible headers
+and 96 independent register-field cases match moviAsm. Both seeds pass
+**92547/92547** cases; **117 offline tests** pass. Corpus parity rises from
+**43/55 to 45/55 exact**, zero different, 10 rejected; diagnostic instruction
+rejections fall from 97 to 93. Fixtures:
+`/mnt/cache/build-shave/cmu-minf32-{3720,9001}` and
+`corpus-parity-cmu-minf32`.
+
 ### Differential gates and corpus inventory
 
 Cached assembly can be inventoried without Wine or recompilation:
@@ -1447,8 +1458,8 @@ python3 -m tools.shaveasm.corpus --native-dir build/linux \
   --output /mnt/cache/build-shave/native-asm-corpus
 ```
 
-Offline regressions: 116 passed, including the merged object-writer/corpus tests.
-Each current randomized gate passes **92046/92046 cases**. Before the eight
+Offline regressions: 117 passed, including the merged object-writer/corpus tests.
+Each current randomized gate passes **92547/92547 cases**. Before the eight
 additional forms documented above, the gate passed **12156/12156 cases**
 (seeds 3720 and 9001): the original 2362 isolated-packet cases (1000 random
 packets, 457 shapes, 352 mixed operand sweeps, 96 ADD sweeps, 384 PCCX pairs,
