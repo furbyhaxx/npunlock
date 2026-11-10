@@ -962,6 +962,16 @@ class EncodingTests(unittest.TestCase):
         with self.assertRaisesRegex(AssemblyError, "read port 8"):
             encode("LSU0.ST.16 i0.0 i1 || LSU1.ST.64 i8 i9")
 
+    def test_iau_rotate_left(self) -> None:
+        self.assertEqual(encode("IAU.ROL i0 i0 0"), bytes.fromhex("c6050080"))
+        self.assertEqual(encode("IAU.ROL i1 i2 3"), bytes.fromhex("c6458481"))
+        self.assertEqual(encode("IAU.ROL i31 i31 31"), bytes.fromhex("c6e5ff8f"))
+        self.assertEqual(encode("IAU.ROL i1 i2 i3"), bytes.fromhex("c6458401"))
+        self.assertEqual(encode("IAU.ROL i31 i31 i31"), bytes.fromhex("c6e5ff0f"))
+        for operands in ("i0 i0 -1", "i0 i0 32", "i0 i0 v0", "i32 i0 0"):
+            with self.subTest(operands=operands), self.assertRaises(AssemblyError):
+                encode("IAU.ROL " + operands)
+
     def test_invalid_or_unmeasured_input_fails_closed(self) -> None:
         for source in [
             "LSU0.LDIL i4 65536",

@@ -1586,6 +1586,19 @@ diagnostic instruction rejections fall from 42 to 41. Fixtures:
 `/mnt/cache/build-shave/lsu0-st16-measure`, `lsu0-st16-{3720,9001}` and
 `corpus-parity-lsu0-st16`.
 
+### IAU scalar rotate left
+
+`IAU.ROL d s amount` uses the 24-bit `IAU.ADD24` class with payload
+`5 | d<<10 | s<<5 | amount<<15`. Register amounts use the scalar register
+field; immediate counts 0..31 add selector `0x800000`. Negative counts,
+32 and vector operands are rejected. All 854 headers with both amount
+forms, 96 register-field cases, 64 immediate register fields and all 32
+counts match moviAsm. Both seeds pass **113095/113095** cases; **131 offline
+tests** pass. Corpus parity remains **51/55 exact**, zero different, four
+rejected; diagnostic instruction rejections fall from 41 to 40. Fixtures:
+`/mnt/cache/build-shave/iau-rol-measure`, `iau-rol-{3720,9001}` and
+`corpus-parity-iau-rol`.
+
 ### Differential gates and corpus inventory
 
 Cached assembly can be inventoried without Wine or recompilation:

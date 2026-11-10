@@ -3891,7 +3891,7 @@ def _operation(instruction: Instruction) -> _Operation:
         immediate = _signed_immediate(operands[1], 14, line)
         return _Operation(unit, 3 | register << 5 | immediate << 10, 24,
                           prefix_class="IAU.ADD24")
-    if mnemonic in ("IAU.SHL", "IAU.SHR.U32") and len(operands) == 3:
+    if mnemonic in ("IAU.SHL", "IAU.SHR.U32", "IAU.ROL") and len(operands) == 3:
         destination, source = (_register(op, line) for op in operands[:2])
         if re.fullmatch(r"[iI][0-9]+", operands[2]):
             right = _register(operands[2], line)
@@ -3899,7 +3899,7 @@ def _operation(instruction: Instruction) -> _Operation:
         else:
             right = _immediate(operands[2], 5, line)
             selector = 0x800000
-        opcode = 0x0C if mnemonic == "IAU.SHL" else 0x0E
+        opcode = {"IAU.SHL": 0x0C, "IAU.SHR.U32": 0x0E, "IAU.ROL": 0x05}[mnemonic]
         return _Operation(unit, opcode | selector | destination << 10 | source << 5 | right << 15, 24,
                           prefix_class="IAU.ADD24")
     if mnemonic in ("IAU.ADD", "IAU.SUB", "IAU.MUL") and len(operands) == 3:
