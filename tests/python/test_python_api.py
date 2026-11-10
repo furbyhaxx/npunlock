@@ -6,6 +6,7 @@ import hashlib
 import io
 import json
 import os
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -876,6 +877,26 @@ class ShaveToolchainTests(unittest.TestCase):
             )
             self.assertEqual(result, b"linked-elf")
 
+    def test_source_assembler_import_without_repository_on_sys_path(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            result = subprocess.run(
+                [
+                    sys.executable, "-c",
+                    "import sys; before = list(sys.path); "
+                    "from npunlock._shaveasm.objwriter import assemble; "
+                    "from npunlock.cache import native_shave_assembler_identity; "
+                    "assert assemble('.code smoke\\nNOP\\n').startswith(b'\\x7fELF'); "
+                    "assert native_shave_assembler_identity(); "
+                    "assert sys.path == before; "
+                    "assert 'tools' not in sys.modules",
+                ],
+                cwd=directory,
+                env={**os.environ, "PYTHONPATH": str(ROOT / "python")},
+                capture_output=True,
+                text=True,
+            )
+        self.assertEqual(result.returncode, 0, result.stderr)
+
     def test_default_uses_hybrid_when_native_tools_are_available(self) -> None:
         compiler = self.Compiler()
         log = io.StringIO()
@@ -891,7 +912,7 @@ class ShaveToolchainTests(unittest.TestCase):
         cases = (
             (patch("npunlock._shave_toolchain.shutil.which", return_value=None), "linker"),
             (
-                patch.dict(sys.modules, {"tools.shaveasm.objwriter": None}),
+                patch.dict(sys.modules, {"npunlock._shaveasm.objwriter": None}),
                 "assembler",
             ),
             (patch("npunlock._shave_toolchain.platform.system", return_value="Windows"), "Linux"),

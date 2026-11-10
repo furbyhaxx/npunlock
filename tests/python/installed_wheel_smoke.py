@@ -4,11 +4,14 @@ from __future__ import annotations
 
 import hashlib
 import json
+import subprocess
+import sys
 from pathlib import Path
 
 import npunlock as npu
+from npunlock._shaveasm import objwriter
 from npunlock.doctor import collect_diagnostics
-from tools.shaveasm.objwriter import assemble
+from npunlock._shaveasm.objwriter import assemble
 
 ROOT = Path(__file__).resolve().parents[2]
 FIXTURE = ROOT / "tests/fixtures/npu3720/add1-shared-1x16.blob"
@@ -16,6 +19,14 @@ FIXTURE_SHA256 = "23b0467b55bd69fa3587afc0387e4ba171ec46eb3ec41b79633e6831cc4178
 
 
 def main() -> None:
+    assert Path(objwriter.__file__).parent == Path(npu.__file__).parent / "_shaveasm"
+    tools_import = subprocess.run(
+        [sys.executable, "-I", "-c", "import tools"],
+        capture_output=True,
+        text=True,
+    )
+    assert tools_import.returncode != 0, "wheel must not install a top-level tools package"
+    assert "No module named 'tools'" in tools_import.stderr, tools_import.stderr
     assert assemble(".code smoke\nNOP\n").startswith(b"\x7fELF")
     native = npu.NativeLibraries()
     doctor = collect_diagnostics(

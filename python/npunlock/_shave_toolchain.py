@@ -59,10 +59,10 @@ def native_unavailability(toolchain: ShaveToolchain) -> str | None:
     if shutil.which(os.fspath(toolchain.linker)) is None:
         return f"native SHAVE linker not found or not executable: {toolchain.linker}"
     try:
-        module = importlib.import_module("tools.shaveasm.objwriter")
+        module = importlib.import_module("npunlock._shaveasm.objwriter")
         if not callable(getattr(module, "assemble", None)):
             raise ImportError("assembler entry point is missing")
-        importlib.import_module("tools.shaveasm.parser")
+        importlib.import_module("npunlock._shaveasm.parser")
     except (ImportError, OSError, SyntaxError) as error:
         return f"native SHAVE assembler unavailable: {error}"
     return None
@@ -162,8 +162,8 @@ def compile_shave(
     if toolchain.mode == "vendor":
         return vendor()
 
-    from tools.shaveasm.objwriter import assemble
-    from tools.shaveasm.parser import AssemblyError
+    from ._shaveasm.objwriter import assemble
+    from ._shaveasm.parser import AssemblyError
 
     assembly = native.compile_shave_assembly(
         source,

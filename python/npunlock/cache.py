@@ -69,12 +69,12 @@ def native_runtime_identity(root: str | Path) -> list[dict[str, object]]:
 
 
 def native_shave_assembler_identity() -> list[dict[str, object]]:
-    from tools import shaveasm
-    from tools.shaveasm import encoding, fixups, objwriter, parser
+    from . import _shaveasm
+    from ._shaveasm import encoding, fixups, objwriter, parser
 
     from . import _shave_toolchain
 
-    modules = (shaveasm, encoding, fixups, objwriter, parser, _shave_toolchain)
+    modules = (_shaveasm, encoding, fixups, objwriter, parser, _shave_toolchain)
     return [{"name": module.__name__, **_hash_file_stable(Path(module.__file__))} for module in modules]
 
 

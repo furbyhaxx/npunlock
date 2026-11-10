@@ -46,7 +46,7 @@ def _file_report(path: Path) -> dict[str, object]:
 
 def _native_assembler_report() -> dict[str, object]:
     try:
-        module = importlib.import_module("tools.shaveasm.objwriter")
+        module = importlib.import_module("npunlock._shaveasm.objwriter")
         if not callable(getattr(module, "assemble", None)):
             raise ImportError("assembler entry point is missing")
         return {"status": "ok", "path": module.__file__}

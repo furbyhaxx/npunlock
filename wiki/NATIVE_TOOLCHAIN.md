@@ -2118,5 +2118,10 @@ reload across them while retaining vendor and driver/compiler checks. Both
 examples were rerun end to end on `8086:ad1d` in vendor and strict hybrid
 modes: the branched FP16 and FP32 maximum absolute errors were both 0;
 connected mixed-precision prepared and saved-program reloads matched exact
-host oracles. Source-checkout hybrid runs require both `python/` and the
-repository root on `PYTHONPATH` for `tools.shaveasm`.
+host oracles. Source-checkout hybrid runs require only `python/` on
+`PYTHONPATH`. The private `npunlock._shaveasm` package sets its package search
+path to the checkout's `tools/shaveasm/` without modifying `sys.path` or
+importing a top-level `tools` package. Wheel builds map that same source
+directory directly to `npunlock._shaveasm`; no duplicate assembler sources
+or top-level `tools` package are installed. In-repository developer commands
+such as `python -m tools.shaveasm.asm` remain unchanged.
