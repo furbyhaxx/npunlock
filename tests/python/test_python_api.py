@@ -28,6 +28,12 @@ from npunlock import _native
 from npunlock.doctor import collect_diagnostics, human_report
 
 
+def setUpModule() -> None:
+    vendor = patch.dict(os.environ, {"NPUNLOCK_SHAVE_TOOLCHAIN": "vendor"})
+    vendor.start()
+    unittest.addModuleCleanup(vendor.stop)
+
+
 class SymbolicTests(unittest.TestCase):
     def test_public_contribs_stay_above_the_npunlock_native_boundary(self) -> None:
         forbidden_attributes = {
@@ -797,7 +803,7 @@ class ShaveToolchainTests(unittest.TestCase):
         from npunlock._shave_toolchain import resolve_toolchain
 
         with patch.dict("os.environ", {}, clear=True):
-            self.assertEqual(resolve_toolchain(None, None).mode, "vendor")
+            self.assertEqual(resolve_toolchain(None, None).mode, "auto")
             self.assertEqual(resolve_toolchain(None, None).linker, Path("/opt/shave-lld/bin/ld.lld"))
         with patch.dict("os.environ", {"NPUNLOCK_SHAVE_TOOLCHAIN": "auto", "NPUNLOCK_SHAVE_LINKER": "/env/lld"}):
             self.assertEqual(resolve_toolchain(None, None).mode, "auto")
@@ -870,7 +876,62 @@ class ShaveToolchainTests(unittest.TestCase):
             )
             self.assertEqual(result, b"linked-elf")
 
-    def test_auto_falls_back_only_on_assembler_rejection(self) -> None:
+    def test_default_uses_hybrid_when_native_tools_are_available(self) -> None:
+        compiler = self.Compiler()
+        log = io.StringIO()
+        with patch.dict(os.environ, {"NPUNLOCK_SHAVE_LINKER": sys.executable}, clear=True):
+            with patch("npunlock._shave_toolchain._link_native", return_value=b"native-elf"):
+                with patch.object(sys, "stderr", log):
+                    result = npu.compile_kernel(b"kernel", movi_dll_dir="/tmp/movi", libraries=compiler)
+        self.assertEqual(result.elf, b"native-elf")
+        self.assertEqual(compiler.calls, ["compiler"])
+        self.assertIn("toolchain=hybrid", log.getvalue())
+
+    def test_default_missing_tools_uses_vendor_for_every_kernel_and_logs_once(self) -> None:
+        cases = (
+            (patch("npunlock._shave_toolchain.shutil.which", return_value=None), "linker"),
+            (
+                patch.dict(sys.modules, {"tools.shaveasm.objwriter": None}),
+                "assembler",
+            ),
+            (patch("npunlock._shave_toolchain.platform.system", return_value="Windows"), "Linux"),
+        )
+        for unavailable, reason in cases:
+            with self.subTest(reason=reason):
+                compiler = self.Compiler()
+                log = io.StringIO()
+                with patch.dict(os.environ, {"NPUNLOCK_SHAVE_LINKER": sys.executable}, clear=True):
+                    with patch("npunlock._shave_toolchain._reported_fallbacks", set()), unavailable:
+                        with patch.object(sys, "stderr", log):
+                            for source in (b"first", b"second"):
+                                result = npu.compile_kernel(source, movi_dll_dir="/tmp/movi", libraries=compiler)
+                                self.assertEqual(result.elf, b"vendor-elf")
+                        if reason == "assembler":
+                            with self.assertRaises(ImportError):
+                                self.compile(compiler, "hybrid")
+                self.assertEqual(compiler.calls, ["vendor", "vendor"])
+                self.assertEqual(len(log.getvalue().splitlines()), 1)
+                self.assertIn("toolchain=vendor", log.getvalue())
+                self.assertIn(reason, log.getvalue())
+
+    def test_default_nonexistent_linker_falls_back_and_hybrid_fails(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            linker = Path(directory) / "missing-lld"
+            compiler = self.Compiler()
+            log = io.StringIO()
+            with patch.dict(os.environ, {"NPUNLOCK_SHAVE_LINKER": str(linker)}, clear=True):
+                with patch.object(sys, "stderr", log):
+                    for _ in range(2):
+                        npu.compile_kernel(b"kernel", movi_dll_dir="/tmp/movi", libraries=compiler)
+                with self.assertRaises(FileNotFoundError):
+                    npu.compile_kernel(
+                        b"kernel", movi_dll_dir="/tmp/movi", libraries=compiler, shave_toolchain="hybrid"
+                    )
+            self.assertEqual(log.getvalue().count("toolchain=vendor"), 1)
+            self.assertEqual(compiler.calls, ["vendor", "vendor", "compiler"])
+
+    @patch("npunlock._shave_toolchain.shutil.which", return_value="/native/lld")
+    def test_auto_falls_back_only_on_assembler_rejection(self, which) -> None:
         compiler = self.Compiler(b".code smoke\nIAU.UNKNOWN i1 i2\n")
         with patch("npunlock._shave_toolchain._link_native") as link:
             result = self.compile(compiler, "auto")
@@ -914,6 +975,27 @@ class DoctorTests(unittest.TestCase):
         self.assertEqual(report["shave_toolchain"]["native_linker"]["status"], "not-found")
         self.assertFalse(report["capabilities"]["compile_custom_c"])
         self.assertTrue(vendor["capabilities"]["compile_custom_c"])
+        with patch.dict(os.environ, {}, clear=True):
+            auto = collect_diagnostics(
+                native_dir="unused",
+                movi_dll_dir=".",
+                check_driver=False,
+                libraries=FakeNative(),
+                shave_linker="/nonexistent/ld.lld",
+            )
+        self.assertEqual(auto["shave_toolchain"]["default_mode"], "auto")
+        self.assertEqual(auto["shave_toolchain"]["effective_mode"], "vendor")
+        self.assertIn("linker not found", auto["shave_toolchain"]["reason"])
+        self.assertIn("effective: vendor", human_report(auto))
+        with patch("npunlock.doctor._MOVITOOLS_FILES", ()), patch.dict(os.environ, {}, clear=True):
+            auto = collect_diagnostics(
+                native_dir="unused",
+                movi_dll_dir=".",
+                check_driver=False,
+                libraries=FakeNative(),
+                shave_linker="/nonexistent/ld.lld",
+            )
+        self.assertTrue(auto["capabilities"]["compile_custom_c"])
 
     def test_doctor_distinguishes_run_and_custom_compile_capabilities(self) -> None:
         fake = FakeNative()
@@ -2152,7 +2234,8 @@ class CompilationFlowTests(unittest.TestCase):
         self.assertEqual(len(fake.patch_calls), 2)
         self.assertEqual(program.graph_blob, b"patched2")
 
-    def test_auto_selects_a_path_for_each_kernel(self) -> None:
+    @patch("npunlock._shave_toolchain.shutil.which", return_value="/native/lld")
+    def test_auto_selects_a_path_for_each_kernel(self, which) -> None:
         class MixedNative(FakeNative):
             def compile_shave_assembly(self, source: bytes, **kwargs: object) -> bytes:
                 return b".code smoke\nNOP\n" if source == b"supported" else b".code smoke\nIAU.UNKNOWN i1 i2\n"
@@ -4275,7 +4358,7 @@ class ContribFoundationTests(unittest.TestCase):
             fake = ModeNative()
             programs = []
 
-            def run(mode: str):
+            def run(mode: str | None, selected_linker: Path = linker):
                 result = npu.compile_cached(
                     graph,
                     cache_dir=cache,
@@ -4285,7 +4368,7 @@ class ContribFoundationTests(unittest.TestCase):
                     native_dir=native,
                     libraries=fake,
                     shave_toolchain=mode,
-                    shave_linker=linker,
+                    shave_linker=selected_linker,
                 )
                 programs.append(result.program)
                 return result.cache.state
@@ -4294,6 +4377,15 @@ class ContribFoundationTests(unittest.TestCase):
                 with patch("npunlock._shave_toolchain._link_native", return_value=b"hybrid-elf"):
                     self.assertEqual(run("vendor"), "stored")
                     self.assertEqual(run("hybrid"), "stored")
+                    log = io.StringIO()
+                    with patch.dict(os.environ, {}, clear=True), patch.object(sys, "stderr", log):
+                        with patch("npunlock.native_shave_assembler_identity") as assembler:
+                            with patch("npunlock.native_shave_linker_identity") as native_linker:
+                                self.assertEqual(run(None, root / "missing-lld"), "hit")
+                                self.assertEqual(run(None, root / "missing-lld"), "hit")
+                        assembler.assert_not_called()
+                        native_linker.assert_not_called()
+                    self.assertEqual(log.getvalue().count("toolchain=vendor"), 1)
                     fake.reject = True
                     self.assertEqual(run("auto"), "hit")
                     fake.reject = False

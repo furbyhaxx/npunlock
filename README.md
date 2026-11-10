@@ -191,8 +191,9 @@ python examples/example_global_hybrid_five_input_custom.py
 
 ### SHAVE assembler and linker mode
 
-On Linux, the default `vendor` mode runs MoviTools' compiler, assembler and
-linker under Wine. Select the experimental native assembler and patched linker:
+The default `auto` mode uses MoviTools' compiler with the experimental native
+assembler and patched linker when available on Linux. Configure the linker or
+select an explicit mode:
 
 ```bash
 export NPUNLOCK_SHAVE_TOOLCHAIN=auto       # vendor, hybrid, or auto
@@ -201,11 +202,13 @@ python -m npunlock doctor --full
 ```
 
 `hybrid` uses the native assembler and linker after `moviCompile`, and reports
-unsupported assembly with its source line. `auto` falls back to the vendor
-assembler and linker for each rejected kernel. Compiler and linker failures do
-not trigger fallback. Each hybrid/auto compilation reports its chosen path on
-stderr. The native assembler supports a measured subset; it is not a complete
-replacement for MoviTools. See [Native SHAVE toolchain](wiki/NATIVE_TOOLCHAIN.md)
+unsupported assembly with its source line. `auto` uses the vendor
+assembler and linker for every kernel when native tools are unavailable (including
+non-Linux hosts), reporting the reason once per process. Otherwise it falls back
+per rejected kernel. Compiler and linker execution failures still propagate.
+Hybrid/auto report the chosen path on stderr; `doctor` shows the effective mode
+and reason. Explicit `vendor` keeps the full MoviTools path. The native assembler
+supports a measured subset; it is not a complete replacement for MoviTools. See [Native SHAVE toolchain](wiki/NATIVE_TOOLCHAIN.md)
 for linker setup, limits, Python options and cache behavior.
 
 The Wine prefix defaults to `$XDG_DATA_HOME/npunlock/wine`, or

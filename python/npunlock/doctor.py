@@ -10,6 +10,7 @@ from pathlib import Path
 import numpy as np
 
 from ._native import NATIVE_RUNTIME_FILES, NativeLibraries, _native_directory
+from ._shave_toolchain import native_unavailability
 from .graph import Graph, input
 
 _MOVITOOLS_FILES = (
@@ -203,6 +204,14 @@ def collect_diagnostics(
         "movitools": movitools,
         "shave_toolchain": {
             "mode": toolchain.mode,
+            "default_mode": "auto",
+            "effective_mode": toolchain.effective_mode,
+            "reason": toolchain.unavailable_reason
+            or (
+                "native tools available; assembler rejection falls back per kernel"
+                if toolchain.mode == "auto"
+                else "explicitly selected mode"
+            ),
             "native_assembler": assembler_report,
             "native_linker": linker_report,
         },
@@ -212,9 +221,7 @@ def collect_diagnostics(
             "run_saved_program": ready_to_run,
             "compile_custom_c": ready_to_run
             and movitools["status"] == "ok"
-            and (
-                toolchain.mode == "vendor" or (assembler_report["status"] == "ok" and linker_report["status"] == "ok")
-            ),
+            and (toolchain.effective_mode == "vendor" or native_unavailability(toolchain) is None),
         },
     }
 
@@ -239,7 +246,8 @@ def human_report(report: dict[str, object]) -> str:
         f"host: {host['system']} {host['release']} {host['machine']} ({host['pointer_bits']}-bit Python)",
         f"native runtime: {runtime['status']} ({runtime['path']})",
         f"MoviTools: {movitools['status']}" + (f" ({movitools['path']})" if movitools["path"] else ""),
-        f"SHAVE toolchain: {toolchain['mode']}",
+        f"SHAVE toolchain: {toolchain['mode']} (default: {toolchain['default_mode']}; "
+        f"effective: {toolchain['effective_mode']}; {toolchain['reason']})",
         f"  native assembler: {toolchain['native_assembler']['status']} ({toolchain['native_assembler']['path']})",
         f"  native linker: {toolchain['native_linker']['status']} ({toolchain['native_linker']['path']})",
         f"NPU driver/compiler: {driver['status']}",

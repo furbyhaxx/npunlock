@@ -247,12 +247,16 @@ itself is not supported. See [Getting MoviTools](GET_MOVITOOLS.md).
 
 ### SHAVE assembler and linker selection
 
-`shave_toolchain` selects `vendor` (default), `hybrid`, or `auto`. The hybrid
+`shave_toolchain` selects `vendor`, `hybrid`, or `auto` (default). The hybrid
 path runs `moviCompile` under Wine, the bundled native assembler, then a patched
 native `ld.lld`; the default linker is `/opt/shave-lld/bin/ld.lld`. `auto`
-falls back per kernel only when the native assembler rejects the compiler's
-output. Hybrid/auto print the actual path on stderr, including the rejected
-line and form when falling back. Compiler and linker errors propagate.
+uses vendor for every kernel when the native linker or assembler is unavailable
+or the host is not Linux, logging the reason once per process. With native tools
+available it falls back per kernel when the assembler rejects compiler output.
+Hybrid/auto print the actual path on stderr, including rejected lines and forms.
+Compiler and linker execution errors propagate. Explicit `hybrid` requires native
+tools and never falls back; `vendor` is unchanged. `doctor` reports the default,
+effective mode and reason.
 
 ```python
 npu.configure(shave_toolchain="auto", shave_linker="/opt/shave-lld/bin/ld.lld")
