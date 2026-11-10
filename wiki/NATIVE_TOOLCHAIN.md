@@ -1257,6 +1257,18 @@ zero different, 18 rejected; diagnostic instruction rejections fall from
 243 to 234. Fixtures: `/mnt/cache/build-shave/scalar-next-measure`,
 `lsu1-sti16-{3720,9001}` and `corpus-parity-lsu1-sti16`.
 
+### LSU1 half-to-float scalar load
+
+`LSU1.LD.32.F16.F32 dst base` uses payload `dst<<4 | base<<9` in the
+existing 20-bit LSU1 class (`LSU1.STI20`, standalone prefix `0x49`).
+All 804 current headers and 64 register-field cases match. It can co-issue
+with LSU0 scalar and half-to-float loads, but conflicts with scalar LSU0
+LD.64/LDO.64 on write port 5 and CMII on read port 6.
+Both seeds pass **78868/78868** cases; **104 offline tests** pass.
+Corpus parity rises from **37/55 to 39/55 exact**, zero different, 16 rejected;
+diagnostic instruction rejections fall from 234 to 225. Fixtures:
+`/mnt/cache/build-shave/lsu1-ldf16-{3720,9001}` and `corpus-parity-lsu1-ldf16`.
+
 ### Differential gates and corpus inventory
 
 Cached assembly can be inventoried without Wine or recompilation:

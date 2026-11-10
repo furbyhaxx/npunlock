@@ -15,6 +15,18 @@ def encode(source: str) -> bytes:
 
 
 class EncodingTests(unittest.TestCase):
+    def test_lsu1_half_to_float_load_uses_twenty_bit_class(self) -> None:
+        self.assertEqual(encode("LSU1.LD.32.F16.F32 i0 i0"), bytes.fromhex("49000000"))
+        self.assertEqual(encode("LSU1.LD.32.F16.F32 i31 i31"), bytes.fromhex("49f03f00"))
+        self.assertEqual(encode("LSU1.LD.32.F16.F32 i1 i2"), bytes.fromhex("49100400"))
+        self.assertEqual(encode("LSU1.LD.32.F16.F32 i8 i9 || LSU0.LD.32.F16.F32 i4 i5"),
+                         bytes.fromhex("59400a002801"))
+        for source in ("LSU1.LD.32.F16.F32 i32 i0", "LSU1.LD.32.F16.F32 i0.0 i0",
+                       "LSU1.LD.32.F16.F32 i8 i9 || CMU.CMII.I32 i0 i1",
+                       "LSU1.LD.32.F16.F32 i8 i9 || LSU0.LDO.64 i4 i5 -3"):
+            with self.subTest(source=source), self.assertRaises(AssemblyError):
+                encode(source)
+
     def test_lsu1_postincrement_halfword_store_accepts_scalar_lanes(self) -> None:
         self.assertEqual(encode("LSU1.STI.16 i0.0 i0"), bytes.fromhex("89090082"))
         self.assertEqual(encode("LSU1.STI.16 i31.3 i31"), bytes.fromhex("89f9ff82"))
