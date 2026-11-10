@@ -3,10 +3,21 @@
 ## Status and scope
 
 The Linux default is still the full MoviTools toolchain under Wine. **There is
-no selectable hybrid mode yet.** On 2026-11-09, native linking was validated
-on NPU3720 (`8086:ad1d`), but the published Python assembler failed the vendor
-assembly compatibility gate. Do not advertise the linker-only experiment as
-replacement of both assembler and linker.
+no selectable hybrid mode yet.** As of 2026-11-10, the independent native
+assembler is **native-complete for the captured corpus**: **55/55 complete
+objects are byte-identical** to moviAsm, with zero differences or rejections.
+All **11912/11912 packets** and **98 captured mnemonics** are covered; this is
+not a claim of full-ISA support. Other mnemonics, untested operand ranges,
+shuffle masks and packet classes remain unknown and fail closed where unmeasured.
+
+The final gates pass **155 offline tests** and **130605/130605 differential
+cases per seed** (3720 and 9001), across 3696 measured prefix shapes. Evidence:
+`/mnt/cache/build-shave/corpus-parity-combined-header-9/` and
+`/mnt/cache/build-shave/combined-header-9-{3720,9001}/`.
+Native linking was validated on NPU3720 (`8086:ad1d`) on 2026-11-09, but this
+assembler extension has not been integrated into a selectable pipeline or
+validated end-to-end on hardware. The prior linker-only experiment is not
+assembler-plus-linker hardware acceptance.
 
 The intended interface is C -> Wine `moviCompile -S` -> native assembler ->
 native `ld.lld` -> existing native patchblob and inference. The compiler and
@@ -201,8 +212,10 @@ mismatches. Doctor in a new mode is not implemented or validated.
 ## Independent native parser and packet encoder
 
 The follow-up implementation in `tools/shaveasm/` is independent stdlib Python;
-no third-party assembler or encoding table was imported. It remains a development
-library, not a complete `.s` -> `.o` assembler or a selectable toolchain mode.
+no third-party assembler or encoding table was imported. Its native `.s` -> `.o`
+assembler now matches the captured corpus, but is not a selectable toolchain mode.
+Per-form sections record measurements and counts at each extension; the status
+and inventory sections report the current totals.
 `parser.py` preserves directives and labels, strips comments without damaging
 quoted strings, and joins inline/continued packets without rescheduling.
 `encoding.py` fails closed outside the measured instruction forms below.
@@ -1885,13 +1898,10 @@ also fail alone; `rejected_packets` includes supported forms co-issued with an
 unsupported form or header class. Counts overlap across shapes and must not be
 summed as packet totals. Parse failures are reported separately and fail the
 command. The combined baseline is 3291/11912 accepted packets and **98** distinct
-mnemonics (97 in the literal corpus alone). With symbolic branches, signed
-loads/stores, indirect loads, integer addition, comparisons, PCCX, AND/OR,
-LMULL, INCS, scalar floating-point addition and immediate SHL, coverage is
-**11345/11912** packets, including 983 requiring symbolic fixups, after the
-additional measured forms documented above.
-Fifty-two distinct mnemonics occur in accepted packets (six at baseline); the
-corpus still has 98 mnemonics.
+mnemonics (97 in the literal corpus alone). With the measured extensions above,
+coverage is **11912/11912** packets, including **1000** requiring symbolic
+fixups. All **98 captured mnemonics** occur in accepted packets (six at baseline).
+This inventory does not enumerate the full ISA or all legal operand ranges.
 `accepted_packets` counts bytes-plus-fixups support and `relocatable_packets`
 identifies that subset. Coverage tests isolated packet forms; it does not
 validate whole-stream branch suffixes or assert whole-object parity.
@@ -1909,9 +1919,10 @@ python3 -m tools.shaveasm.corpus --native-dir build/linux \
   --output /mnt/cache/build-shave/native-asm-corpus
 ```
 
-Offline regressions: 120 passed, including the merged object-writer/corpus tests.
-Each current randomized gate passes **100389/100389 cases**. Before the eight
-additional forms documented above, the gate passed **12156/12156 cases**
+Offline regressions: **155 passed**, including object-writer/corpus tests.
+Each current randomized gate passes **130605/130605 cases** across **3696**
+measured prefix shapes. The following counts describe historical growth.
+Before the later forms documented above, the gate passed **12156/12156 cases**
 (seeds 3720 and 9001): the original 2362 isolated-packet cases (1000 random
 packets, 457 shapes, 352 mixed operand sweeps, 96 ADD sweeps, 384 PCCX pairs,
 eight immediate boundaries and 65 NOP cases), plus 64 counted-NOP branch
@@ -1934,7 +1945,7 @@ sequences as BRA; the expanded headers also repeat existing alternative forms.
 SUB adds 482 register/immediate header cases, 96 register-field cases and ten
 immediate-bit/boundary cases. Those forms established 887 prefix shapes;
 SAU.AND and CMPI established 1474 prefix shapes; the half-to-float LSU0 load
-brings the current total to 1882.
+brought the then-current total to 1882.
 Every case's full instruction bytes and fixups are compared to moviAsm, not
 merely round-tripped through native code. All measured instruction forms occur
 in the real compiler corpus.
@@ -1942,9 +1953,8 @@ in the real compiler corpus.
 Original C, compiler `.s`, vendor `.o` and JSON manifests stay under the cache
 paths above. `elf.py` provides bounded ELF32 section inspection and a comparator
 which reports every section-attribute or byte difference while ignoring only
-file offsets. Whole-object native parity now reaches **40/55** exact cached
-objects, zero different; 15 still reject unmeasured instructions or headers. See the object-writer
-section below.
+file offsets. Whole-object native parity now reaches **55/55 exact** cached
+objects, zero different and zero rejected. See the object-writer section below.
 
 The captured corpus has **55 distinct complete kernel sources**: 39 literal
 sources (including all seven contrib `.c` kernels) and 16 generated variants
@@ -1963,23 +1973,20 @@ uncaptured and require explicit model/generator inputs.
 
 The parser structurally accepted all 55 captured assemblies. The literal
 corpus contains 97 distinct mnemonics. Only **3291/11912** parsed packets are
-accepted by the original byte-only encoder across the two corpora; the symbolic
-branch, scalar-load/store, ADD, compare, PCCX, AND/OR, LMULL, INCS and SHL extensions raise
-bytes-plus-fixups support to **11097/11912** with the additional measured forms
-above. These are
-syntactic coverage counts, **not** full-stream or whole-object parity claims.
-Calls, other branch forms, additional instruction/header classes, data and
-alignment directives, ELF symbols and relocations remain the next gate. Hybrid
-worker/config/cache integration and new-mode doctor/NPU acceptance must wait
-for whole-corpus object parity. The existing default and prior linker-only
-hardware evidence are unchanged; no branch push is justified yet.
+accepted by the original byte-only encoder across the two corpora; the measured
+extensions raise bytes-plus-fixups support to **11912/11912**. These isolated
+packet counts are separate from the **55/55 byte-identical whole objects**.
+Calls, other branch forms and operand/header classes outside the captured
+corpus remain unmeasured. Hybrid worker/config/cache integration and new-mode
+doctor/NPU acceptance remain future gates; no pipeline code changed here.
+The existing default and prior linker-only hardware evidence are unchanged.
 
 ## Native object writer
 
 `tools/shaveasm/asm.py` assembles the measured packet subset and supported
 vendor directives into relocatable objects. This section supersedes the earlier
-pre-writer statement that no object writer or fixture parity exists; it does not
-claim complete compiler-corpus compatibility or a selectable native mode.
+pre-writer statement that no object writer or fixture parity exists. Whole-object
+parity now covers the captured corpus; no selectable native mode is claimed.
 
 ```sh
 python3 -m tools.shaveasm.asm input.s -o output.o
@@ -2038,7 +2045,7 @@ On 2026-11-10 the command above
 compared every fixture to moviAsm: `compare_sections` reported zero differences
 and the complete objects were byte-identical. The test writes no vendor object
 to the repository.
-This is fixture parity, not evidence of full-corpus object parity.
+This fixture gate is separate from the captured-corpus object parity below.
 
 Whole-corpus object comparison uses the cached assembly and vendor objects,
 without invoking moviAsm or writing objects into the repository:
