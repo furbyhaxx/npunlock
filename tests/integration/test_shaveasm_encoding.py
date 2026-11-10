@@ -1119,6 +1119,18 @@ class EncodingTests(unittest.TestCase):
         with self.assertRaisesRegex(AssemblyError, "same vector register"):
             encode("LSU1.CP.32 v0.0 i1 || VAU.OR v0 v24 v25")
 
+    def test_iau_not(self) -> None:
+        self.assertEqual(encode("IAU.NOT i0 i0"), bytes.fromhex("461000"))
+        self.assertEqual(encode("IAU.NOT i1 i2"), bytes.fromhex("465004"))
+        self.assertEqual(encode("IAU.NOT i31 i31"), bytes.fromhex("46f07f"))
+        self.assertEqual(encode("SAU.ADD.I32 i12 i13 i14 || IAU.NOT i16 i17"),
+                         bytes.fromhex("7ca031073042"))
+        for operands in ("i32 i0", "i0 i32", "i0 1", "v0 i1"):
+            with self.subTest(operands=operands), self.assertRaises(AssemblyError):
+                encode("IAU.NOT " + operands)
+        with self.assertRaisesRegex(AssemblyError, "unmeasured packet class"):
+            encode("CMU.CP.32 i0 i1 || IAU.NOT i16 i17")
+
     def test_invalid_or_unmeasured_input_fails_closed(self) -> None:
         for source in [
             "LSU0.LDIL i4 65536",

@@ -21,6 +21,8 @@ _PREFIXES = {
     "LSU1": (8, 0x89),
     "SAU": (8, 0x3C),
     "IAU": (8, 0x86),
+    "IAU.NOT16": (8, 0x46),
+    "SAU,IAU.NOT16": (8, 0x7C),
     "PEU": (8, 0x85),
     "CMU,LSU0": (8, 0xA4),
     "CMU,LSU1": (16, 0x880E),
@@ -3920,6 +3922,10 @@ def _operation(instruction: Instruction) -> _Operation:
             return _Operation(unit, 0x70000C | destination << 9 | source, 24)
         source = _register(operands[1], line)
         return _Operation(unit, 0x08000C | destination << 9 | source << 4, 24)
+    if mnemonic == "IAU.NOT" and len(operands) == 2:
+        destination, source = (_register(op, line) for op in operands)
+        return _Operation(unit, 0x10 | destination << 10 | source << 5, 16,
+                          prefix_class="IAU.NOT16")
     if mnemonic == "IAU.INCS" and len(operands) == 2:
         register = _register(operands[0], line)
         immediate = _signed_immediate(operands[1], 14, line)

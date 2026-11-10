@@ -80,6 +80,8 @@ def generate_packets(seed: int, count: int) -> list[str]:
             mnemonic = rng.choice(("SAU.ADD.I32", "SAU.SHL.X32", "SAU.SHR.U32"))
             right = registers[2] if rng.randrange(2) else str(rng.randrange(32))
             return f"{mnemonic} {registers[0]} {registers[1]} {right}"
+        if unit == "IAU.NOT16":
+            return f"IAU.NOT {registers[0]} {registers[1]}"
         if unit == "IAU.ADD24":
             if rng.randrange(4) == 0:
                 return f"IAU.INCS {registers[0]} {rng.randrange(-8192, 8192)}"
@@ -345,6 +347,11 @@ def generate_packets(seed: int, count: int) -> list[str]:
                 packets.append(mnemonic + " " + " ".join(operands))
     packets.extend(f"{unit}.CP.32 v{r}.{lane} i{31-r}"
                    for unit in ("LSU0", "LSU1") for r in range(32) for lane in range(4))
+    for position in range(2):
+        for register in range(32):
+            operands = ["i0", "i0"]
+            operands[position] = f"i{register}"
+            packets.append("IAU.NOT " + " ".join(operands))
     packets.extend(f"CMU.CP.32 v{r}.{lane} i{31-r}" for r in range(32) for lane in range(4))
     packets.extend(f"CMU.VSZM.BYTE i{r} i{31-r} [ZZ{mask}]"
                    for r in range(32) for mask in ("00", "01", "10", "11"))

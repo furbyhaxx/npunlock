@@ -1779,6 +1779,17 @@ exact**, zero different, one rejected. Fixtures:
 `/mnt/cache/build-shave/lsu1-cp32vector-measure`,
 `lsu1-cp32vector-{3720,9001}` and `corpus-parity-lsu1-cp32vector`.
 
+### IAU scalar complement
+
+`IAU.NOT d s` uses a 16-bit payload `0x10 | d<<10 | s<<5`.
+The standalone eight-bit prefix is `0x46`; co-issue with SAU arithmetic
+uses `0x7c`. Both scalar register fields and the two measured headers
+match moviAsm. Other header combinations remain unmeasured and fail closed.
+Both seeds pass **129900/129900** cases; **147 offline tests** pass.
+Corpus parity remains **54/55 exact**, zero different, one rejected.
+Fixtures: `/mnt/cache/build-shave/iau-not-measure`, `iau-not-{3720,9001}`
+and `corpus-parity-iau-not`.
+
 ### Differential gates and corpus inventory
 
 Cached assembly can be inventoried without Wine or recompilation:
