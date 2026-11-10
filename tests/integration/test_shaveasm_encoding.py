@@ -518,6 +518,27 @@ class EncodingTests(unittest.TestCase):
             with self.subTest(source=source), self.assertRaises(AssemblyError):
                 encode_packet_with_fixups(parse(source)[0])
 
+    def test_lsu0_doubleword_store_reuses_the_measured_register_field(self) -> None:
+        self.assertEqual(encode("LSU0.STO.64 v0.0 i0 0"), bytes.fromhex("c206400000"))
+        self.assertEqual(encode("LSU0.STO.64 v31.1 i31 -3"), bytes.fromhex("c2f63ffaff"))
+        self.assertEqual(encode("LSU0.STO.64 i31 i31 16383"), bytes.fromhex("c2f63fff7f"))
+        self.assertEqual(encode("LSU0.STO.64 v24.1 i19 688"), bytes.fromhex("c286276005"))
+        self.assertEqual(encode("LSU0.STO.64 v31.15 i31 -3"),
+                         encode("LSU0.STO.64 v31.1 i31 -3"))
+        for source in ("LSU0.STO.64 v32.0 i0 0", "LSU0.STO.64 v0.16 i0 0",
+                       "LSU0.STO.64 i32 i0 0", "LSU0.STO.64 v0 i0 0",
+                       "LSU0.STO.64 v0.0 i32 0", "LSU0.STO.64 v0.0 i0 16384",
+                       "LSU0.STO.64 v0.0 i0 -16385"):
+            with self.subTest(source=source), self.assertRaises(AssemblyError):
+                encode(source)
+        with self.assertRaisesRegex(AssemblyError, "read port 8"):
+            encode("LSU0.STO.64 i4 i5 0 || LSU1.STO.64 i8 i9 0")
+        for operation in ("LSU1.CP.32 i8 i9", "LSU1.STO.32 i8 i9 0",
+                          "LSU1.ST.32 i8 i9", "LSU1.STI.32 i8 i9",
+                          "LSU1.STI.16.F32.F16 i8 i9"):
+            with self.subTest(operation=operation), self.assertRaisesRegex(AssemblyError, "read port 9"):
+                encode("LSU0.STO.64 i4 i5 0 || " + operation)
+
     def test_invalid_or_unmeasured_input_fails_closed(self) -> None:
         for source in [
             "LSU0.LDIL i4 65536",

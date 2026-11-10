@@ -1030,6 +1030,21 @@ ordering, changing relocation symbol indices; this is an object-writer gap.
 Fixtures and reports: `/mnt/cache/build-shave/lsu1-sto64-{3720,9001}` and
 `corpus-parity-lsu1-sto64` (602 diagnostic instruction rejections).
 
+### LSU0 offset doubleword store
+
+`LSU0.STO.64 src base offset` reuses the measured doubleword register field,
+15-bit signed offset and LSU0.LDO32 headers, with opcode 6 in place of 2.
+Vector sources match all 394 LSU0.LDO32 shapes. Scalar sources match the 321
+shapes without LSU1.STI20, using LSU1 loads to avoid scalar read-port-9
+conflicts with LSU1.CP.32, STO.32, ST.32, STI.32 and STI.16.F32.F16.
+Scalar doubleword stores on both LSUs also conflict. No scheduling is changed.
+All 32 scalar sources, 512 vector register/lane aliases, 32 bases and 33
+signed offset cases match moviAsm. Both seeds pass **47395/47395** cases
+across 2390 headers; 85 offline tests pass. Object parity remains **15/55 exact**,
+one different and 39 rejected; diagnostic instruction rejections drop from
+602 to 576. Fixtures: `/mnt/cache/build-shave/lsu0-sto64-{3720,9001}`,
+`lsu0-sto64-measure` and `corpus-parity-lsu0-sto64`.
+
 ### Differential gates and corpus inventory
 
 Cached assembly can be inventoried without Wine or recompilation:
