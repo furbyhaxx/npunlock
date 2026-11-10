@@ -3885,7 +3885,7 @@ def _operation(instruction: Instruction) -> _Operation:
         opcode = 0x18 if mnemonic == "SAU.AND" else 0x1A
         return _Operation(unit, opcode | destination << 10 | left << 5 | right << 15, 20,
                           prefix_class="SAU.AND20")
-    if mnemonic in ("SAU.ADD.F32", "SAU.SUB.F32", "SAU.MUL.I32", "SAU.MUL.F32") and len(operands) == 3:
+    if mnemonic in ("SAU.ADD.F32", "SAU.SUB.F32", "SAU.MUL.I32", "SAU.MUL.F32", "SAU.DIV.F32") and len(operands) == 3:
         destination, left = (_register(op, line) for op in operands[:2])
         selector = 0
         if mnemonic in ("SAU.ADD.F32", "SAU.MUL.F32") and is_float_literal(operands[2]):
@@ -3898,7 +3898,7 @@ def _operation(instruction: Instruction) -> _Operation:
         else:
             right = _register(operands[2], line)
         opcode = {"SAU.ADD.F32": 0x200000, "SAU.SUB.F32": 0x200002,
-                  "SAU.MUL.I32": 0x04, "SAU.MUL.F32": 0x200004}[mnemonic]
+                  "SAU.MUL.I32": 0x04, "SAU.MUL.F32": 0x200004, "SAU.DIV.F32": 0x200006}[mnemonic]
         return _Operation(unit, opcode | selector | destination << 10 | left << 5 | right << 15, 24)
     if mnemonic in ("SAU.ADD.I32", "SAU.SHL.X32", "SAU.SHR.U32", "SAU.SHR.U16") and len(operands) == 3:
         destination, source = (_register(op, line) for op in operands[:2])

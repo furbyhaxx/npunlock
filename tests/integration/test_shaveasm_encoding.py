@@ -15,6 +15,14 @@ def encode(source: str) -> bytes:
 
 
 class EncodingTests(unittest.TestCase):
+    def test_sau_float_divide_uses_scalar_registers(self) -> None:
+        self.assertEqual(encode("SAU.DIV.F32 i0 i0 i0"), bytes.fromhex("3c060020"))
+        self.assertEqual(encode("SAU.DIV.F32 i1 i2 i3"), bytes.fromhex("3c468421"))
+        self.assertEqual(encode("SAU.DIV.F32 i31 i31 i31"), bytes.fromhex("3ce6ff2f"))
+        for source in ("i0 i0 1.0", "i0 i0 3", "i32 i0 i0", "i0 i0 v0"):
+            with self.subTest(source=source), self.assertRaises(AssemblyError):
+                encode("SAU.DIV.F32 " + source)
+
     def test_lsu1_half_to_float_load_uses_twenty_bit_class(self) -> None:
         self.assertEqual(encode("LSU1.LD.32.F16.F32 i0 i0"), bytes.fromhex("49000000"))
         self.assertEqual(encode("LSU1.LD.32.F16.F32 i31 i31"), bytes.fromhex("49f03f00"))

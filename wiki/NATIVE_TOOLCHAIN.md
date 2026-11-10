@@ -1269,6 +1269,16 @@ Corpus parity rises from **37/55 to 39/55 exact**, zero different, 16 rejected;
 diagnostic instruction rejections fall from 234 to 225. Fixtures:
 `/mnt/cache/build-shave/lsu1-ldf16-{3720,9001}` and `corpus-parity-lsu1-ldf16`.
 
+### SAU scalar floating-point division
+
+`SAU.DIV.F32 d l r` uses the existing 24-bit SAU class with payload
+`0x200006 | d<<10 | l<<5 | r<<15`. Only scalar register operands are
+supported. All 585 headers and 96 independent register-field cases match.
+Both seeds pass **79549/79549** cases; **105 offline tests** pass.
+Corpus parity rises from **39/55 to 40/55 exact**, zero different, 15 rejected;
+diagnostic instruction rejections fall from 225 to 210. Fixtures:
+`/mnt/cache/build-shave/sau-divf32-{3720,9001}` and `corpus-parity-sau-divf32`.
+
 ### Differential gates and corpus inventory
 
 Cached assembly can be inventoried without Wine or recompilation:
