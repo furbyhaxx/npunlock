@@ -1472,6 +1472,19 @@ rejected; diagnostic instruction rejections fall from 85 to 75. Fixtures:
 `/mnt/cache/build-shave/lsu0-ldo16-{3720,9001}` and
 `corpus-parity-lsu0-ldo16`.
 
+### LSU0 offset scalar halfword-lane store
+
+`LSU0.STO.16 iS.0 base offset15` shares `LSU0.LDO32` headers and uses
+payload `0x18006 | s<<4 | base<<9 | (offset15 & 0x7fff)<<17`.
+Only lane 0 and signed offsets -16384..16383 are supported. The measured
+LSU1 scalar doubleword-store read-port-8 conflict remains rejected.
+All 552 headers, 64 register-field cases and 33 signed offset cases match
+moviAsm. Both seeds pass **101687/101687** cases; **122 offline tests**
+pass. Corpus parity remains **49/55 exact**, zero different, six rejected;
+diagnostic instruction rejections fall from 75 to 67. Fixtures:
+`/mnt/cache/build-shave/lsu0-sto16-{3720,9001}` and
+`corpus-parity-lsu0-sto16`.
+
 ### Differential gates and corpus inventory
 
 Cached assembly can be inventoried without Wine or recompilation:
