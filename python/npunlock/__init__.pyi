@@ -573,6 +573,8 @@ class BuildPlan:
         *,
         movi_dll_dir: str | PathLike[str] | None = ...,
         movi_worker: str | None = ...,
+        shave_toolchain: str | None = ...,
+        shave_linker: str | PathLike[str] | None = ...,
     ) -> Program: ...
 
 class PreparedGraph:
@@ -670,6 +672,8 @@ class PreparedGraph:
         linker_script: str | PathLike[str] | bytes | None = ...,
         definitions: tuple[str, ...] = ...,
         movi_worker: str | None = ...,
+        shave_toolchain: str | None = ...,
+        shave_linker: str | PathLike[str] | None = ...,
     ) -> Program: ...
 
 class PreparedIr:
@@ -687,6 +691,8 @@ class PreparedIr:
         definitions: Sequence[str] = ...,
         linker_script: bytes | str | PathLike[str] | None = ...,
         movi_worker: str | None = ...,
+        shave_toolchain: str | None = ...,
+        shave_linker: str | PathLike[str] | None = ...,
     ) -> Program: ...
 
 class CacheStatus:
@@ -722,7 +728,12 @@ def serialize_ir(
     *,
     _carrier_overrides: Mapping[Node, str] | None = ...,
 ) -> SerializedIR: ...
-def configure(*, movi_dll_dir: str | PathLike[str] | None) -> None: ...
+def configure(
+    *,
+    movi_dll_dir: str | PathLike[str] | None = ...,
+    shave_toolchain: str | None = ...,
+    shave_linker: str | PathLike[str] | None = ...,
+) -> None: ...
 def movitools_manifest(root: str | PathLike[str]) -> dict[str, dict[str, object]]: ...
 def compile_kernel(
     kernel: KernelSpec | bytes | str | PathLike[str],
@@ -733,6 +744,8 @@ def compile_kernel(
     movi_dll_dir: str | PathLike[str] | None = ...,
     timeout_ms: int = ...,
     movi_worker: str | None = ...,
+    shave_toolchain: str | None = ...,
+    shave_linker: str | PathLike[str] | None = ...,
     libraries: Any = ...,
 ) -> CompiledKernel: ...
 def constant(value: object, *, name: str | None = ...) -> Tensor: ...
@@ -784,6 +797,8 @@ def compile_cached(
     timeout_ms: int = ...,
     ir_worker: str | None = ...,
     movi_worker: str | None = ...,
+    shave_toolchain: str | None = ...,
+    shave_linker: str | PathLike[str] | None = ...,
     libraries: Any = ...,
 ) -> CachedCompileResult: ...
 def load_prepared(
@@ -807,6 +822,8 @@ def compile(
     timeout_ms: int = ...,
     ir_worker: str | None = ...,
     movi_worker: str | None = ...,
+    shave_toolchain: str | None = ...,
+    shave_linker: str | PathLike[str] | None = ...,
     libraries: Any = ...,
 ) -> Program: ...
 def compare_native_graphs(

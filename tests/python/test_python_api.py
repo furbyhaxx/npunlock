@@ -817,6 +817,26 @@ class ShaveToolchainTests(unittest.TestCase):
         self.assertEqual((result.path, result.elf, compiler.calls), ("hybrid", b"native-elf", ["compiler"]))
         self.assertTrue(link.call_args.args[0].startswith(b"\x7fELF"))
 
+    def test_configure_and_compile_kernel_use_selected_mode(self) -> None:
+        compiler = self.Compiler()
+        try:
+            with patch.dict("os.environ", {"NPUNLOCK_SHAVE_TOOLCHAIN": "vendor"}):
+                npu.configure(shave_toolchain="auto", shave_linker="/configured/lld")
+                configured = npu._resolve_shave_toolchain(None, None)
+                self.assertEqual((configured.mode, configured.linker), ("auto", Path("/configured/lld")))
+                override = npu._resolve_shave_toolchain("hybrid", "/explicit/lld")
+                self.assertEqual((override.mode, override.linker), ("hybrid", Path("/explicit/lld")))
+                log = io.StringIO()
+                with patch("npunlock._shave_toolchain._link_native", return_value=b"native-elf"):
+                    with patch.object(sys, "stderr", log):
+                        result = npu.compile_kernel(
+                            b"kernel", movi_dll_dir="/tmp/movitools", libraries=compiler, shave_toolchain="hybrid"
+                        )
+                self.assertEqual(result.elf, b"native-elf")
+                self.assertIn("toolchain=hybrid", log.getvalue())
+        finally:
+            npu.configure(shave_toolchain=None, shave_linker=None)
+
     def test_native_linker_receives_object_script_and_math_archive(self) -> None:
         from npunlock._shave_toolchain import _link_native
 
@@ -2104,6 +2124,31 @@ class CompilationFlowTests(unittest.TestCase):
         self.assertEqual(fake.shave_calls[0][1]["definitions"], ("MODE=1",))
         self.assertEqual(len(fake.patch_calls), 2)
         self.assertEqual(program.graph_blob, b"patched2")
+
+    def test_auto_selects_a_path_for_each_kernel(self) -> None:
+        class MixedNative(FakeNative):
+            def compile_shave_assembly(self, source: bytes, **kwargs: object) -> bytes:
+                return b".code smoke\nNOP\n" if source == b"supported" else b".code smoke\nIAU.UNKNOWN i1 i2\n"
+
+        x = npu.input("x", shape=(1, 32), dtype="f16")
+        first = npu.custom(x, source=b"supported", carrier="Abs", _name="first")
+        second = npu.custom(first, source=b"unsupported", carrier="Sqrt", _name="second")
+        fake = MixedNative()
+        fake.discovery_groups = (
+            (npu.PatchTarget(0, 0, 1, 32, 64, 0x1F),),
+            (npu.PatchTarget(1, 1, 1, 32, 64, 0x1F),),
+        )
+        prepared = npu.prepare(npu.Graph([x], [second]), libraries=fake)
+        log = io.StringIO()
+        with patch("npunlock._shave_toolchain._link_native", return_value=b"hybrid-elf"):
+            with patch.object(sys, "stderr", log):
+                program = prepared.build(movi_dll_dir="movi", shave_toolchain="auto")
+        self.assertEqual(tuple(call[1] for call in fake.patch_calls), (b"hybrid-elf", b"elf"))
+        self.assertEqual([call[0] for call in fake.shave_calls], [b"unsupported"])
+        self.assertIn("kernel 'first' groups=0 toolchain=hybrid", log.getvalue())
+        self.assertIn("kernel 'second' groups=1 toolchain=vendor", log.getvalue())
+        self.assertIn("line 2", log.getvalue())
+        program.close()
 
     def test_build_plan_failure_identifies_symbolic_kernel_and_preserves_streams(self) -> None:
         class FailingNative(FakeNative):
@@ -4166,6 +4211,77 @@ class ContribFoundationTests(unittest.TestCase):
             for path in sorted(root.rglob("*"), reverse=True):
                 path.unlink() if path.is_file() else path.rmdir()
             root.rmdir()
+
+    def test_compile_cache_separates_actual_vendor_and_hybrid_paths(self) -> None:
+        x = npu.input("x", shape=(1, 32), dtype="f16")
+        y = npu.custom(x, source=b"kernel", carrier="Abs", _name="y")
+        graph = npu.Graph([x], [y], name="path-cache")
+        carrier = npu.CarrierContract((npu.ActGroupContract(("f16",), "f16", (32,), 32, 1),), mapping_indices=((0,),))
+        contract = npu.ProgramContract(
+            inputs=(("x", (1, 32), "f16"),),
+            outputs=(("y", (1, 32), "f16"),),
+            patch_count=1,
+            targets_per_patch=(1,),
+        )
+
+        class ModeNative(ContractNative):
+            reject = False
+
+            def compile_shave_assembly(self, source: bytes, **kwargs: object) -> bytes:
+                return b".code smoke\nIAU.UNKNOWN i1 i2\n" if self.reject else b".code smoke\nNOP\n"
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            movi, native, cache, linker = root / "movi", root / "native", root / "cache", root / "ld.lld"
+            dependencies = [
+                *(
+                    movi / name
+                    for name in ("bin/moviCompile64.dll", "bin/moviAsm64.dll", "bin/moviLLD64.dll", "lib/mlibm.a")
+                ),
+                *(native / name for name in _native.NATIVE_RUNTIME_FILES),
+                linker,
+            ]
+            for path in dependencies:
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(path.name.encode())
+            linker.chmod(0o755)
+            fake = ModeNative()
+            programs = []
+
+            def run(mode: str):
+                result = npu.compile_cached(
+                    graph,
+                    cache_dir=cache,
+                    carrier_contract=carrier,
+                    program_contract=contract,
+                    movi_dll_dir=movi,
+                    native_dir=native,
+                    libraries=fake,
+                    shave_toolchain=mode,
+                    shave_linker=linker,
+                )
+                programs.append(result.program)
+                return result.cache.state
+
+            try:
+                with patch("npunlock._shave_toolchain._link_native", return_value=b"hybrid-elf"):
+                    self.assertEqual(run("vendor"), "stored")
+                    self.assertEqual(run("hybrid"), "stored")
+                    fake.reject = True
+                    self.assertEqual(run("auto"), "hit")
+                    fake.reject = False
+                    self.assertEqual(run("auto"), "hit")
+                    linker.write_bytes(b"new-linker")
+                    self.assertEqual(run("hybrid"), "stored")
+                self.assertEqual(fake.compile_ir_count, 3)
+                paths = {
+                    json.loads(path.read_text())["request"]["kernels"][0]["toolchain_path"]
+                    for path in cache.glob("request-*.json")
+                }
+                self.assertEqual(paths, {"vendor", "hybrid"})
+            finally:
+                for program in programs:
+                    program.close()
 
     def test_compile_cached_rejects_dependency_drift_before_publication(self) -> None:
         x = npu.input("x", shape=(1, 32), dtype="f16")

@@ -5,6 +5,7 @@ import hashlib
 import io
 import json
 import os
+import sys
 import threading
 from time import perf_counter
 import zipfile
@@ -51,8 +52,11 @@ from .cache import (
     movitools_identity,
     movitools_manifest,
     native_runtime_identity,
+    native_shave_assembler_identity,
+    native_shave_linker_identity,
     worker_identity,
 )
+from ._shave_toolchain import ShaveCompilation, ShaveToolchain, compile_shave as _compile_shave, resolve_toolchain
 from .external import ReviewedPatchBinding
 from .graph import Graph, Node, constant, custom, input, op
 from .ir import SerializedIR, serialize_ir
@@ -130,6 +134,15 @@ __all__ = [
 ]
 
 _configured_movi_dll_dir: str | None = None
+_configured_shave_toolchain: str | None = None
+_configured_shave_linker: str | None = None
+
+
+class _Unset:
+    pass
+
+
+_UNSET = _Unset()
 _native_library_cache: dict[str, NativeLibraries] = {}
 _native_library_cache_lock = threading.Lock()
 _EXECUTION_NUMPY_DTYPES = {
@@ -146,21 +159,28 @@ _EXECUTION_NUMPY_DTYPES = {
 _VALIDATED_POSITIONAL_COMPILER_VERSION = (8, 3)
 
 
-def configure(*, movi_dll_dir: str | Path | None) -> None:
-    """Set the process-local MVC_DEPEND root used by custom compilation.
+def configure(
+    *,
+    movi_dll_dir: str | Path | None | _Unset = _UNSET,
+    shave_toolchain: str | None | _Unset = _UNSET,
+    shave_linker: str | Path | None | _Unset = _UNSET,
+) -> None:
+    """Set process-local toolchain overrides; ``None`` clears an override."""
 
-    Passing ``None`` clears the process-local override so that
-    ``NPUNLOCK_MOVITOOLS_DIR`` is consulted again.
-    """
-
-    global _configured_movi_dll_dir
-    if movi_dll_dir is None:
-        _configured_movi_dll_dir = None
-        return
-    value = os.fspath(movi_dll_dir)
-    if not value:
+    global _configured_movi_dll_dir, _configured_shave_toolchain, _configured_shave_linker
+    if not isinstance(movi_dll_dir, _Unset) and movi_dll_dir is not None and not os.fspath(movi_dll_dir):
         raise ValueError("movi_dll_dir must not be empty")
-    _configured_movi_dll_dir = value
+    if not isinstance(shave_toolchain, _Unset) and shave_toolchain is not None:
+        if shave_toolchain not in ("vendor", "hybrid", "auto"):
+            raise ValueError("SHAVE toolchain must be vendor, hybrid, or auto")
+    if not isinstance(shave_linker, _Unset) and shave_linker is not None and not os.fspath(shave_linker):
+        raise ValueError("SHAVE linker path must not be empty")
+    if not isinstance(movi_dll_dir, _Unset):
+        _configured_movi_dll_dir = None if movi_dll_dir is None else os.fspath(movi_dll_dir)
+    if not isinstance(shave_toolchain, _Unset):
+        _configured_shave_toolchain = shave_toolchain
+    if not isinstance(shave_linker, _Unset):
+        _configured_shave_linker = None if shave_linker is None else os.fspath(shave_linker)
 
 
 def _resolve_movi_dll_dir(explicit: str | Path | None) -> str | Path | None:
@@ -169,6 +189,20 @@ def _resolve_movi_dll_dir(explicit: str | Path | None) -> str | Path | None:
     if _configured_movi_dll_dir is not None:
         return _configured_movi_dll_dir
     return os.environ.get("NPUNLOCK_MOVITOOLS_DIR") or None
+
+
+def _resolve_shave_toolchain(mode: str | None, linker: str | Path | None) -> ShaveToolchain:
+    return resolve_toolchain(
+        mode if mode is not None else _configured_shave_toolchain,
+        linker if linker is not None else _configured_shave_linker,
+    )
+
+
+def _report_shave_compilation(context: str, result: ShaveCompilation) -> None:
+    message = f"npunlock: {context} toolchain={result.path}"
+    if result.rejection:
+        message += f" (native assembler rejected {result.rejection})"
+    print(message, file=sys.stderr)
 
 
 def _default_native_libraries(directory: str | Path | None) -> NativeLibraries:
@@ -1227,6 +1261,8 @@ def compile_kernel(
     movi_dll_dir: str | Path | None = None,
     timeout_ms: int = 20_000,
     movi_worker: str | None = None,
+    shave_toolchain: str | None = None,
+    shave_linker: str | Path | None = None,
     libraries: NativeLibraries | None = None,
 ) -> CompiledKernel:
     """Compile C source or a snapshotted spec into a reusable linked SHAVE ELF."""
@@ -1250,15 +1286,20 @@ def compile_kernel(
             "configure(), or NPUNLOCK_MOVITOOLS_DIR"
         )
     native = libraries or _default_native_libraries(native_dir)
-    elf = native.compile_shave(
+    toolchain = _resolve_shave_toolchain(shave_toolchain, shave_linker)
+    compiled = _compile_shave(
+        native,
         spec.source,
         movi_dll_dir=resolved_movi_dll_dir,
         linker_script=spec.linker_script,
         definitions=spec.definitions,
         timeout_ms=timeout_ms,
         worker=movi_worker,
+        toolchain=toolchain,
     )
-    result = CompiledKernel(elf)
+    if toolchain.mode != "vendor":
+        _report_shave_compilation(f"kernel {spec.source_name!r}", compiled)
+    result = CompiledKernel(compiled.elf)
     object.__setattr__(result, "elf_name", f"<compiled from {spec.source_name}>")
     return result
 
@@ -1286,6 +1327,8 @@ class PreparedIr:
         definitions: Sequence[str] = (),
         linker_script: bytes | str | os.PathLike[str] | None = None,
         movi_worker: str | None = None,
+        shave_toolchain: str | None = None,
+        shave_linker: str | Path | None = None,
     ) -> Program:
         """Compile or reuse one kernel and apply the reviewed explicit targets."""
 
@@ -1301,6 +1344,8 @@ class PreparedIr:
                 movi_dll_dir=movi_dll_dir,
                 timeout_ms=self._timeout_ms,
                 movi_worker=movi_worker,
+                shave_toolchain=shave_toolchain,
+                shave_linker=shave_linker,
                 libraries=self._libraries,
             )
         patched = self._libraries.patch_graph(
@@ -2064,6 +2109,8 @@ class BuildPlan:
         *,
         movi_dll_dir: str | Path | None = None,
         movi_worker: str | None = None,
+        shave_toolchain: str | None = None,
+        shave_linker: str | Path | None = None,
     ) -> Program:
         """Compile the planned kernels and patch the retained carrier."""
 
@@ -2075,9 +2122,10 @@ class BuildPlan:
                 "C source kernels require an MVC_DEPEND root from movi_dll_dir, "
                 "configure(), or NPUNLOCK_MOVITOOLS_DIR"
             )
+        toolchain = _resolve_shave_toolchain(shave_toolchain, shave_linker) if needs_compiler else None
         blob = self._prepared.ir_provenance.graph_blob
         reports: list[bytes] = []
-        elf_cache: dict[KernelSpec, bytes] = {}
+        elf_cache: dict[KernelSpec, ShaveCompilation] = {}
         if custom_nodes:
             for node, indices, kernel, target_values in zip(
                 custom_nodes,
@@ -2090,28 +2138,35 @@ class BuildPlan:
                 if isinstance(kernel, CompiledKernel):
                     elf = kernel.elf
                 else:
-                    elf = elf_cache.get(kernel)
-                if elf is None:
-                    assert resolved_movi_dll_dir is not None
-                    try:
-                        elf = self._prepared._libraries.compile_shave(
-                            kernel.source,
-                            movi_dll_dir=resolved_movi_dll_dir,
-                            linker_script=kernel.linker_script,
-                            definitions=kernel.definitions,
-                            timeout_ms=self._prepared._timeout_ms,
-                            worker=movi_worker,
-                        )
-                    except NativeError as error:
-                        raise NativeError(
-                            f"{context}: {error.stage}",
-                            error.status,
-                            error.status_name,
-                            error.diagnostic,
-                            error.stdout_log,
-                            error.stderr_log,
-                        ) from error
-                    elf_cache[kernel] = elf
+                    assert resolved_movi_dll_dir is not None and toolchain is not None
+                    compiled = elf_cache.get(kernel)
+                    if compiled is None:
+                        try:
+                            compiled = _compile_shave(
+                                self._prepared._libraries,
+                                kernel.source,
+                                movi_dll_dir=resolved_movi_dll_dir,
+                                linker_script=kernel.linker_script,
+                                definitions=kernel.definitions,
+                                timeout_ms=self._prepared._timeout_ms,
+                                worker=movi_worker,
+                                toolchain=toolchain,
+                            )
+                        except NativeError as error:
+                            raise NativeError(
+                                f"{context}: {error.stage}",
+                                error.status,
+                                error.status_name,
+                                error.diagnostic,
+                                error.stdout_log,
+                                error.stderr_log,
+                            ) from error
+                        except RuntimeError as error:
+                            raise RuntimeError(f"{context}: {error}") from error
+                        elf_cache[kernel] = compiled
+                    if toolchain.mode != "vendor":
+                        _report_shave_compilation(context, compiled)
+                    elf = compiled.elf
                 try:
                     patched = self._prepared._libraries.patch_graph(blob, elf, target_values)
                 except NativeError as error:
@@ -2867,6 +2922,8 @@ class PreparedGraph:
         linker_script: str | Path | bytes | None = None,
         definitions: tuple[str, ...] = (),
         movi_worker: str | None = None,
+        shave_toolchain: str | None = None,
+        shave_linker: str | Path | None = None,
     ) -> Program:
         """Plan, compile, and patch custom kernels into this carrier."""
 
@@ -2878,6 +2935,8 @@ class PreparedGraph:
         ).build(
             movi_dll_dir=movi_dll_dir,
             movi_worker=movi_worker,
+            shave_toolchain=shave_toolchain,
+            shave_linker=shave_linker,
         )
 
 
@@ -3367,6 +3426,8 @@ def compile(
     timeout_ms: int = 20_000,
     ir_worker: str | None = None,
     movi_worker: str | None = None,
+    shave_toolchain: str | None = None,
+    shave_linker: str | Path | None = None,
     libraries: NativeLibraries | None = None,
 ) -> Program:
     if not isinstance(graph, Graph):
@@ -3385,6 +3446,8 @@ def compile(
         linker_script=linker_script,
         definitions=definitions,
         movi_worker=movi_worker,
+        shave_toolchain=shave_toolchain,
+        shave_linker=shave_linker,
     )
 
 
@@ -3481,6 +3544,8 @@ def compile_cached(
     timeout_ms: int = 20_000,
     ir_worker: str | None = None,
     movi_worker: str | None = None,
+    shave_toolchain: str | None = None,
+    shave_linker: str | Path | None = None,
     libraries: NativeLibraries | None = None,
 ) -> CachedCompileResult:
     """Load or build a contract-validated, provenance-bound program artifact."""
@@ -3516,6 +3581,8 @@ def compile_cached(
         program = plan.build(
             movi_dll_dir=resolved_movi,
             movi_worker=movi_worker,
+            shave_toolchain=shave_toolchain,
+            shave_linker=shave_linker,
         ).require(program_contract)
         return CachedCompileResult(
             program,
@@ -3523,15 +3590,65 @@ def compile_cached(
             (perf_counter() - started) * 1000.0,
             plan.explain(),
         )
+    started = perf_counter()
+    toolchain = _resolve_shave_toolchain(shave_toolchain, shave_linker) if needs_movitools else None
     runtime_root = _native_directory(native_dir)
-    dependencies = _cache_dependency_json(
-        runtime_root,
-        resolved_movi,
-        ir_worker,
-        movi_worker,
+    dependencies = _cache_dependency_json(runtime_root, resolved_movi, ir_worker, movi_worker)
+    assembler_identity = (
+        native_shave_assembler_identity() if toolchain is not None and toolchain.mode != "vendor" else None
     )
+    linker_identity = (
+        native_shave_linker_identity(toolchain.linker) if toolchain is not None and toolchain.mode != "vendor" else None
+    )
+    build_kernels = list(resolved_kernels)
+    paths: list[str] = []
+    for kernel in resolved_kernels:
+        if isinstance(kernel, CompiledKernel):
+            paths.append("precompiled")
+        else:
+            assert toolchain is not None
+            paths.append(toolchain.mode)
+    if toolchain is not None and toolchain.mode == "auto":
+        assert resolved_movi is not None
+        compiled_cache: dict[KernelSpec, ShaveCompilation] = {}
+        for index, (node, kernel) in enumerate(zip(serialized.custom_nodes, resolved_kernels)):
+            if isinstance(kernel, CompiledKernel):
+                continue
+            compiled = compiled_cache.get(kernel)
+            if compiled is None:
+                compiled = _compile_shave(
+                    native,
+                    kernel.source,
+                    movi_dll_dir=resolved_movi,
+                    linker_script=kernel.linker_script,
+                    definitions=kernel.definitions,
+                    timeout_ms=timeout_ms,
+                    worker=movi_worker,
+                    toolchain=toolchain,
+                )
+                compiled_cache[kernel] = compiled
+            paths[index] = compiled.path
+            build_kernels[index] = CompiledKernel(compiled.elf)
+            _report_shave_compilation(f"kernel {node.name or '<unnamed>'!r}", compiled)
+    uses_hybrid = "hybrid" in paths
+    if uses_hybrid and linker_identity is None:
+        assert toolchain is not None
+        raise FileNotFoundError(f"native SHAVE linker not found or not executable: {toolchain.linker}")
+
+    def verify_dependencies() -> None:
+        if _cache_dependency_json(runtime_root, resolved_movi, ir_worker, movi_worker) != dependencies:
+            raise RuntimeError("compiler/runtime dependencies changed during cached compilation")
+        if assembler_identity is not None and native_shave_assembler_identity() != assembler_identity:
+            raise RuntimeError("native SHAVE assembler changed during cached compilation")
+        if uses_hybrid and toolchain is not None and native_shave_linker_identity(toolchain.linker) != linker_identity:
+            raise RuntimeError("native SHAVE linker changed during cached compilation")
+
+    verify_dependencies()
     provenance_result = native.query_ir_provenance(timeout_ms=timeout_ms, worker=ir_worker)
     provenance = NpuProvenance.from_ir_result(provenance_result)
+    kernel_entries = [_kernel_cache_json(kernel) for kernel in resolved_kernels]
+    for entry, path in zip(kernel_entries, paths):
+        entry["toolchain_path"] = path
     request: dict[str, object] = {
         "schema": "npunlock.compilation-request.v1",
         "ir": {
@@ -3539,22 +3656,29 @@ def compile_cached(
             "weights": ArtifactIdentity.from_bytes(serialized.weights).to_json(),
             "build_flags": effective_flags,
         },
-        "kernels": [_kernel_cache_json(kernel) for kernel in resolved_kernels],
+        "kernels": kernel_entries,
+        "native_shave": {"assembler": assembler_identity, "linker": linker_identity} if uses_hybrid else None,
         "provenance": provenance.to_json(),
         **dependencies,
         "carrier_contract": carrier_contract.to_json(),
         "program_contract": program_contract.to_json(),
     }
     cache = ProgramCache(cache_dir)
-    cached = cache.load(
-        request,
-        libraries=native,
-        timeout_ms=timeout_ms,
-        contract=program_contract,
-    )
+    cached = cache.load(request, libraries=native, timeout_ms=timeout_ms, contract=program_contract)
     if cached is not None:
-        return CachedCompileResult(cached, cache.status, 0.0, "loaded validated program from cache")
-    started = perf_counter()
+        try:
+            verify_dependencies()
+        except Exception:
+            cached.close()
+            raise
+        if toolchain is not None and toolchain.mode == "hybrid":
+            for node, path in zip(serialized.custom_nodes, paths):
+                if path == "hybrid":
+                    _report_shave_compilation(
+                        f"cached kernel {node.name or '<unnamed>'!r}", ShaveCompilation(b"", "hybrid")
+                    )
+        build_ms = (perf_counter() - started) * 1000.0 if toolchain is not None and toolchain.mode == "auto" else 0.0
+        return CachedCompileResult(cached, cache.status, build_ms, "loaded validated program from cache")
     prepared = prepare(
         graph,
         build_flags=build_flags,
@@ -3564,22 +3688,19 @@ def compile_cached(
     ).require(carrier_contract)
     if NpuProvenance.from_ir_result(prepared.ir_provenance) != provenance:
         raise RuntimeError("NPU driver/compiler provenance changed during cached compilation")
-    kernel_overrides = {node.outputs[0]: kernel for node, kernel in zip(serialized.custom_nodes, resolved_kernels)}
+    kernel_overrides = {node.outputs[0]: kernel for node, kernel in zip(serialized.custom_nodes, build_kernels)}
     plan = prepared.plan(kernels=kernel_overrides)
-    program = plan.build(movi_dll_dir=resolved_movi, movi_worker=movi_worker).require(program_contract)
+    program = plan.build(
+        movi_dll_dir=resolved_movi,
+        movi_worker=movi_worker,
+        shave_toolchain=shave_toolchain,
+        shave_linker=shave_linker,
+    ).require(program_contract)
     build_ms = (perf_counter() - started) * 1000.0
     try:
-        current_dependencies = _cache_dependency_json(
-            runtime_root,
-            resolved_movi,
-            ir_worker,
-            movi_worker,
-        )
+        verify_dependencies()
     except Exception:
         program.close()
         raise
-    if current_dependencies != dependencies:
-        program.close()
-        raise RuntimeError("compiler/runtime dependencies changed during cached compilation")
     cache.store(request, program)
     return CachedCompileResult(program, cache.status, build_ms, plan.explain())

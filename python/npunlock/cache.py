@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import shutil
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
@@ -65,6 +66,21 @@ def movitools_manifest(root: str | Path) -> dict[str, dict[str, object]]:
 
 def native_runtime_identity(root: str | Path) -> list[dict[str, object]]:
     return dependency_identity(root, NATIVE_RUNTIME_FILES)
+
+
+def native_shave_assembler_identity() -> list[dict[str, object]]:
+    from tools import shaveasm
+    from tools.shaveasm import encoding, fixups, objwriter, parser
+
+    from . import _shave_toolchain
+
+    modules = (shaveasm, encoding, fixups, objwriter, parser, _shave_toolchain)
+    return [{"name": module.__name__, **_hash_file_stable(Path(module.__file__))} for module in modules]
+
+
+def native_shave_linker_identity(linker: str | Path) -> dict[str, object] | None:
+    executable = shutil.which(os.fspath(linker))
+    return None if executable is None else _hash_file_stable(Path(executable).resolve())
 
 
 def worker_identity(worker: str | os.PathLike[str] | None) -> dict[str, object]:
