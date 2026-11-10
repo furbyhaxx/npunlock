@@ -1599,6 +1599,19 @@ rejected; diagnostic instruction rejections fall from 41 to 40. Fixtures:
 `/mnt/cache/build-shave/iau-rol-measure`, `iau-rol-{3720,9001}` and
 `corpus-parity-iau-rol`.
 
+### Six-unit scalar predicated packet header
+
+`CMU,LSU0,LSU1,SAU,IAU,PEU.PCCX12` uses the measured 24-bit prefix
+`0xcba80f`, followed by 128 payload bits (19 bytes total). Independent
+copy/logical and comparison/subtraction packets identify the same unique
+header width. The existing differential generator automatically exercises
+the added class with alternative forms, operands, fixups and textual orders.
+Both seeds pass **113189/113189** cases; **132 offline tests** pass. Corpus
+parity remains **51/55 exact**, zero different, four rejected; diagnostic
+instruction rejections fall from 40 to 39. Fixtures:
+`/mnt/cache/build-shave/six-scalar-measure`, `six-scalar-{3720,9001}` and
+`corpus-parity-six-scalar`.
+
 ### Differential gates and corpus inventory
 
 Cached assembly can be inventoried without Wine or recompilation:
