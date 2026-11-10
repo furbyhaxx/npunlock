@@ -1732,6 +1732,17 @@ pass. Corpus parity is **53/55 exact**, zero different. Fixtures:
 `/mnt/cache/build-shave/remaining-headers-measure`, `combined-header-3-{3720,9001}`
 and `corpus-parity-combined-header-3`.
 
+### Five-unit offset-memory logical add header
+
+`CMU,LSU0.LDO32,LSU1.STO32,SAU.AND20,IAU.ADD24` uses the measured
+24-bit prefix `0xef80f`. Independent scalar and vector offset-memory packets
+identify the same unique width; reversed textual orders encode identically.
+Both seeds pass **120547/120547** cases; **143 offline tests** pass.
+Corpus parity rises from **53/55 to 54/55 exact**, zero different, one
+rejected. The contrib/bytetrack assignment object is now exact. Fixtures:
+`/mnt/cache/build-shave/remaining-headers-measure`, `combined-header-10-{3720,9001}`
+and `corpus-parity-combined-header-10`.
+
 ### Differential gates and corpus inventory
 
 Cached assembly can be inventoried without Wine or recompilation:

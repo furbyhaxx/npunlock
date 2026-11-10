@@ -1080,6 +1080,16 @@ class EncodingTests(unittest.TestCase):
         self.assertEqual(encode(source), expected)
         self.assertEqual(encode(" || ".join(reversed(source.split(" || ")))), expected)
 
+    def test_measured_combined_header_10(self) -> None:
+        source = "CMU.CP.32 i0 i1 || LSU0.LDO.32 i4 i5 -7 || LSU1.STO.32 i8 i9 11 || SAU.AND i12 i13 i14 || IAU.ADD i16 i17 i18"
+        expected = bytes.fromhex("0ff80e1c0008424af3ff86521700b83107229400")
+        self.assertEqual(encode(source), expected)
+        self.assertEqual(encode(" || ".join(reversed(source.split(" || ")))), expected)
+        source = "CMU.CP.32 i2 i3 || LSU0.LDO.64 v4.1 i6 123 || LSU1.STO.64 v8.1 i10 -123 || SAU.OR i15 i12 i13 || IAU.INCS i19 -123"
+        expected = bytes.fromhex("0ff80e3c0408420cf60086140aff9bbd3666e10f")
+        self.assertEqual(encode(source), expected)
+        self.assertEqual(encode(" || ".join(reversed(source.split(" || ")))), expected)
+
     def test_invalid_or_unmeasured_input_fails_closed(self) -> None:
         for source in [
             "LSU0.LDIL i4 65536",
