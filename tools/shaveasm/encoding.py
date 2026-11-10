@@ -11,6 +11,7 @@ from .parser import AssemblyError, Instruction, Packet, is_float_literal
 
 _ORDER = ("VAU", "CMU", "LSU0", "LSU1", "SAU", "IAU", "BRU", "PEU")
 _PREFIXES = {
+    "CMU,LSU0.LDO32,LSU1,IAU.ADD24,PEU.PCCX12": (24, 0xCCB80F),
     "CMU,LSU0,SAU,IAU.ADD24,PEU.PCCX12": (24, 0xCF280F),
     "CMU,LSU0,LSU1.STO32,SAU.AND20,IAU.ADD24,PEU.PCCX12": (24, 0xCEE80F),
     "CMU,LSU0,LSU1.STO32,IAU.ADD24,PEU.PCCX12": (24, 0xCCE80F),
