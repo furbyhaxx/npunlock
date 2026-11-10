@@ -1155,6 +1155,18 @@ register field cases match moviAsm. Both seeds pass **68196/68196** cases;
 39 rejected; diagnostic instruction rejections fall from 347 to 324. Fixtures:
 `/mnt/cache/build-shave/sau-xor-{3720,9001}` and `corpus-parity-sau-xor`.
 
+### IAU scalar subtract with carry
+
+`IAU.SUBCI d l r` uses the 20-bit IAU class and five-bit scalar register
+fields, with payload `0x07 | d<<10 | l<<5 | r<<15`. Immediate and vector
+operands remain rejected. All 961 current headers and 96 independent register
+field cases match moviAsm. Both seeds pass **69253/69253** cases; 96 offline
+tests pass. This advances the first rejection in eight files but does not yet
+make another complete object exact: parity remains **16/55 exact**, zero
+different, 39 rejected. Diagnostic instruction rejections drop from 324 to 316.
+Fixtures: `/mnt/cache/build-shave/iau-subci-{3720,9001}` and
+`corpus-parity-iau-subci`.
+
 ### Differential gates and corpus inventory
 
 Cached assembly can be inventoried without Wine or recompilation:

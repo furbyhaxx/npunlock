@@ -15,6 +15,13 @@ def encode(source: str) -> bytes:
 
 
 class EncodingTests(unittest.TestCase):
+    def test_iau_subtract_with_carry_uses_twenty_bit_iau_headers(self) -> None:
+        self.assertEqual(encode("IAU.SUBCI i31 i30 i29"), bytes.fromhex("86c7ff0e"))
+        self.assertEqual(encode("IAU.SUBCI i0 i0 i1"), bytes.fromhex("86078000"))
+        for source in ("IAU.SUBCI i0 i0 1", "IAU.SUBCI i0 v0 i0"):
+            with self.subTest(source=source), self.assertRaises(AssemblyError):
+                encode(source)
+
     def test_sau_xor_reuses_twenty_bit_sau_headers(self) -> None:
         self.assertEqual(encode("SAU.XOR i31 i30 i29"), bytes.fromhex("2cdaff0e"))
         self.assertEqual(encode("SAU.XOR i0 i1 i0"), bytes.fromhex("2c3a0000"))

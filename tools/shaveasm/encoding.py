@@ -3870,10 +3870,10 @@ def _operation(instruction: Instruction) -> _Operation:
         opcode = {"IAU.ADD": 0, "IAU.SUB": 1, "IAU.MUL": 2}[mnemonic]
         return _Operation(unit, opcode | selector | destination << 10 | left << 5 | right << 15, 24,
                           prefix_class="IAU.ADD24")
-    if mnemonic in ("IAU.XOR", "IAU.AND", "IAU.OR", "IAU.LMULL", "IAU.LMULH", "IAU.ADDCI") and len(operands) == 3:
+    if mnemonic in ("IAU.XOR", "IAU.AND", "IAU.OR", "IAU.LMULL", "IAU.LMULH", "IAU.ADDCI", "IAU.SUBCI") and len(operands) == 3:
         destination, left, right = (_register(op, line) for op in operands)
         opcode = {"IAU.XOR": 0x12, "IAU.AND": 0x10, "IAU.OR": 0x11,
-                  "IAU.LMULL": 0x04, "IAU.LMULH": 0x05, "IAU.ADDCI": 0x06}[mnemonic]
+                  "IAU.LMULL": 0x04, "IAU.LMULH": 0x05, "IAU.ADDCI": 0x06, "IAU.SUBCI": 0x07}[mnemonic]
         return _Operation(unit, opcode | destination << 10 | left << 5 | right << 15, 20)
     if mnemonic in ("SAU.AND", "SAU.XOR") and len(operands) == 3:
         destination, left, right = (_register(op, line) for op in operands)
