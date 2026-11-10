@@ -1209,6 +1209,15 @@ and register sweeps; **99 offline tests** pass. Corpus parity rises from
 rejections fall from 310 to 290. Fixtures: `/mnt/cache/build-shave/float-measure`,
 `float-add-{3720,9001}` and `corpus-parity-float-add`.
 
+### SAU floating-point MUL constant mapping
+
+`SAU.MUL.F32` shares ADD's measured constant ROM selector, spellings, fields
+and 585 headers, retaining opcode `0x200004`. Both seeds pass
+**71065/71065** cases and **100 offline tests** pass. Corpus parity rises
+from **19/55 to 29/55 exact**, zero different, 26 rejected; diagnostic
+instruction rejections fall from 290 to 277. Fixtures:
+`/mnt/cache/build-shave/float-mul-{3720,9001}` and `corpus-parity-float-mul`.
+
 ### Differential gates and corpus inventory
 
 Cached assembly can be inventoried without Wine or recompilation:

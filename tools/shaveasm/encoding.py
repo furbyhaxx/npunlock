@@ -3885,7 +3885,7 @@ def _operation(instruction: Instruction) -> _Operation:
     if mnemonic in ("SAU.ADD.F32", "SAU.SUB.F32", "SAU.MUL.I32", "SAU.MUL.F32") and len(operands) == 3:
         destination, left = (_register(op, line) for op in operands[:2])
         selector = 0
-        if mnemonic == "SAU.ADD.F32" and is_float_literal(operands[2]):
+        if mnemonic in ("SAU.ADD.F32", "SAU.MUL.F32") and is_float_literal(operands[2]):
             constants = {"0.5": 0, "1.0": 1, "2.0": 2, "3.0": 3,
                          "-0.5": 16, "-1.0": 17, "-2.0": 18, "-3.0": 19, "+1.0": 1}
             if operands[2] not in constants:
