@@ -3831,6 +3831,10 @@ def _operation(instruction: Instruction) -> _Operation:
     if mnemonic in ("LSU0.CP.128", "LSU1.CP.128") and len(operands) == 2:
         destination, source = (_vector_register(op, line) for op in operands)
         return _Operation(unit, 0x480007 | destination << 4 | source << 9, 24)
+    if mnemonic == "LSU0.CP.32" and len(operands) == 2 and operands[0].lower().startswith("v"):
+        destination = _vector_word_register(operands[0], line)
+        source = _register(operands[1], line)
+        return _Operation(unit, 0x0C0007 | destination | source << 9, 24)
     if mnemonic in ("LSU0.LD.32", "LSU1.LD.32", "LSU0.CP.32", "LSU1.CP.32") and len(operands) == 2:
         destination, source = (_register(op, line) for op in operands)
         opcode = 0x80007 if mnemonic.endswith(".CP.32") else 0x1000D
@@ -4074,7 +4078,7 @@ def encode_packet_with_fixups(
     vector_copies = [instruction for instruction in packet.operations
                      if len(instruction.operands) == 2 and (
                          instruction.mnemonic in ("CMU.CP.128.32.R", "CMU.CP.128", "LSU0.CP.128", "LSU1.CP.128")
-                         or instruction.mnemonic == "CMU.CP.32" and instruction.operands[0].lower().startswith("v"))]
+                         or instruction.mnemonic in ("CMU.CP.32", "LSU0.CP.32") and instruction.operands[0].lower().startswith("v"))]
     for copy in vector_copies:
         destination = _vector_register(copy.operands[0].split(".")[0], copy.line)
         if any(instruction.mnemonic in ("VAU.MUL.F32", "VAU.ADD.F32", "VAU.SUB.F32", "VAU.OR")

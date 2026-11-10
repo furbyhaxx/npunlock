@@ -1756,6 +1756,17 @@ Corpus parity remains **54/55 exact**, zero different, one rejected.
 Fixtures: `/mnt/cache/build-shave/cmu-cp32vector-measure`,
 `cmu-cp32vector-{3720,9001}` and `corpus-parity-cmu-cp32vector`.
 
+### LSU0 scalar-to-vector word copy
+
+`LSU0.CP.32 vD.lane s` uses the 24-bit LSU0 class with payload
+`0x0c0007 | d<<4 | s<<9 | lane<<14`. All scalar/vector registers and
+lanes 0..3 are supported; a VAU write to the same vector register conflicts.
+Every LSU0 header with all four lanes and 128 register/lane pairs matches
+moviAsm. Both seeds pass **126647/126647** cases; **145 offline tests** pass.
+Corpus parity remains **54/55 exact**, zero different, one rejected.
+Fixtures: `/mnt/cache/build-shave/lsu0-cp32vector-measure`,
+`lsu0-cp32vector-{3720,9001}` and `corpus-parity-lsu0-cp32vector`.
+
 ### Differential gates and corpus inventory
 
 Cached assembly can be inventoried without Wine or recompilation:

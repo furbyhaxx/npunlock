@@ -1099,6 +1099,16 @@ class EncodingTests(unittest.TestCase):
         with self.assertRaisesRegex(AssemblyError, "same vector register"):
             encode("CMU.CP.32 v0.0 i1 || VAU.OR v0 v24 v25")
 
+    def test_lsu0_vector_word_destination(self) -> None:
+        for operands, expected in (("v0.0 i0", "8207000c"), ("v1.1 i2", "8217440c"),
+                                   ("v31.3 i31", "82f7ff0c")):
+            self.assertEqual(encode("LSU0.CP.32 " + operands), bytes.fromhex(expected))
+        for operands in ("v0.4 i0", "v32.0 i0", "v0 i0", "v0.0 v1.0", "v0.0 i32"):
+            with self.subTest(operands=operands), self.assertRaises(AssemblyError):
+                encode("LSU0.CP.32 " + operands)
+        with self.assertRaisesRegex(AssemblyError, "same vector register"):
+            encode("LSU0.CP.32 v0.0 i1 || VAU.OR v0 v24 v25")
+
     def test_invalid_or_unmeasured_input_fails_closed(self) -> None:
         for source in [
             "LSU0.LDIL i4 65536",
