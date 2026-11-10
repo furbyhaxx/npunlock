@@ -3837,7 +3837,7 @@ def _operation(instruction: Instruction) -> _Operation:
         return _Operation(unit, 3 | destination << 3 | immediate << 8, 24)
     if mnemonic in ("LSU0.LDIL", "LSU1.LDIL") and len(operands) == 2:
         destination = _register(operands[0], line)
-        if mnemonic == "LSU1.LDIL" and re.fullmatch(r"[A-Za-z_.$][A-Za-z_0-9.$]*", operands[1]):
+        if re.fullmatch(r"[A-Za-z_.$][A-Za-z_0-9.$]*", operands[1]):
             return _Operation(unit, 2 | destination << 3, 24,
                               Fixup(operands[1], 0, 8, 16, "R_SHAVE_LO16"))
         immediate = _immediate(operands[1], 16, line)

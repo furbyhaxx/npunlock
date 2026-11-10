@@ -1545,6 +1545,20 @@ rejections fall from 49 to 45. Fixtures:
 `/mnt/cache/build-shave/five-logical-{3720,9001}` and
 `corpus-parity-five-logical`.
 
+### LSU0 symbolic low-half load
+
+`LSU0.LDIL d symbol` shares the immediate payload `2 | d<<3`, with a
+zero initialized 16-bit `R_SHAVE_LO16` field at payload bit 8. Combined
+headers can move the field to a half-byte offset, selecting
+`R_SHAVE_LO16_AT4`. Expressions and signed immediates remain rejected.
+All 757 headers and 32 destinations match moviAsm, including relocation
+symbol, offset, width, kind and addend. Both seeds pass **105615/105615**
+cases; **128 offline tests** pass. Corpus parity rises from **49/55 to
+50/55 exact**, zero different, five rejected; diagnostic instruction
+rejections fall from 45 to 43. The function-table example is now exact.
+Fixtures: `/mnt/cache/build-shave/lsu0-ldil-symbol-{3720,9001}` and
+`corpus-parity-lsu0-ldil-symbol`.
+
 ### Differential gates and corpus inventory
 
 Cached assembly can be inventoried without Wine or recompilation:

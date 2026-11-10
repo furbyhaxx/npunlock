@@ -930,6 +930,18 @@ class EncodingTests(unittest.TestCase):
         self.assertEqual(encode(" || ".join(operations)), expected)
         self.assertEqual(encode(" || ".join(reversed(operations))), expected)
 
+    def test_lsu0_symbolic_low_load_emits_byte_and_half_byte_fixups(self) -> None:
+        data, fixups = encode_packet_with_fixups(parse("LSU0.LDIL i0 external_target")[0])
+        self.assertEqual(data, bytes.fromhex("82020000"))
+        self.assertEqual(fixups, (Fixup("external_target", 0, 16, 16, "R_SHAVE_LO16"),))
+        packet = parse("CMU.CMPI i0 0 || LSU0.LDIL i31 external_target")[0]
+        data, fixups = encode_packet_with_fixups(packet)
+        self.assertEqual(data, bytes.fromhex("b40a0000a00f0000"))
+        self.assertEqual(fixups, (Fixup("external_target", 0, 44, 16, "R_SHAVE_LO16_AT4"),))
+        for source in ("LSU0.LDIL i0 target+2", "LSU0.LDIL i0 -1"):
+            with self.subTest(source=source), self.assertRaises(AssemblyError):
+                encode_packet_with_fixups(parse(source)[0])
+
     def test_invalid_or_unmeasured_input_fails_closed(self) -> None:
         for source in [
             "LSU0.LDIL i4 65536",

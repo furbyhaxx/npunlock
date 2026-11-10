@@ -189,6 +189,8 @@ def generate_packets(seed: int, count: int) -> list[str]:
                 packets.append("\n || ".join(f"{mnemonic} i12 i13 {right}" if unit == "SAU"
                                               else operation(unit, store_packet=store_packet) for unit in shape))
         if "LSU0" in shape:
+            packets.append("\n || ".join("LSU0.LDIL i4 external_target" if unit == "LSU0"
+                                          else operation(unit, store_packet=store_packet) for unit in shape))
             for destination in ("i4", "v4.0", "v4.1"):
                 packets.append("\n || ".join(f"LSU0.LD.64 {destination} i5" if unit == "LSU0"
                                               else "LSU1.STO.32 i8 i9 -3" if unit == "LSU1.STO32"
@@ -406,7 +408,8 @@ def generate_packets(seed: int, count: int) -> list[str]:
                    (0, -1, 8191, -8192, *(1 << bit for bit in range(13)),
                     *(-(1 << bit) for bit in range(14))))
     packets.extend(f"BRU.SWP i{r}" for r in range(32))
-    packets.extend(f"LSU1.LDIL i{r} external_target" for r in range(32))
+    for unit in ("LSU0", "LSU1"):
+        packets.extend(f"{unit}.LDIL i{r} external_target" for r in range(32))
     for position in range(2):
         for register in range(32):
             operands = ["i0", "i0"]
