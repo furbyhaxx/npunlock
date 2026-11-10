@@ -1830,6 +1830,16 @@ parity is **54/55 exact**, zero different. Fixtures:
 `/mnt/cache/build-shave/remaining-headers-measure`, `combined-header-5-{3720,9001}`
 and `corpus-parity-combined-header-5`.
 
+### six offset store logical add predicated header
+
+`CMU,LSU0,LSU1.STO32,SAU.AND20,IAU.ADD24,PEU.PCCX12` uses the measured 24-bit
+prefix `0xcee80f`. Two independent packets identify the same
+unique width; reversed textual orders encode identically. Both seeds pass
+**130360/130360** cases; **152 offline tests** pass. Corpus
+parity is **54/55 exact**, zero different. Fixtures:
+`/mnt/cache/build-shave/remaining-headers-measure`, `combined-header-6-{3720,9001}`
+and `corpus-parity-combined-header-6`.
+
 ### Differential gates and corpus inventory
 
 Cached assembly can be inventoried without Wine or recompilation:

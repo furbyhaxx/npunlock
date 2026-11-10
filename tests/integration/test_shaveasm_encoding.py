@@ -1163,6 +1163,14 @@ class EncodingTests(unittest.TestCase):
             self.assertEqual(encode(source), bytes.fromhex(expected))
             self.assertEqual(encode(" || ".join(reversed(source.split(" || ")))), bytes.fromhex(expected))
 
+    def test_six_offset_store_logical_add_predicated_header(self) -> None:
+        for source, expected in (
+            ("CMU.CP.32 i0 i1 || LSU0.CP.32 i4 i5 || LSU1.STO.32 i8 i9 11 || SAU.AND i12 i13 i14 || IAU.ADD i16 i17 i18 || PEU.PCCX EQ 21", "0fe8ce1c0008470a0886521700b8310722945054"),
+            ("CMU.CP.32 i2 i3 || LSU0.LDIH i6 12345 || LSU1.STO.64 v8.1 i10 -123 || SAU.OR i15 i12 i13 || IAU.INCS i19 -123 || PEU.PCCX NEQ 47", "0fe8ce3c040833393086140aff9bbd3666e19fbd"),
+        ):
+            self.assertEqual(encode(source), bytes.fromhex(expected))
+            self.assertEqual(encode(" || ".join(reversed(source.split(" || ")))), bytes.fromhex(expected))
+
     def test_invalid_or_unmeasured_input_fails_closed(self) -> None:
         for source in [
             "LSU0.LDIL i4 65536",
