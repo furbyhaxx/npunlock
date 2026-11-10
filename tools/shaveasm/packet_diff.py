@@ -145,6 +145,9 @@ def generate_packets(seed: int, count: int) -> list[str]:
                                               else operation(unit, store_packet=store_packet) for unit in shape))
             packets.append("\n || ".join("LSU0.STO.32 i4 i5 -3" if unit == "LSU0.LDO32"
                                           else operation(unit, store_packet=store_packet) for unit in shape))
+        if "LSU0.LDO32" in shape:
+            packets.append("\n || ".join("LSU0.LDO.16 i4.0 i5 -3" if unit == "LSU0.LDO32"
+                                          else operation(unit, store_packet=store_packet) for unit in shape))
         if "LSU1.STO32" in shape:
             for source in ("i8", "v8.0", "v8.1"):
                 packets.append("\n || ".join(f"LSU1.STO.64 {source} i9 -3" if unit == "LSU1.STO32"
@@ -357,6 +360,11 @@ def generate_packets(seed: int, count: int) -> list[str]:
                    for register in range(32) for lane in range(16))
     packets.extend(f"LSU0.LDO.64 i0 i{register} 0" for register in range(32))
     packets.extend(f"LSU0.LDO.64 i0 i0 {value}" for value in
+                   (0, -1, 16383, -16384, *(1 << bit for bit in range(14)),
+                    *(-(1 << bit) for bit in range(15))))
+    packets.extend(f"LSU0.LDO.16 i{register}.0 i0 0" for register in range(32))
+    packets.extend(f"LSU0.LDO.16 i0.0 i{register} 0" for register in range(32))
+    packets.extend(f"LSU0.LDO.16 i0.0 i0 {value}" for value in
                    (0, -1, 16383, -16384, *(1 << bit for bit in range(14)),
                     *(-(1 << bit) for bit in range(15))))
     packets.extend(f"LSU0.LD.16 i{register}.{lane} i0"
