@@ -49,11 +49,12 @@ class CorpusTests(unittest.TestCase):
             root = Path(directory)
             (root / "authored.s").write_text(
                 "CMU.UNMEASURED i1 v13.2\nLSU0.UNMEASURED i6.0 i9\n"
-                "LSU1.UNMEASURED i30 memcpy\n"
+                "LSU1.UNMEASURED i30 memcpy\nSAU.UNMEASURED i1 i2 3.0\n"
+                "SAU.UNMEASURED i3 i4 -0.5\nSAU.UNMEASURED i1 i2 1.0e0\n"
             )
             result = report([root])
             shapes = {row["operand_shape"] for row in result["rejected_shapes"]}
-            self.assertEqual(shapes, {"ireg vreg_lane", "ireg_lane ireg", "ireg symbol"})
+            self.assertEqual(shapes, {"ireg vreg_lane", "ireg_lane ireg", "ireg symbol", "ireg ireg float"})
 
     def test_coverage_identifies_packets_requiring_fixups(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

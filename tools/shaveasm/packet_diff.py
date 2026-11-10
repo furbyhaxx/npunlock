@@ -108,6 +108,8 @@ def generate_packets(seed: int, count: int) -> list[str]:
     for register in range(32):
         for unit in (*_UNITS, "LSU0.LDO32", "LSU1.STO32", "IAU.ADD24", "CMU.CMZ16", "PEU.PCCX12", "BRU.JMP16", "LSU0.LD20", "LSU1.STI20"):
             packets.append(operation(unit, (f"i{register}", f"i{31 - register}", f"i{(register + 11) % 32}")))
+    packets.extend(f"SAU.ADD.F32 i{r} i{31-r} {literal}" for r in range(32)
+                   for literal in ("0.5", "1.0", "2.0", "3.0", "-0.5", "-1.0", "-2.0", "-3.0", "+1.0"))
     packets.extend(("LSU0.LDIL i31 65535", "LSU1.LDIL i0 0", "SAU.ADD.i32 i0 i31 31"))
     packets.extend(f"LSU0.LDO.32 i31 i0 {value}" for value in (-16384, -1, 0, 1, 16383))
     packets.extend(f"IAU.ADD i{r} i{31-r} i{(r+11)%32}" for r in range(32))
@@ -164,6 +166,8 @@ def generate_packets(seed: int, count: int) -> list[str]:
             packets.append("\n || ".join("SAU.XOR i12 i13 i14" if unit == "SAU.AND20"
                                           else operation(unit, store_packet=store_packet) for unit in shape))
         if "SAU" in shape:
+            packets.append("\n || ".join("SAU.ADD.F32 i12 i13 " + rng.choice(("0.5", "1.0", "3.0", "-1.0")) if unit == "SAU"
+                                          else operation(unit, store_packet=store_packet) for unit in shape))
             for mnemonic in ("SAU.ADD.I32", "SAU.SHL.X32", "SAU.SHR.U32"):
                 packets.append("\n || ".join(f"{mnemonic} i12 i13 i14" if unit == "SAU"
                                               else operation(unit, store_packet=store_packet) for unit in shape))

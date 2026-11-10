@@ -426,6 +426,18 @@ class EncodingTests(unittest.TestCase):
             with self.subTest(source=source), self.assertRaises(AssemblyError):
                 encode(source)
 
+    def test_float_add_uses_measured_constant_mapping(self) -> None:
+        for literal, payload in (("0.5", "400430"), ("1.0", "408430"),
+                                 ("2.0", "400431"), ("3.0", "408431"),
+                                 ("-0.5", "400438"), ("-1.0", "408438"),
+                                 ("-2.0", "400439"), ("-3.0", "408439"),
+                                 ("+1.0", "408430")):
+            with self.subTest(literal=literal):
+                self.assertEqual(encode(f"SAU.ADD.F32 i1 i2 {literal}"), bytes.fromhex("3c" + payload))
+        for literal in ("0.0", "4.0", "0.25", "1.5", "0.50", ".5", "1e0", "1.0e0", "nan", "inf"):
+            with self.subTest(literal=literal), self.assertRaises(AssemblyError):
+                encode(f"SAU.ADD.F32 i1 i2 {literal}")
+
     def test_float_add_uses_scalar_registers_in_the_sau_class(self) -> None:
         self.assertEqual(encode("SAU.ADD.F32 i0 i0 i0"), bytes.fromhex("3c000020"))
         self.assertEqual(encode("SAU.ADD.f32 i31 i31 i31"), bytes.fromhex("3ce0ff2f"))

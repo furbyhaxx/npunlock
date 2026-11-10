@@ -1193,6 +1193,22 @@ from 314 to 310. The original pre-merge baseline was 15 exact, one different,
 `/mnt/cache/build-shave/sau-xor-wide-{3720,9001}`, `vau-measure/xor-wide.*`
 and `corpus-parity-sau-xor-wide`.
 
+### SAU floating-point ADD constant mapping
+
+`SAU.ADD.F32 d l literal` selects a constant ROM, not an IEEE immediate.
+The measured spellings `0.5`, `1.0`, `2.0`, `3.0` map to right-field values
+0..3; their negative spellings map to 16..19. `+1.0` aliases `1.0`.
+The payload adds selector `0x100000` to the register form, retaining the
+24-bit SAU class and all 585 measured headers. Spellings are significant:
+moviAsm rejects `0.50`, `.5`, `1.00`, `1e0` and `1.0e0`, as well as `0.0`,
+`0.25`, `1.5` and `4.0`. Other mappings remain unsupported. Shared operand
+classification now distinguishes decimal floats from symbols without altering
+source spelling. Both seeds pass **70192/70192** cases, including constant
+and register sweeps; **99 offline tests** pass. Corpus parity rises from
+**16/55 to 19/55 exact**, zero different, 36 rejected; diagnostic instruction
+rejections fall from 310 to 290. Fixtures: `/mnt/cache/build-shave/float-measure`,
+`float-add-{3720,9001}` and `corpus-parity-float-add`.
+
 ### Differential gates and corpus inventory
 
 Cached assembly can be inventoried without Wine or recompilation:
