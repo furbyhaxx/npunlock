@@ -1531,6 +1531,20 @@ six rejected; diagnostic instruction rejections fall from 53 to 49.
 Fixtures: `/mnt/cache/build-shave/sau-divu32-{3720,9001}` and
 `corpus-parity-sau-divu32`.
 
+### Five-unit scalar logical packet header
+
+The measured `CMU,LSU0,LSU1,SAU.AND20,IAU` packet class uses the
+24-bit combined prefix `0x0aa80f`. A packet of scalar copies and SAU/IAU
+OR operations has 112 payload bits plus this prefix, occupying 17 bytes.
+The table remains explicit; other five-unit classes are not inferred.
+The differential generator automatically exercises every retained class
+with its alternative operations and textual permutations. Both seeds pass
+**104826/104826** cases; **127 offline tests** pass. Corpus parity remains
+**49/55 exact**, zero different, six rejected; diagnostic instruction
+rejections fall from 49 to 45. Fixtures:
+`/mnt/cache/build-shave/five-logical-{3720,9001}` and
+`corpus-parity-five-logical`.
+
 ### Differential gates and corpus inventory
 
 Cached assembly can be inventoried without Wine or recompilation:

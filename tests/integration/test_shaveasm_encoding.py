@@ -923,6 +923,13 @@ class EncodingTests(unittest.TestCase):
             with self.subTest(operands=operands), self.assertRaises(AssemblyError):
                 encode("SAU.DIV.U32 " + operands)
 
+    def test_five_unit_scalar_logical_header(self) -> None:
+        operations = ("LSU0.CP.32 i4 i5", "LSU1.CP.32 i8 i9", "CMU.CP.32 i0 i1",
+                      "SAU.OR i12 i13 i14", "IAU.OR i16 i17 i18")
+        expected = bytes.fromhex("0fa80a1c0008470a08871208bb31172394")
+        self.assertEqual(encode(" || ".join(operations)), expected)
+        self.assertEqual(encode(" || ".join(reversed(operations))), expected)
+
     def test_invalid_or_unmeasured_input_fails_closed(self) -> None:
         for source in [
             "LSU0.LDIL i4 65536",
