@@ -899,6 +899,14 @@ class EncodingTests(unittest.TestCase):
             with self.subTest(operation=operation), self.assertRaisesRegex(AssemblyError, port):
                 encode(operation + " || LSU1.STO.16 i8.0 i9 0")
 
+    def test_iau_unsigned_maximum(self) -> None:
+        self.assertEqual(encode("IAU.MAXU i0 i0 i0"), bytes.fromhex("86000000"))
+        self.assertEqual(encode("IAU.MAXU i1 i2 i3"), bytes.fromhex("86408401"))
+        self.assertEqual(encode("IAU.MAXU i31 i31 i31"), bytes.fromhex("86e0ff0f"))
+        for operands in ("i0 i0 1", "i32 i0 i0", "i0 i32 i0", "i0 i0 i32", "v0 i0 i0"):
+            with self.subTest(operands=operands), self.assertRaises(AssemblyError):
+                encode("IAU.MAXU " + operands)
+
     def test_invalid_or_unmeasured_input_fails_closed(self) -> None:
         for source in [
             "LSU0.LDIL i4 65536",
