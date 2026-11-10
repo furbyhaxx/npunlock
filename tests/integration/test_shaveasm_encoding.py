@@ -15,6 +15,15 @@ def encode(source: str) -> bytes:
 
 
 class EncodingTests(unittest.TestCase):
+    def test_signed_byte_compare_uses_cmu_register_fields(self) -> None:
+        self.assertEqual(encode("CMU.CMII.I8 i0 i0"), bytes.fromhex("81000005"))
+        self.assertEqual(encode("CMU.CMII.I8 i1 i2"), bytes.fromhex("81100405"))
+        for source in ("CMU.CMII.I8 i0 1", "CMU.CMII.I8 i32 i0", "CMU.CMII.I8 i0 v0",
+                       "CMU.CMII.I8 i0 i1 || LSU1.ST.64 v8.0 i9",
+                       "CMU.CMII.I8 i0 i1 || LSU1.LD.32.F16.F32 i8 i9"):
+            with self.subTest(source=source), self.assertRaises(AssemblyError):
+                encode(source)
+
     def test_sau_float_divide_uses_scalar_registers(self) -> None:
         self.assertEqual(encode("SAU.DIV.F32 i0 i0 i0"), bytes.fromhex("3c060020"))
         self.assertEqual(encode("SAU.DIV.F32 i1 i2 i3"), bytes.fromhex("3c468421"))

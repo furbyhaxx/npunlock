@@ -1279,6 +1279,17 @@ Corpus parity rises from **39/55 to 40/55 exact**, zero different, 15 rejected;
 diagnostic instruction rejections fall from 225 to 210. Fixtures:
 `/mnt/cache/build-shave/sau-divf32-{3720,9001}` and `corpus-parity-sau-divf32`.
 
+### CMU signed byte register comparison
+
+`CMU.CMII.I8 l r` uses the existing 24-bit CMU class with payload
+`0x50000 | l<<4 | r<<9`. It retains the CMII read-port-6 conflict with
+LSU1 memory operations. All 471 eligible headers and 64 independent
+register-field cases match. Both seeds pass **80084/80084** cases;
+**106 offline tests** pass. Corpus parity remains **40/55 exact**, zero
+different, 15 rejected; diagnostic instruction rejections fall from 210 to
+188. Fixtures: `/mnt/cache/build-shave/cmu-cmiii8-{3720,9001}` and
+`corpus-parity-cmu-cmiii8`.
+
 ### Differential gates and corpus inventory
 
 Cached assembly can be inventoried without Wine or recompilation:
