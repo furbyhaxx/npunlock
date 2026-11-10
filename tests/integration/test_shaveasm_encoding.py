@@ -15,6 +15,13 @@ def encode(source: str) -> bytes:
 
 
 class EncodingTests(unittest.TestCase):
+    def test_sau_bitwise_or_shares_twenty_bit_logical_class(self) -> None:
+        self.assertEqual(encode("SAU.OR i0 i0 i0"), bytes.fromhex("2c1b0000"))
+        self.assertEqual(encode("SAU.OR i1 i2 i3"), bytes.fromhex("2c5b8401"))
+        for source in ("i0 i0 1", "i32 i0 i0", "i0 i0 v0"):
+            with self.subTest(source=source), self.assertRaises(AssemblyError):
+                encode("SAU.OR " + source)
+
     def test_signed_byte_compare_uses_cmu_register_fields(self) -> None:
         self.assertEqual(encode("CMU.CMII.I8 i0 i0"), bytes.fromhex("81000005"))
         self.assertEqual(encode("CMU.CMII.I8 i1 i2"), bytes.fromhex("81100405"))

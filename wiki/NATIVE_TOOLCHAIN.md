@@ -1290,6 +1290,18 @@ different, 15 rejected; diagnostic instruction rejections fall from 210 to
 188. Fixtures: `/mnt/cache/build-shave/cmu-cmiii8-{3720,9001}` and
 `corpus-parity-cmu-cmiii8`.
 
+### SAU scalar bitwise OR
+
+`SAU.OR d l r` uses the 20-bit scalar logical class (`SAU.AND20`) with
+payload `0x1B | d<<10 | l<<5 | r<<15`. Immediate and vector operands
+remain unsupported. All 606 current headers and 96 register-field cases
+match. Both seeds pass **80786/80786** cases; **107 offline tests** pass.
+Corpus parity stays **40/55 exact**, zero different, 15 rejected; diagnostic
+instruction rejections fall from 188 to 178. Twelve corpus OR packets still
+reject unmeasured combined headers; no headers are inferred from other
+classes. Fixtures: `/mnt/cache/build-shave/sau-or-{3720,9001}` and
+`corpus-parity-sau-or`.
+
 ### Differential gates and corpus inventory
 
 Cached assembly can be inventoried without Wine or recompilation:
@@ -1329,8 +1341,8 @@ python3 -m tools.shaveasm.corpus --native-dir build/linux \
   --output /mnt/cache/build-shave/native-asm-corpus
 ```
 
-Offline regressions: 84 passed, including the merged object-writer/corpus tests.
-Each current randomized gate passes **45677/45677 cases**. Before the eight
+Offline regressions: 107 passed, including the merged object-writer/corpus tests.
+Each current randomized gate passes **80786/80786 cases**. Before the eight
 additional forms documented above, the gate passed **12156/12156 cases**
 (seeds 3720 and 9001): the original 2362 isolated-packet cases (1000 random
 packets, 457 shapes, 352 mixed operand sweeps, 96 ADD sweeps, 384 PCCX pairs,
@@ -1362,8 +1374,8 @@ in the real compiler corpus.
 Original C, compiler `.s`, vendor `.o` and JSON manifests stay under the cache
 paths above. `elf.py` provides bounded ELF32 section inspection and a comparator
 which reports every section-attribute or byte difference while ignoring only
-file offsets. Whole-object native parity now reaches **11/55** exact cached
-objects; 44 still reject unmeasured instructions. See the object-writer
+file offsets. Whole-object native parity now reaches **40/55** exact cached
+objects, zero different; 15 still reject unmeasured instructions or headers. See the object-writer
 section below.
 
 The captured corpus has **55 distinct complete kernel sources**: 39 literal
