@@ -1640,6 +1640,19 @@ and CMU copies to avoid the measured read-port conflicts. Both seeds pass
 rejections fall from 38 to 36. Fixtures: `/mnt/cache/build-shave/lsu0-st64-measure`,
 `lsu0-st64-{3720,9001}` and `corpus-parity-lsu0-st64`.
 
+### CMU scalar doubleword copy
+
+`CMU.CP.64 d s` uses the 24-bit CMU class with payload
+`0x04000c | d<<9 | s<<4`. All scalar registers, including odd registers and
+i31, are accepted. Vector forms remain unmeasured. LSU1 memory operations
+conflict on scalar read port 6. SAU.AND/OR/XOR conflict on scalar write
+port 1; scalar SAU arithmetic can co-issue. All 398 eligible headers and
+64 register-field cases match moviAsm. Both seeds pass **117539/117539**
+cases; **135 offline tests** pass. Corpus parity remains **52/55 exact**,
+zero different, three rejected; diagnostic instruction rejections fall from
+36 to 35. Fixtures: `/mnt/cache/build-shave/cmu-cp64-measure`,
+`cmu-cp64-{3720,9001}` and `corpus-parity-cmu-cp64`.
+
 ### Differential gates and corpus inventory
 
 Cached assembly can be inventoried without Wine or recompilation:

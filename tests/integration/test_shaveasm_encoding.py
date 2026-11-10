@@ -999,6 +999,19 @@ class EncodingTests(unittest.TestCase):
         with self.assertRaises(AssemblyError):
             encode("LSU0.ST.64 i0 i1 || LSU1.ST.64 i8 i9")
 
+    def test_cmu_scalar_doubleword_copy(self) -> None:
+        self.assertEqual(encode("CMU.CP.64 i0 i0"), bytes.fromhex("810c0004"))
+        self.assertEqual(encode("CMU.CP.64 i1 i22"), bytes.fromhex("816c0304"))
+        self.assertEqual(encode("CMU.CP.64 i31 i31"), bytes.fromhex("81fc3f04"))
+        for operands in ("i32 i1", "i0 i32", "v0.0 i1", "i0 v1.0"):
+            with self.subTest(operands=operands), self.assertRaises(AssemblyError):
+                encode("CMU.CP.64 " + operands)
+        with self.assertRaisesRegex(AssemblyError, "read port 6"):
+            encode("CMU.CP.64 i0 i1 || LSU1.LD.32 i8 i9")
+        for mnemonic in ("SAU.AND", "SAU.OR", "SAU.XOR"):
+            with self.subTest(mnemonic=mnemonic), self.assertRaisesRegex(AssemblyError, "write port 1"):
+                encode(f"CMU.CP.64 i0 i1 || {mnemonic} i12 i13 i14")
+
     def test_invalid_or_unmeasured_input_fails_closed(self) -> None:
         for source in [
             "LSU0.LDIL i4 65536",
