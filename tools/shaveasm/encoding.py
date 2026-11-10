@@ -3788,13 +3788,13 @@ def _operation(instruction: Instruction) -> _Operation:
         base = _register(operands[1], line)
         opcode = 0x8009 if mnemonic == "LSU1.ST.64" else 0x800D
         return _Operation(unit, opcode | register | base << 9, 24)
-    if mnemonic in ("LSU0.LD.16", "LSU1.STI.16") and len(operands) == 2:
+    if mnemonic in ("LSU0.LD.16", "LSU0.LD.8", "LSU1.STI.16") and len(operands) == 2:
         destination = re.fullmatch(r"[iI]([0-9]+)\.([0-9]+)", operands[0])
         if destination is None or not 0 <= int(destination[1]) < 32 or not 0 <= int(destination[2]) < 4:
-            raise AssemblyError(f"line {line}: invalid scalar halfword register {operands[0]!r}")
+            raise AssemblyError(f"line {line}: invalid scalar lane register {operands[0]!r}")
         register, lane = int(destination[1]), int(destination[2])
         base = _register(operands[1], line)
-        opcode = 0x820009 if mnemonic == "LSU1.STI.16" else 0x2000D
+        opcode = {"LSU1.STI.16": 0x820009, "LSU0.LD.16": 0x2000D, "LSU0.LD.8": 0x4000D}[mnemonic]
         return _Operation(unit, opcode | register << 4 | base << 9 | lane << 14, 24)
     if mnemonic in ("LSU0.LD.32.F16.F32", "LSU1.LD.32.F16.F32") and len(operands) == 2:
         destination, base = (_register(op, line) for op in operands)
@@ -3997,7 +3997,7 @@ def encode_packet_with_fixups(
     if any(instruction.mnemonic in ("LSU1.LDO.64", "LSU1.LD.64") and instruction.operands
            and re.fullmatch(r"[iI][0-9]+", instruction.operands[0])
            for instruction in packet.operations) and (
-        mnemonics & {"LSU0.LDO.32", "LSU0.LD.32", "LSU0.LD.16", "LSU0.LD.32.F16.F32"}
+        mnemonics & {"LSU0.LDO.32", "LSU0.LD.32", "LSU0.LD.16", "LSU0.LD.8", "LSU0.LD.32.F16.F32"}
         or any(instruction.mnemonic in ("LSU0.LDO.64", "LSU0.LD.64") and instruction.operands
                and re.fullmatch(r"[iI][0-9]+", instruction.operands[0])
                for instruction in packet.operations)

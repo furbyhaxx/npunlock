@@ -783,6 +783,16 @@ class EncodingTests(unittest.TestCase):
         with self.assertRaisesRegex(AssemblyError, "same vector register"):
             encode("LSU1.CP.128 v0 v1 || VAU.OR v0 v2 v3")
 
+    def test_lsu0_scalar_byte_lane_load(self) -> None:
+        self.assertEqual(encode("LSU0.LD.8 i0.0 i0"), bytes.fromhex("820d0004"))
+        self.assertEqual(encode("LSU0.LD.8 i31.3 i31"), bytes.fromhex("82fdff04"))
+        for source in ("LSU0.LD.8 i32.0 i0", "LSU0.LD.8 i0.4 i0",
+                       "LSU0.LD.8 i0 i1", "LSU0.LD.8 v0.0 i1", "LSU0.LD.8 i0.0 i32"):
+            with self.subTest(source=source), self.assertRaises(AssemblyError):
+                encode(source)
+        with self.assertRaisesRegex(AssemblyError, "write port 4"):
+            encode("LSU0.LD.8 i4.0 i5 || LSU1.LD.64 i8 i9")
+
     def test_invalid_or_unmeasured_input_fails_closed(self) -> None:
         for source in [
             "LSU0.LDIL i4 65536",

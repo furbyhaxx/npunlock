@@ -1369,6 +1369,19 @@ diagnostic instruction rejections fall from 117 to 108. Fixtures:
 `/mnt/cache/build-shave/lsu1-cp128-{3720,9001}` and
 `corpus-parity-lsu1-cp128`.
 
+### LSU0 scalar byte-lane load
+
+`LSU0.LD.8 iD.lane base` shares the scalar lane fields and 24-bit LSU0
+class with LD.16, using opcode `0x4000D`. Lanes 0..3 are measured;
+lanes 4..7 are rejected by moviAsm. The payload is
+`0x4000D | d<<4 | base<<9 | lane<<14`. Scalar LSU1 doubleword loads
+conflict on write port 4. All 756 headers with each lane, 128 destination/lane
+pairs and 32 bases match moviAsm. Both seeds pass **88365/88365** cases;
+**114 offline tests** pass. Corpus parity remains **42/55 exact**, zero
+different, 13 rejected; diagnostic instruction rejections fall from 108 to
+102. Fixtures: `/mnt/cache/build-shave/lsu0-ld8-{3720,9001}` and
+`corpus-parity-lsu0-ld8`.
+
 ### Differential gates and corpus inventory
 
 Cached assembly can be inventoried without Wine or recompilation:
@@ -1408,8 +1421,8 @@ python3 -m tools.shaveasm.corpus --native-dir build/linux \
   --output /mnt/cache/build-shave/native-asm-corpus
 ```
 
-Offline regressions: 113 passed, including the merged object-writer/corpus tests.
-Each current randomized gate passes **85181/85181 cases**. Before the eight
+Offline regressions: 114 passed, including the merged object-writer/corpus tests.
+Each current randomized gate passes **88365/88365 cases**. Before the eight
 additional forms documented above, the gate passed **12156/12156 cases**
 (seeds 3720 and 9001): the original 2362 isolated-packet cases (1000 random
 packets, 457 shapes, 352 mixed operand sweeps, 96 ADD sweeps, 384 PCCX pairs,
