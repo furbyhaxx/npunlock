@@ -29,6 +29,18 @@ class EncodingTests(unittest.TestCase):
             with self.subTest(source=source), self.assertRaises(AssemblyError):
                 encode(source)
 
+    def test_lsu1_offset_doubleword_load_reuses_the_pair_and_lane_field(self) -> None:
+        self.assertEqual(encode("LSU1.LDO.64 i31 i0 0"), bytes.fromhex("c9f2010100"))
+        self.assertEqual(encode("LSU1.LDO.64 v0.0 i0 0"), bytes.fromhex("c902400000"))
+        self.assertEqual(encode("LSU1.LDO.64 v31.15 i0 0"), bytes.fromhex("c9f2010000"))
+        self.assertEqual(encode("LSU1.LDO.64 v8.0 i9 0 || LSU0.LD.32.F16.F32 i4 i5"),
+                         bytes.fromhex("d9400a2028050000"))
+        for other in ("LSU0.LD.32 i4 i5", "LSU0.LDO.32 i4 i5 0",
+                      "LSU0.LD.16 i4.0 i5", "LSU0.LD.32.F16.F32 i4 i5",
+                      "LSU0.LDO.64 i4 i5 0", "CMU.CMII.I32 i0 i1"):
+            with self.subTest(other=other), self.assertRaises(AssemblyError):
+                encode("LSU1.LDO.64 i8 i9 0 || " + other)
+
     def test_packet_prefix_replaces_individual_prefixes(self) -> None:
         self.assertEqual(encode("LSU0.LDIL i4 1 || IAU.XOR i5 i5 i5"), bytes.fromhex("aa220100b29402"))
         self.assertEqual(encode("IAU.XOR i5 i5 i5 || LSU0.LDIL i4 1"), bytes.fromhex("aa220100b29402"))

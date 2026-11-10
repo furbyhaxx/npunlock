@@ -985,6 +985,20 @@ tests pass. Object parity remains **11/55 exact**, zero different objects,
 with 800 diagnostic instruction rejections. Fixtures and reports remain under
 `/mnt/cache/build-shave/ldo64-{3720,9001}` and `corpus-parity-ldo64`.
 
+### LSU1 offset doubleword load
+
+`LSU1.LDO.64` reuses the measured LSU0 doubleword operand field, signed
+15-bit offset and 32-bit LSU1.STO32 headers (standalone prefix `0xc9`).
+All 408 header shapes match for vector destinations. Scalar destinations
+also match all 320 shapes not containing LSU0.LD20, with LSU0 copies or stores
+selected to avoid the measured scalar write-port-4 conflict with LSU0 loads.
+CMII conflicts on scalar read port 6, including vector destinations.
+All 32 scalar registers, 512 vector register/lane combinations, 32 bases and
+33 offset cases match. Both seeds pass **39047/39047** cases and 82 offline
+tests pass. Object parity remains **11/55 exact**, zero different objects.
+Fixtures and reports: `/mnt/cache/build-shave/lsu1-ldo64-{3720,9001}` and
+`corpus-parity-lsu1-ldo64`.
+
 ### Differential gates and corpus inventory
 
 Cached assembly can be inventoried without Wine or recompilation:
@@ -1024,8 +1038,8 @@ python3 -m tools.shaveasm.corpus --native-dir build/linux \
   --output /mnt/cache/build-shave/native-asm-corpus
 ```
 
-Offline regressions: 81 passed, including the merged object-writer/corpus tests.
-Each current randomized gate passes **37332/37332 cases**. Before the eight
+Offline regressions: 82 passed, including the merged object-writer/corpus tests.
+Each current randomized gate passes **39047/39047 cases**. Before the eight
 additional forms documented above, the gate passed **12156/12156 cases**
 (seeds 3720 and 9001): the original 2362 isolated-packet cases (1000 random
 packets, 457 shapes, 352 mixed operand sweeps, 96 ADD sweeps, 384 PCCX pairs,
