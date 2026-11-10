@@ -215,8 +215,7 @@ class EncodingTests(unittest.TestCase):
         self.assertEqual(encode("CMU.CP.32 i0 v0.1"), bytes.fromhex("810c4070"))
         self.assertEqual(encode("CMU.CP.32 I31 V31.3"), bytes.fromhex("81fcff70"))
         for source in ("CMU.CP.32 i0 v32.0", "CMU.CP.32 i0 v0.4",
-                       "CMU.CP.32 i0 v0", "CMU.CP.32 i32 v0.0",
-                       "CMU.CP.32 v0.0 i0"):
+                       "CMU.CP.32 i0 v0", "CMU.CP.32 i32 v0.0"):
             with self.subTest(source=source), self.assertRaises(AssemblyError):
                 encode(source)
 
@@ -1089,6 +1088,16 @@ class EncodingTests(unittest.TestCase):
         expected = bytes.fromhex("0ff80e3c0408420cf60086140aff9bbd3666e10f")
         self.assertEqual(encode(source), expected)
         self.assertEqual(encode(" || ".join(reversed(source.split(" || ")))), expected)
+
+    def test_cmu_vector_word_destination(self) -> None:
+        for operands, expected in (("v0.0 i0", "810c000c"), ("v1.1 i2", "812c420c"),
+                                   ("v31.3 i31", "81fcff0c")):
+            self.assertEqual(encode("CMU.CP.32 " + operands), bytes.fromhex(expected))
+        for operands in ("v0.4 i0", "v32.0 i0", "v0 i0", "v0.0 v1.0", "v0.0 i32"):
+            with self.subTest(operands=operands), self.assertRaises(AssemblyError):
+                encode("CMU.CP.32 " + operands)
+        with self.assertRaisesRegex(AssemblyError, "same vector register"):
+            encode("CMU.CP.32 v0.0 i1 || VAU.OR v0 v24 v25")
 
     def test_invalid_or_unmeasured_input_fails_closed(self) -> None:
         for source in [

@@ -1743,6 +1743,19 @@ rejected. The contrib/bytetrack assignment object is now exact. Fixtures:
 `/mnt/cache/build-shave/remaining-headers-measure`, `combined-header-10-{3720,9001}`
 and `corpus-parity-combined-header-10`.
 
+### CMU scalar-to-vector word copy
+
+`CMU.CP.32 vD.lane s` uses the 24-bit CMU class with payload
+`0x0c000c | d<<9 | s<<4 | lane<<14`. All 32 registers and lanes 0..3
+are supported. A VAU operation writing the same vector register conflicts;
+scalar LSU1 loads and postincrement stores can co-issue. Every CMU header
+with all four lanes and 128 register/lane pairs matches moviAsm. Both seeds
+pass **123471/123471** cases; **144 offline tests** pass. The earlier
+vector-source test's rejection of this newly measured direction is removed.
+Corpus parity remains **54/55 exact**, zero different, one rejected.
+Fixtures: `/mnt/cache/build-shave/cmu-cp32vector-measure`,
+`cmu-cp32vector-{3720,9001}` and `corpus-parity-cmu-cp32vector`.
+
 ### Differential gates and corpus inventory
 
 Cached assembly can be inventoried without Wine or recompilation:

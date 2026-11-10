@@ -3732,6 +3732,13 @@ def _vector_register(text: str, line: int) -> int:
     return int(match[1])
 
 
+def _vector_word_register(text: str, line: int, *, register_shift: int = 4) -> int:
+    match = re.fullmatch(r"[vV]([0-9]+)\.([0-9]+)", text)
+    if match is None or not 0 <= int(match[1]) < 32 or not 0 <= int(match[2]) < 4:
+        raise AssemblyError(f"line {line}: invalid vector word register {text!r}")
+    return int(match[1]) << register_shift | int(match[2]) << 14
+
+
 def _doubleword_register(text: str, line: int, *, indirect: bool = False) -> int:
     match = re.fullmatch(r"[vV]([0-9]+)\.([0-9]+)", text)
     if match is not None:
@@ -3899,13 +3906,14 @@ def _operation(instruction: Instruction) -> _Operation:
         destination, source = (_register(op, line) for op in operands)
         return _Operation(unit, 0x04000C | destination << 9 | source << 4, 24)
     if mnemonic == "CMU.CP.32" and len(operands) == 2:
+        if operands[0].lower().startswith("v"):
+            destination = _vector_word_register(operands[0], line, register_shift=9)
+            source = _register(operands[1], line)
+            return _Operation(unit, 0x0C000C | destination | source << 4, 24)
         destination = _register(operands[0], line)
-        vector = re.fullmatch(r"[vV]([0-9]+)\.([0-9]+)", operands[1])
-        if vector is not None:
-            source, lane = int(vector[1]), int(vector[2])
-            if not 0 <= source < 32 or not 0 <= lane < 4:
-                raise AssemblyError(f"line {line}: invalid vector word register {operands[1]!r}")
-            return _Operation(unit, 0x70000C | destination << 9 | source << 4 | lane << 14, 24)
+        if operands[1].lower().startswith("v"):
+            source = _vector_word_register(operands[1], line)
+            return _Operation(unit, 0x70000C | destination << 9 | source, 24)
         source = _register(operands[1], line)
         return _Operation(unit, 0x08000C | destination << 9 | source << 4, 24)
     if mnemonic == "IAU.INCS" and len(operands) == 2:
@@ -4064,9 +4072,11 @@ def encode_packet_with_fixups(
     ):
         raise AssemblyError(f"line {first.line}: LSU0 scalar doubleword load and LSU1 load conflict on scalar write port 5")
     vector_copies = [instruction for instruction in packet.operations
-                     if instruction.mnemonic in ("CMU.CP.128.32.R", "CMU.CP.128", "LSU0.CP.128", "LSU1.CP.128") and len(instruction.operands) == 2]
+                     if len(instruction.operands) == 2 and (
+                         instruction.mnemonic in ("CMU.CP.128.32.R", "CMU.CP.128", "LSU0.CP.128", "LSU1.CP.128")
+                         or instruction.mnemonic == "CMU.CP.32" and instruction.operands[0].lower().startswith("v"))]
     for copy in vector_copies:
-        destination = _vector_register(copy.operands[0], copy.line)
+        destination = _vector_register(copy.operands[0].split(".")[0], copy.line)
         if any(instruction.mnemonic in ("VAU.MUL.F32", "VAU.ADD.F32", "VAU.SUB.F32", "VAU.OR")
                and len(instruction.operands) == 3
                and _vector_register(instruction.operands[0], instruction.line) == destination
