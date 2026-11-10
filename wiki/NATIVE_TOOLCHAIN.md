@@ -1061,6 +1061,20 @@ Object parity remains **15/55 exact**, one different and 39 rejected, with
 `/mnt/cache/build-shave/lsu0-ld64-{3720,9001}`, `ld64-measure` and
 `corpus-parity-lsu0-ld64`.
 
+### LSU1 indirect doubleword load
+
+`LSU1.LD.64` shares LSU0.LD.64's 24-bit payload and strict vector lanes 0..1,
+using the LSU1 headers (standalone prefix `0x89`). Vector destinations match
+all 508 shapes. Scalar destinations match the 408 shapes without LSU0.LD20,
+using LSU0 copies or stores to avoid the scalar write-port-4 conflict with
+LSU0 loads. Scalar doubleword loads on both LSUs also conflict. All destinations
+conflict with CMII on scalar read port 6. All scalar/vector register fields,
+both lanes and 32 bases match. Both seeds pass **50599/50599** cases across
+2390 headers; 87 offline tests pass. Object parity remains **15/55 exact**,
+one different and 39 rejected, with 530 diagnostic instruction rejections.
+Fixtures: `/mnt/cache/build-shave/lsu1-ld64-{3720,9001}`, `ld64-measure` and
+`corpus-parity-lsu1-ld64`.
+
 ### Differential gates and corpus inventory
 
 Cached assembly can be inventoried without Wine or recompilation:

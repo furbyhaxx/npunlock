@@ -553,6 +553,23 @@ class EncodingTests(unittest.TestCase):
         with self.assertRaisesRegex(AssemblyError, "write port 4"):
             encode("LSU0.LD.64 i4 i5 || LSU1.LDO.64 i8 i9 0")
 
+    def test_lsu1_indirect_doubleword_load_reuses_lsu0_fields(self) -> None:
+        self.assertEqual(encode("LSU1.LD.64 v0.0 i0"), bytes.fromhex("890d8008"))
+        self.assertEqual(encode("LSU1.LD.64 v31.1 i31"), bytes.fromhex("89fdff08"))
+        self.assertEqual(encode("LSU1.LD.64 i31 i31"), bytes.fromhex("89fdbf00"))
+        for source in ("LSU1.LD.64 v32.0 i0", "LSU1.LD.64 v0.2 i0",
+                       "LSU1.LD.64 i32 i0", "LSU1.LD.64 v0 i0",
+                       "LSU1.LD.64 v0.0 i32", "LSU1.LD.64 v0.0 i0 0"):
+            with self.subTest(source=source), self.assertRaises(AssemblyError):
+                encode(source)
+        for operation in ("LSU0.LD.32 i4 i5", "LSU0.LDO.32 i4 i5 0",
+                          "LSU0.LDO.64 i4 i5 0", "LSU0.LD.64 i4 i5",
+                          "LSU0.LD.32.F16.F32 i4 i5"):
+            with self.subTest(operation=operation), self.assertRaisesRegex(AssemblyError, "write port 4"):
+                encode(operation + " || LSU1.LD.64 i8 i9")
+        with self.assertRaisesRegex(AssemblyError, "read port 6"):
+            encode("CMU.CMII.F32 i0 i1 || LSU1.LD.64 v8.0 i9")
+
     def test_invalid_or_unmeasured_input_fails_closed(self) -> None:
         for source in [
             "LSU0.LDIL i4 65536",

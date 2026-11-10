@@ -2481,7 +2481,7 @@ def _operation(instruction: Instruction) -> _Operation:
         opcode = 6 if ".STO." in mnemonic else 2
         return _Operation(unit, opcode | register | base << 9 | immediate << 17, 32,
                           prefix_class="LSU0.LDO32" if unit == "LSU0" else "LSU1.STO32")
-    if mnemonic == "LSU0.LD.64" and len(operands) == 2:
+    if mnemonic in ("LSU0.LD.64", "LSU1.LD.64") and len(operands) == 2:
         register = _doubleword_register(operands[0], line, indirect=True)
         base = _register(operands[1], line)
         return _Operation(unit, 0x800D | register | base << 9, 24)
@@ -2643,7 +2643,7 @@ def encode_packet_with_fixups(
         full, remaining = divmod(count, 16)
         return b"\xf0" * full + (bytes([(remaining - 1) << 4]) if remaining else b""), ()
     mnemonics = {instruction.mnemonic for instruction in packet.operations}
-    if mnemonics & {"LSU1.STO.32", "LSU1.LDO.32", "LSU1.LDO.64", "LSU1.STO.64", "LSU1.STI.16.F32.F16", "LSU1.STI.32", "LSU1.LD.32", "LSU1.ST.32"} and mnemonics & {"CMU.CMII.I32", "CMU.CMII.U32", "CMU.CMII.F32"}:
+    if mnemonics & {"LSU1.STO.32", "LSU1.LDO.32", "LSU1.LDO.64", "LSU1.LD.64", "LSU1.STO.64", "LSU1.STI.16.F32.F16", "LSU1.STI.32", "LSU1.LD.32", "LSU1.ST.32"} and mnemonics & {"CMU.CMII.I32", "CMU.CMII.U32", "CMU.CMII.F32"}:
         raise AssemblyError(f"line {first.line}: CMII and LSU1 memory operation conflict on scalar read port 6")
     if mnemonics & {"LSU1.CP.32", "LSU1.STO.32", "LSU1.ST.32", "LSU1.STI.32", "LSU1.STI.16.F32.F16"} and any(
         instruction.mnemonic == "LSU0.STO.64" and instruction.operands
@@ -2661,7 +2661,7 @@ def encode_packet_with_fixups(
         for instruction in packet.operations
     ):
         raise AssemblyError(f"line {first.line}: LSU1 scalar doubleword store and LSU0 scalar read conflict on scalar read port 8")
-    if any(instruction.mnemonic == "LSU1.LDO.64" and instruction.operands
+    if any(instruction.mnemonic in ("LSU1.LDO.64", "LSU1.LD.64") and instruction.operands
            and re.fullmatch(r"[iI][0-9]+", instruction.operands[0])
            for instruction in packet.operations) and (
         mnemonics & {"LSU0.LDO.32", "LSU0.LD.32", "LSU0.LD.16", "LSU0.LD.32.F16.F32"}
