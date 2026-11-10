@@ -1520,6 +1520,17 @@ six rejected; diagnostic instruction rejections fall from 57 to 53.
 Fixtures: `/mnt/cache/build-shave/sau-divu16-{3720,9001}` and
 `corpus-parity-sau-divu16`.
 
+### SAU unsigned word division
+
+`SAU.DIV.U32 d l r` uses the 24-bit SAU class with payload
+`0x06 | d<<10 | l<<5 | r<<15`. Only scalar register operands are
+supported. All 585 headers and 96 independent register-field cases
+match moviAsm. Both seeds pass **104755/104755** cases; **126 offline
+tests** pass. Corpus parity remains **49/55 exact**, zero different,
+six rejected; diagnostic instruction rejections fall from 53 to 49.
+Fixtures: `/mnt/cache/build-shave/sau-divu32-{3720,9001}` and
+`corpus-parity-sau-divu32`.
+
 ### Differential gates and corpus inventory
 
 Cached assembly can be inventoried without Wine or recompilation:

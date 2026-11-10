@@ -915,6 +915,14 @@ class EncodingTests(unittest.TestCase):
             with self.subTest(operands=operands), self.assertRaises(AssemblyError):
                 encode("SAU.DIV.U16 " + operands)
 
+    def test_sau_unsigned_word_division(self) -> None:
+        self.assertEqual(encode("SAU.DIV.U32 i0 i0 i0"), bytes.fromhex("3c060000"))
+        self.assertEqual(encode("SAU.DIV.U32 i1 i2 i3"), bytes.fromhex("3c468401"))
+        self.assertEqual(encode("SAU.DIV.U32 i31 i31 i31"), bytes.fromhex("3ce6ff0f"))
+        for operands in ("i0 i0 1", "i32 i0 i0", "i0 i32 i0", "i0 i0 i32", "v0 i0 i0"):
+            with self.subTest(operands=operands), self.assertRaises(AssemblyError):
+                encode("SAU.DIV.U32 " + operands)
+
     def test_invalid_or_unmeasured_input_fails_closed(self) -> None:
         for source in [
             "LSU0.LDIL i4 65536",
