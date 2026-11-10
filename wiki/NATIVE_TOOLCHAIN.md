@@ -1573,6 +1573,19 @@ The custom u8-to-f32 example is now exact. Fixtures:
 `/mnt/cache/build-shave/cmu-cpu8-{3720,9001}` and
 `corpus-parity-cmu-cpu8`.
 
+### LSU0 indirect scalar halfword-lane store
+
+`LSU0.ST.16 iS.lane base` uses the 24-bit LSU0 class with payload
+`0x20009 | s<<4 | base<<9 | lane<<14`. Scalar lanes 0..3 are supported;
+bare scalar sources and lane 4 are rejected by moviAsm. Vector sources remain
+unmeasured and fail closed. Scalar LSU1 doubleword stores conflict on read
+port 8. All 757 headers with each lane, 128 source/lane pairs and 32 bases
+match moviAsm. Both seeds pass **111195/111195** cases; **130 offline tests**
+pass. Corpus parity remains **51/55 exact**, zero different, four rejected;
+diagnostic instruction rejections fall from 42 to 41. Fixtures:
+`/mnt/cache/build-shave/lsu0-st16-measure`, `lsu0-st16-{3720,9001}` and
+`corpus-parity-lsu0-st16`.
+
 ### Differential gates and corpus inventory
 
 Cached assembly can be inventoried without Wine or recompilation:

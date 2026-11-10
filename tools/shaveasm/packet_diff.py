@@ -228,6 +228,10 @@ def generate_packets(seed: int, count: int) -> list[str]:
                     packets.append("\n || ".join(f"{mnemonic} {destination}.{lane} {base}" if unit == load_unit
                                                   else operation(unit, store_packet=store_packet or load_unit == "LSU1")
                                                   for unit in shape))
+        if "LSU0" in shape:
+            for lane in range(4):
+                packets.append("\n || ".join(f"LSU0.ST.16 i4.{lane} i5" if unit == "LSU0"
+                                              else operation(unit, store_packet=store_packet) for unit in shape))
         for copy_unit, destination, source in (("LSU0", "v4", "v5"), ("LSU1", "v8", "v9")):
             if copy_unit in shape:
                 packets.append("\n || ".join(f"{copy_unit}.CP.128 {destination} {source}" if unit == copy_unit
@@ -379,6 +383,9 @@ def generate_packets(seed: int, count: int) -> list[str]:
     packets.extend(f"LSU0.LD.16 i{register}.{lane} i0"
                    for register in range(32) for lane in range(4))
     packets.extend(f"LSU0.LD.16 i0.0 i{register}" for register in range(32))
+    packets.extend(f"LSU0.ST.16 i{register}.{lane} i0"
+                   for register in range(32) for lane in range(4))
+    packets.extend(f"LSU0.ST.16 i0.0 i{register}" for register in range(32))
     for mnemonic in ("LSU0.LD.32", "LSU0.CP.32", "LSU0.ST.32", "LSU0.LD.32.F16.F32"):
         for position in range(2):
             for register in range(32):

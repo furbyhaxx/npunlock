@@ -3803,12 +3803,12 @@ def _operation(instruction: Instruction) -> _Operation:
         base = _register(operands[1], line)
         opcode = 0x8009 if mnemonic == "LSU1.ST.64" else 0x800D
         return _Operation(unit, opcode | register | base << 9, 24)
-    if mnemonic in ("LSU0.LD.16", "LSU1.LD.16", "LSU0.LD.8", "LSU1.STI.16", "LSU1.STI.8", "LSU1.ST.16") and len(operands) == 2:
+    if mnemonic in ("LSU0.LD.16", "LSU1.LD.16", "LSU0.LD.8", "LSU1.STI.16", "LSU1.STI.8", "LSU1.ST.16", "LSU0.ST.16") and len(operands) == 2:
         register = _scalar_lane_register(operands[0], line, 4)
         base = _register(operands[1], line)
         opcode = {"LSU1.STI.16": 0x820009, "LSU0.LD.16": 0x2000D,
                   "LSU1.LD.16": 0x2000D, "LSU0.LD.8": 0x4000D, "LSU1.STI.8": 0x840009,
-                  "LSU1.ST.16": 0x20009}[mnemonic]
+                  "LSU1.ST.16": 0x20009, "LSU0.ST.16": 0x20009}[mnemonic]
         return _Operation(unit, opcode | register | base << 9, 24)
     if mnemonic in ("LSU0.LD.32.F16.F32", "LSU1.LD.32.F16.F32") and len(operands) == 2:
         destination, base = (_register(op, line) for op in operands)
@@ -4011,7 +4011,7 @@ def encode_packet_with_fixups(
         for instruction in packet.operations
     ):
         raise AssemblyError(f"line {first.line}: LSU0 scalar doubleword store and LSU1 scalar read conflict on scalar read port 9")
-    if (mnemonics & {"LSU0.STO.32", "LSU0.STO.16", "LSU0.ST.32", "LSU0.CP.32"} or any(
+    if (mnemonics & {"LSU0.STO.32", "LSU0.STO.16", "LSU0.ST.32", "LSU0.ST.16", "LSU0.CP.32"} or any(
         instruction.mnemonic == "LSU0.STO.64" and instruction.operands
         and re.fullmatch(r"[iI][0-9]+", instruction.operands[0])
         for instruction in packet.operations
