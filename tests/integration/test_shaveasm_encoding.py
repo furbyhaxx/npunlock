@@ -41,6 +41,15 @@ class EncodingTests(unittest.TestCase):
             with self.subTest(other=other), self.assertRaises(AssemblyError):
                 encode("LSU1.LDO.64 i8 i9 0 || " + other)
 
+    def test_lsu1_postincrement_float_to_half_store_uses_twenty_bit_payload(self) -> None:
+        self.assertEqual(encode("LSU1.STI.16.F32.F16 i4 i8"), bytes.fromhex("49441008"))
+        self.assertEqual(encode("LSU1.STI.16.F32.F16 i31 i31"), bytes.fromhex("49f43f08"))
+        for source in ("LSU1.STI.16.F32.F16 v4.0 i8", "LSU1.STI.16.F32.F16 i32 i8",
+                       "LSU1.STI.16.F32.F16 i4 i32",
+                       "LSU1.STI.16.F32.F16 i4 i8 || CMU.CMII.F32 i0 i1"):
+            with self.subTest(source=source), self.assertRaises(AssemblyError):
+                encode(source)
+
     def test_packet_prefix_replaces_individual_prefixes(self) -> None:
         self.assertEqual(encode("LSU0.LDIL i4 1 || IAU.XOR i5 i5 i5"), bytes.fromhex("aa220100b29402"))
         self.assertEqual(encode("IAU.XOR i5 i5 i5 || LSU0.LDIL i4 1"), bytes.fromhex("aa220100b29402"))

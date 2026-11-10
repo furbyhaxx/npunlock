@@ -999,6 +999,21 @@ tests pass. Object parity remains **11/55 exact**, zero different objects.
 Fixtures and reports: `/mnt/cache/build-shave/lsu1-ldo64-{3720,9001}` and
 `corpus-parity-lsu1-ldo64`.
 
+### LSU1 post-increment float-to-half store
+
+`LSU1.STI.16.F32.F16 src base` converts a scalar float to a stored half and
+post-increments the scalar base. Its 20-bit payload is
+`0x80004 | src<<4 | base<<9`, standalone prefix `0x49`. Substitution into all
+508 existing LSU1 shapes uniquely measured the new LSU1.STI20 headers;
+combined prefixes cannot be borrowed from the 24-bit LSU1 class.
+CMII co-issue is rejected for its measured scalar read-port-6 conflict.
+All new shapes, randomized textual order and operands, and 64 independent
+register sweeps match moviAsm. No LSU0 variant occurs in either cached corpus.
+Both seeds pass **43889/43889** cases across 2390 headers, and 83 offline
+tests pass. Object parity rises to **15/55 exact**, zero different objects,
+with 701 diagnostic instruction rejections. Fixtures and reports:
+`/mnt/cache/build-shave/sti-f16-{3720,9001}` and `corpus-parity-sti-f16`.
+
 ### Differential gates and corpus inventory
 
 Cached assembly can be inventoried without Wine or recompilation:
@@ -1038,8 +1053,8 @@ python3 -m tools.shaveasm.corpus --native-dir build/linux \
   --output /mnt/cache/build-shave/native-asm-corpus
 ```
 
-Offline regressions: 82 passed, including the merged object-writer/corpus tests.
-Each current randomized gate passes **39047/39047 cases**. Before the eight
+Offline regressions: 83 passed, including the merged object-writer/corpus tests.
+Each current randomized gate passes **43889/43889 cases**. Before the eight
 additional forms documented above, the gate passed **12156/12156 cases**
 (seeds 3720 and 9001): the original 2362 isolated-packet cases (1000 random
 packets, 457 shapes, 352 mixed operand sweeps, 96 ADD sweeps, 384 PCCX pairs,
