@@ -215,7 +215,8 @@ For the six measured instruction forms, vendor output has these properties:
 
 1. Operations are encoded in canonical order **CMU, LSU0, LSU1, SAU, IAU, PEU**,
    independent of textual order. Symbolic `BRU.BRA` is measured between IAU and
-   PEU (see below); VAU order remains unmeasured.
+   PEU (see below). Measured VAU floating-point operations precede CMU;
+   their headers exclude SAU (see the VAU section below).
 2. Each standalone operation has an eight-bit prefix followed by its payload.
    In a packet, the individual prefixes are replaced by **one combined prefix**.
 3. The combined prefix occupies **8, 16 or 24 bits** for the measured shapes.
@@ -629,7 +630,7 @@ the locally named, measured relocation types in `lld-shave.patch`; the vendor
 objects themselves provide numeric types only. Targets are restricted to plain
 symbol names. A probe of `target+2` treated that entire token as a symbol,
 not an arithmetic addend, so expression syntax remains rejected. Calls, resolved
-branch distances and VAU classes remain unmeasured.
+branch distances remain unmeasured. VAU classes are documented below.
 
 #### Branch delay-window byte span
 
@@ -1074,6 +1075,27 @@ both lanes and 32 bases match. Both seeds pass **50599/50599** cases across
 one different and 39 rejected, with 530 diagnostic instruction rejections.
 Fixtures: `/mnt/cache/build-shave/lsu1-ld64-{3720,9001}`, `ld64-measure` and
 `corpus-parity-lsu1-ld64`.
+
+### VAU floating-point multiplication
+
+`VAU.MUL.F32 d l r` accepts bare vector registers v0..v31 and has a 24-bit
+payload `0x200004 | d<<10 | l<<5 | r<<15`, with standalone prefix `0x33`.
+VAU precedes CMU, LSU0, LSU1, IAU, BRU and PEU, independent of textual order.
+SAU.ADD.I32 and SAU.ADD.F32 conflict on SHARED_RES_S5; all VAU/SAU shapes
+remain rejected. The table adds 643 independently measured VAU headers of
+8, 16 or 24 bits, limited to shapes with at most 80 scalar payload bits.
+Other combinations remain unmeasured and fail closed. Symbolic branch bias
+includes the leading vector payload, using the existing bit-level packing.
+
+All vector register fields and randomized textual permutations match moviAsm.
+Both seeds pass **51370/51370** cases across 3033 measured headers; 90 offline
+tests pass. Scalar alternative-form sweeps remain on scalar headers; vector
+headers receive their own generated case and randomized operand coverage to
+stay below the vendor ELF32 section-count limit. Corpus parity after merging
+the object-order fix is **16/55 exact**, zero different and 39 rejected, unchanged
+by multiplication; diagnostic instruction rejections fall from 530 to 471.
+Fixtures: `/mnt/cache/build-shave/vau-measure`, `vau-mul-{3720,9001}` and
+`corpus-parity-vau-mul`.
 
 ### Differential gates and corpus inventory
 

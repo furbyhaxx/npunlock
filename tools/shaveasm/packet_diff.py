@@ -14,7 +14,7 @@ from .fixups import Fixup
 from .oracle import Oracle
 from .parser import Packet, parse
 
-_UNITS = ("CMU", "LSU0", "LSU1", "SAU", "IAU", "BRU", "PEU")
+_UNITS = ("CMU", "LSU0", "LSU1", "SAU", "IAU", "BRU", "PEU", "VAU")
 
 
 def generate_packets(seed: int, count: int) -> list[str]:
@@ -22,6 +22,8 @@ def generate_packets(seed: int, count: int) -> list[str]:
     rng = random.Random(seed)
 
     def operation(unit: str, registers: tuple[str, str, str] | None = None, *, store_packet: bool = False) -> str:
+        if unit == "VAU":
+            return "VAU.MUL.F32 " + " ".join(f"v{rng.randrange(32)}" for _ in range(3))
         if unit == "BRU":
             return "BRU.BRA external_target"
         if unit == "BRU.JMP16":
@@ -94,7 +96,13 @@ def generate_packets(seed: int, count: int) -> list[str]:
             return f"PEU.PCCX {condition} {rng.randrange(64)}"
         return "PEU.PC1C " + condition
 
-    packets = ["NOP", *(f"NOP {n}" for n in range(1, 65))]
+    packets = []
+    for position in range(3):
+        for register in range(32):
+            operands = ["v0"] * 3
+            operands[position] = f"v{register}"
+            packets.append("VAU.MUL.F32 " + " ".join(operands))
+    packets.extend(["NOP", *(f"NOP {n}" for n in range(1, 65))])
     for register in range(32):
         for unit in (*_UNITS, "LSU0.LDO32", "LSU1.STO32", "IAU.ADD24", "CMU.CMZ16", "PEU.PCCX12", "BRU.JMP16", "LSU0.LD20", "LSU1.STI20"):
             packets.append(operation(unit, (f"i{register}", f"i{31 - register}", f"i{(register + 11) % 32}")))
@@ -112,6 +120,8 @@ def generate_packets(seed: int, count: int) -> list[str]:
         packets.append("\n || ".join(operation(unit, store_packet=bool({"LSU1.STO32", "LSU1.STI20"} & set(shape))) for unit in order))
     for key in _PREFIXES:
         shape = key.split(",")
+        if "VAU" in shape:
+            continue
         store_packet = bool({"LSU1.STO32", "LSU1.STI20"} & set(shape))
         if "LSU0.LDO32" in shape:
             for source in ("i4", "v4.0", "v4.1"):
@@ -194,6 +204,8 @@ def generate_packets(seed: int, count: int) -> list[str]:
                                               else operation(unit) for unit in shape))
     for key in _PREFIXES:
         shape = key.split(",")
+        if "VAU" in shape:
+            continue
         if "LSU1" in shape:
             for destination in ("i8", "v8.0", "v8.1"):
                 if destination == "i8" and "LSU0.LD20" in shape:

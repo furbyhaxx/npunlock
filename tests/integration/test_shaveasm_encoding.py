@@ -15,6 +15,18 @@ def encode(source: str) -> bytes:
 
 
 class EncodingTests(unittest.TestCase):
+    def test_vau_multiply_packs_before_scalar_units(self) -> None:
+        self.assertEqual(encode("VAU.MUL.F32 v31 v30 v29"), bytes.fromhex("33c4ff2e"))
+        self.assertEqual(encode("CMU.CP.32 i1 i2 || VAU.MUL.F32 v3 v4 v5"),
+                         bytes.fromhex("b1848c222c0208"))
+        self.assertEqual(encode("VAU.MUL.F32 v3 v4 v5 || LSU1.LDIL i8 456"),
+                         bytes.fromhex("0e83848c2242c801"))
+        for source in ("VAU.MUL.F32 i0 v0 v0", "VAU.MUL.F32 v32 v0 v0",
+                       "VAU.MUL.F32 v0 v0.0 v0", "VAU.MUL.F32 v0 v0 -1",
+                       "VAU.MUL.F32 v0 v0 v0 || SAU.ADD.I32 i0 i0 1"):
+            with self.subTest(source=source), self.assertRaises(AssemblyError):
+                encode(source)
+
     def test_lsu0_offset_doubleword_load_selects_scalar_pairs_and_vector_lanes(self) -> None:
         self.assertEqual(encode("LSU0.LDO.64 i1 i19 72"), bytes.fromhex("c212269100"))
         self.assertEqual(encode("LSU0.LDO.64 v9.1 i10 40"), bytes.fromhex("c292145000"))
