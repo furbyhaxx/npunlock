@@ -4017,7 +4017,7 @@ def encode_packet_with_fixups(
         raise AssemblyError(f"line {first.line}: CMU scalar doubleword copy and SAU logical operation conflict on scalar write port 1")
     if mnemonics & {"CMU.CP.32.U8.F32", "CMU.CP.32.U32.F32", "CMU.CP.32.F32.U32S", "CMU.MAX.F32", "CMU.MIN.F32"} and mnemonics & {"LSU1.STI.16.F32.F16", "LSU1.STI.16", "LSU1.STI.8", "LSU1.STI.32"}:
         raise AssemblyError(f"line {first.line}: CMU scalar result and LSU1 postincrement store conflict on scalar write port 3")
-    if mnemonics & {"LSU1.STO.16", "LSU1.STO.32", "LSU1.LDO.32", "LSU1.LDO.64", "LSU1.LD.64", "LSU1.STO.64", "LSU1.ST.64", "LSU1.STI.16.F32.F16", "LSU1.STI.16", "LSU1.STI.8", "LSU1.STI.32", "LSU1.LD.32", "LSU1.LD.16", "LSU1.LD.32.F16.F32", "LSU1.ST.32", "LSU1.ST.16"} and mnemonics & {"CMU.CMII.I32", "CMU.CMII.U32", "CMU.CMII.F32", "CMU.CMII.I8", "CMU.CP.64", "CMU.MAX.F32", "CMU.MIN.F32"}:
+    if mnemonics & {"LSU1.STO.16", "LSU1.STO.32", "LSU1.LDO.32", "LSU1.LDO.64", "LSU1.LD.64", "LSU1.STO.64", "LSU1.ST.64", "LSU1.STI.16.F32.F16", "LSU1.STI.16", "LSU1.STI.8", "LSU1.STI.32", "LSU1.LD.32", "LSU1.LD.16", "LSU1.LD.32.F16.F32", "LSU1.ST.32", "LSU1.ST.16"} and mnemonics & {"CMU.CMII.I32", "CMU.CMII.U32", "CMU.CMII.F32", "CMU.CMII.I8", "CMU.CMII.U16", "CMU.CP.64", "CMU.MAX.F32", "CMU.MIN.F32"}:
         raise AssemblyError(f"line {first.line}: CMU scalar pair and LSU1 memory operation conflict on scalar read port 6")
     if mnemonics & {"LSU1.STO.16", "LSU1.CP.32", "LSU1.STO.32", "LSU1.ST.32", "LSU1.STI.32", "LSU1.STI.16", "LSU1.STI.8", "LSU1.STI.16.F32.F16", "LSU1.ST.16"} and any(
         instruction.mnemonic in ("LSU0.STO.64", "LSU0.ST.64") and instruction.operands

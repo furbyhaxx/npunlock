@@ -1670,8 +1670,9 @@ exact. Fixtures: `/mnt/cache/build-shave/five-add-pred-measure`,
 
 `CMU.CMII.U16 left right` uses the 24-bit CMU class with payload
 `0x20000 | left<<4 | right<<9`. All 32 registers in both fields and the
-eligible comparison headers match moviAsm. Vector operands and immediates
-fail closed. Both seeds pass **118165/118165** cases; **137 offline tests**
+eligible comparison headers match moviAsm. LSU1 memory operations conflict
+on scalar read port 6, while LSU1 scalar copies can co-issue. Vector operands
+and immediates fail closed. Both seeds pass **118165/118165** cases; **137 offline tests**
 pass. Corpus parity remains **53/55 exact**, zero different, two rejected.
 Fixtures: `/mnt/cache/build-shave/cmu-cmiiu16-measure`,
 `cmu-cmiiu16-{3720,9001}` and `corpus-parity-cmu-cmiiu16`.

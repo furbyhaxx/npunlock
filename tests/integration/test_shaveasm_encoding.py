@@ -1026,6 +1026,9 @@ class EncodingTests(unittest.TestCase):
         for operands in ("i32 i0", "i0 i32", "v0 i0", "i0 1"):
             with self.subTest(operands=operands), self.assertRaises(AssemblyError):
                 encode("CMU.CMII.U16 " + operands)
+        for operation in ("LSU1.LD.32 i8 i9", "LSU1.ST.32 i8 i9"):
+            with self.subTest(operation=operation), self.assertRaisesRegex(AssemblyError, "read port 6"):
+                encode("CMU.CMII.U16 i0 i1 || " + operation)
 
     def test_sau_integer_subtraction(self) -> None:
         for operands, expected in (("i0 i0 i0", "3c020000"), ("i1 i2 i3", "3c428401"),
