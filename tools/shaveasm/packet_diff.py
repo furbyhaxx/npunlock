@@ -191,6 +191,12 @@ def generate_packets(seed: int, count: int) -> list[str]:
         if "LSU0" in shape:
             packets.append("\n || ".join("LSU0.LDIL i4 external_target" if unit == "LSU0"
                                           else operation(unit, store_packet=store_packet) for unit in shape))
+            for source in ("i4", "v4.0", "v4.1"):
+                packets.append("\n || ".join(f"LSU0.ST.64 {source} i5" if unit == "LSU0"
+                                              else "LSU1.LD.32 i8 i9" if unit == "LSU1"
+                                              else "LSU1.LDO.32 i8 i9 -3" if unit == "LSU1.STO32"
+                                              else "LSU1.LD.32.F16.F32 i8 i9" if unit == "LSU1.STI20"
+                                              else operation(unit, store_packet=True) for unit in shape))
             for destination in ("i4", "v4.0", "v4.1"):
                 packets.append("\n || ".join(f"LSU0.LD.64 {destination} i5" if unit == "LSU0"
                                               else "LSU1.STO.32 i8 i9 -3" if unit == "LSU1.STO32"
@@ -349,6 +355,10 @@ def generate_packets(seed: int, count: int) -> list[str]:
     packets.extend(f"LSU0.LD.64 v{register}.{lane} i0"
                    for register in range(32) for lane in range(2))
     packets.extend(f"LSU0.LD.64 i0 i{register}" for register in range(32))
+    packets.extend(f"LSU0.ST.64 i{register} i0" for register in range(32))
+    packets.extend(f"LSU0.ST.64 v{register}.{lane} i0"
+                   for register in range(32) for lane in range(2))
+    packets.extend(f"LSU0.ST.64 i0 i{register}" for register in range(32))
     packets.extend(f"LSU0.STO.64 i{register} i0 0" for register in range(32))
     packets.extend(f"LSU0.STO.64 v{register}.{lane} i0 0"
                    for register in range(32) for lane in range(16))

@@ -987,6 +987,18 @@ class EncodingTests(unittest.TestCase):
             with self.subTest(operands=operands), self.assertRaises(AssemblyError):
                 encode("CMU.CP.16.F32.F16 " + operands)
 
+    def test_lsu0_indirect_doubleword_store(self) -> None:
+        for operands, expected in (("i0 i0", "82098000"), ("i31 i31", "82f9bf00"),
+                                   ("v1.0 i2", "82198408"), ("v31.1 i31", "82f9ff08")):
+            self.assertEqual(encode("LSU0.ST.64 " + operands), bytes.fromhex(expected))
+        for operands in ("v0.2 i1", "v0 i1", "i32 i1", "i0 i32"):
+            with self.subTest(operands=operands), self.assertRaises(AssemblyError):
+                encode("LSU0.ST.64 " + operands)
+        with self.assertRaisesRegex(AssemblyError, "read port 9"):
+            encode("LSU0.ST.64 i0 i1 || LSU1.ST.32 i8 i9")
+        with self.assertRaises(AssemblyError):
+            encode("LSU0.ST.64 i0 i1 || LSU1.ST.64 i8 i9")
+
     def test_invalid_or_unmeasured_input_fails_closed(self) -> None:
         for source in [
             "LSU0.LDIL i4 65536",

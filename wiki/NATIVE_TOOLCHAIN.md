@@ -1625,6 +1625,21 @@ fall from 39 to 38. The contrib/yolo11-nms object is now exact. Fixtures:
 `/mnt/cache/build-shave/cmu-cpto16-measure`, `cmu-cpto16-{3720,9001}` and
 `corpus-parity-cmu-cpto16`.
 
+### LSU0 indirect doubleword store
+
+`LSU0.ST.64 src base` uses the 24-bit LSU0 class with payload
+`0x8009 | n<<4 | base<<9`; vector sources add `0x80000 | lane<<14`.
+Vector lanes 0..1 and all scalar registers are supported. Scalar sources
+conflict with LSU1 scalar copies/stores on read port 9 and scalar LSU1
+doubleword stores on ports 8 and 9; vector sources can co-issue.
+All 758 headers with scalar and both vector selectors, 32 scalar sources,
+64 vector sources and 32 bases match moviAsm. The generator uses LSU1 loads
+and CMU copies to avoid the measured read-port conflicts. Both seeds pass
+**117077/117077** cases; **134 offline tests** pass. Corpus parity remains
+**52/55 exact**, zero different, three rejected; diagnostic instruction
+rejections fall from 38 to 36. Fixtures: `/mnt/cache/build-shave/lsu0-st64-measure`,
+`lsu0-st64-{3720,9001}` and `corpus-parity-lsu0-st64`.
+
 ### Differential gates and corpus inventory
 
 Cached assembly can be inventoried without Wine or recompilation:

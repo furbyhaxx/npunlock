@@ -3799,10 +3799,10 @@ def _operation(instruction: Instruction) -> _Operation:
         opcode = 6 if ".STO." in mnemonic else 2
         return _Operation(unit, opcode | register | base << 9 | immediate << 17, 32,
                           prefix_class="LSU0.LDO32" if unit == "LSU0" else "LSU1.STO32")
-    if mnemonic in ("LSU0.LD.64", "LSU1.LD.64", "LSU1.ST.64") and len(operands) == 2:
+    if mnemonic in ("LSU0.LD.64", "LSU1.LD.64", "LSU0.ST.64", "LSU1.ST.64") and len(operands) == 2:
         register = _doubleword_register(operands[0], line, indirect=True)
         base = _register(operands[1], line)
-        opcode = 0x8009 if mnemonic == "LSU1.ST.64" else 0x800D
+        opcode = 0x8009 if ".ST." in mnemonic else 0x800D
         return _Operation(unit, opcode | register | base << 9, 24)
     if mnemonic in ("LSU0.LD.16", "LSU1.LD.16", "LSU0.LD.8", "LSU1.STI.16", "LSU1.STI.8", "LSU1.ST.16", "LSU0.ST.16") and len(operands) == 2:
         register = _scalar_lane_register(operands[0], line, 4)
@@ -4011,13 +4011,13 @@ def encode_packet_with_fixups(
     if mnemonics & {"LSU1.STO.16", "LSU1.STO.32", "LSU1.LDO.32", "LSU1.LDO.64", "LSU1.LD.64", "LSU1.STO.64", "LSU1.ST.64", "LSU1.STI.16.F32.F16", "LSU1.STI.16", "LSU1.STI.8", "LSU1.STI.32", "LSU1.LD.32", "LSU1.LD.16", "LSU1.LD.32.F16.F32", "LSU1.ST.32", "LSU1.ST.16"} and mnemonics & {"CMU.CMII.I32", "CMU.CMII.U32", "CMU.CMII.F32", "CMU.CMII.I8", "CMU.MAX.F32", "CMU.MIN.F32"}:
         raise AssemblyError(f"line {first.line}: CMU scalar pair and LSU1 memory operation conflict on scalar read port 6")
     if mnemonics & {"LSU1.STO.16", "LSU1.CP.32", "LSU1.STO.32", "LSU1.ST.32", "LSU1.STI.32", "LSU1.STI.16", "LSU1.STI.8", "LSU1.STI.16.F32.F16", "LSU1.ST.16"} and any(
-        instruction.mnemonic == "LSU0.STO.64" and instruction.operands
+        instruction.mnemonic in ("LSU0.STO.64", "LSU0.ST.64") and instruction.operands
         and re.fullmatch(r"[iI][0-9]+", instruction.operands[0])
         for instruction in packet.operations
     ):
         raise AssemblyError(f"line {first.line}: LSU0 scalar doubleword store and LSU1 scalar read conflict on scalar read port 9")
     if (mnemonics & {"LSU0.STO.32", "LSU0.STO.16", "LSU0.ST.32", "LSU0.ST.16", "LSU0.CP.32"} or any(
-        instruction.mnemonic == "LSU0.STO.64" and instruction.operands
+        instruction.mnemonic in ("LSU0.STO.64", "LSU0.ST.64") and instruction.operands
         and re.fullmatch(r"[iI][0-9]+", instruction.operands[0])
         for instruction in packet.operations
     )) and any(
