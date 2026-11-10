@@ -1097,6 +1097,15 @@ by multiplication; diagnostic instruction rejections fall from 530 to 471.
 Fixtures: `/mnt/cache/build-shave/vau-measure`, `vau-mul-{3720,9001}` and
 `corpus-parity-vau-mul`.
 
+### VAU floating-point addition
+
+`VAU.ADD.F32` shares MUL's 24-bit class, vector fields and measured headers,
+with opcode `0x200000`. All 643 headers and 96 independent vector register
+field cases match moviAsm. Both seeds pass **52109/52109** cases; 91 offline
+tests pass. Corpus parity remains **16/55 exact**, zero different, 39 rejected;
+diagnostic instruction rejections drop from 471 to 422. Fixtures:
+`/mnt/cache/build-shave/vau-add-{3720,9001}` and `corpus-parity-vau-add`.
+
 ### Differential gates and corpus inventory
 
 Cached assembly can be inventoried without Wine or recompilation:

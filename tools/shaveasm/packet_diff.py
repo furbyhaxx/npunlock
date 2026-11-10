@@ -101,7 +101,8 @@ def generate_packets(seed: int, count: int) -> list[str]:
         for register in range(32):
             operands = ["v0"] * 3
             operands[position] = f"v{register}"
-            packets.append("VAU.MUL.F32 " + " ".join(operands))
+            for mnemonic in ("VAU.MUL.F32", "VAU.ADD.F32"):
+                packets.append(mnemonic + " " + " ".join(operands))
     packets.extend(["NOP", *(f"NOP {n}" for n in range(1, 65))])
     for register in range(32):
         for unit in (*_UNITS, "LSU0.LDO32", "LSU1.STO32", "IAU.ADD24", "CMU.CMZ16", "PEU.PCCX12", "BRU.JMP16", "LSU0.LD20", "LSU1.STI20"):
@@ -121,6 +122,9 @@ def generate_packets(seed: int, count: int) -> list[str]:
     for key in _PREFIXES:
         shape = key.split(",")
         if "VAU" in shape:
+            packets.append("\n || ".join("VAU.ADD.F32 v3 v4 v5" if unit == "VAU"
+                                          else operation(unit, store_packet=bool({"LSU1.STO32", "LSU1.STI20"} & set(shape)))
+                                          for unit in shape))
             continue
         store_packet = bool({"LSU1.STO32", "LSU1.STI20"} & set(shape))
         if "LSU0.LDO32" in shape:

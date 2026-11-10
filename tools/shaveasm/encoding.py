@@ -3107,9 +3107,10 @@ def _signed_immediate(text: str, bits: int, line: int) -> int:
 def _operation(instruction: Instruction) -> _Operation:
     mnemonic, operands, line = instruction.mnemonic, instruction.operands, instruction.line
     unit = mnemonic.split(".")[0]
-    if mnemonic == "VAU.MUL.F32" and len(operands) == 3:
+    if mnemonic in ("VAU.MUL.F32", "VAU.ADD.F32") and len(operands) == 3:
         destination, left, right = (_vector_register(op, line) for op in operands)
-        return _Operation(unit, 0x200004 | destination << 10 | left << 5 | right << 15, 24)
+        opcode = {"VAU.MUL.F32": 0x200004, "VAU.ADD.F32": 0x200000}[mnemonic]
+        return _Operation(unit, opcode | destination << 10 | left << 5 | right << 15, 24)
     if mnemonic in ("BRU.JMP", "BRU.SWP") and len(operands) == 1:
         register = _register(operands[0], line)
         opcode = 1 if mnemonic == "BRU.JMP" else 2
